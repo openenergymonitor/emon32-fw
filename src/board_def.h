@@ -187,11 +187,11 @@
 
 /* UART related defines */
 #define PMUX_UART       PORT_PMUX_PMUXE_C /* SERCOM */
-#define GRP_SERCOM_UART GRP_PINB
-#define PIN_UART_RX     20u
-#define PIN_UART_TX     21u
-#define UART_PAD_RX     1u
-#define UART_PAD_TX     0u
+#define GRP_SERCOM_UART GRP_PINA
+#define PIN_UART_TX     20u
+#define PIN_UART_RX     21u
+#define UART_PAD_RX     3u /* RXPO */
+#define UART_PAD_TX     1u /* TXPO value, Tx on pad 2 */
 #define UART_BAUD       115200u
 
 /* RFM related defines */
