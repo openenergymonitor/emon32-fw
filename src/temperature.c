@@ -23,10 +23,12 @@ unsigned int tempInitSensors(const TEMP_INTF_t intf, const void *pParams) {
   EMON32_ASSERT(pParams);
 
   if (TEMP_INTF_ONEWIRE == intf) {
-    numSensors += ds18b20InitSensors((DS18B20_conf_t *)pParams);
+    int numFound = ds18b20InitSensors((DS18B20_conf_t *)pParams);
+    numSensors += numFound;
+    return numFound;
   }
 
-  return numSensors;
+  return 0;
 }
 
 TempRead_t tempReadSample(const TEMP_INTF_t intf, const uint8_t dev) {
