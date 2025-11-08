@@ -56,7 +56,7 @@ def generate_build_info_c(configuration):
     except subprocess.CalledProcessError:
         release = "None"
 
-    day, month, year = datetime.now(timezone.utc).strftime("%m.%d.%Y").split(".")
+    day, month, year = datetime.now(timezone.utc).strftime("%d.%m.%Y").split(".")
 
     try:
         revision = subprocess.run(
@@ -111,9 +111,9 @@ def generate_build_info_c(configuration):
             .compiler = compiler,
             .machine = machine,
             .release = release,
-            .release_year = {year},
-            .release_month = {month},
-            .release_day = {day},
+            .release_year = {int(year)},
+            .release_month = {int(month)},
+            .release_day = {int(day)},
         }};
     }}
 
