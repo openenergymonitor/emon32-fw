@@ -900,7 +900,7 @@ void configFirmwareBoardInfo(void) {
   serialPuts("> Board:\r\n");
   printf_("  - emonPi3/emonTx6 (arch. rev. %" PRIu32 ")\r\n",
           getBoardRevision());
-  printf_("  - Serial       : 0x%02x%02x%02x%02x\r\n",
+  printf_("  - Serial    : 0x%02x%02x%02x%02x\r\n",
           (unsigned int)getUniqueID(0), (unsigned int)getUniqueID(1),
           (unsigned int)getUniqueID(2), (unsigned int)getUniqueID(3));
   printf_("  - Last reset: %s\r\n", getLastReset());

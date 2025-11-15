@@ -86,7 +86,6 @@ void irq_handler_dmac(void) {
 
   DMAC->CHID.reg = DMA_CHAN_UART;
   if (DMAC->CHINTFLAG.reg & DMAC_CHINTFLAG_TCMPL) {
-    emon32EventSet(EVT_DMAC_UART_CMPL);
     DMAC->CHINTFLAG.reg = DMAC_CHINTFLAG_TCMPL;
   }
 }

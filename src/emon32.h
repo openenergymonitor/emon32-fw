@@ -91,31 +91,17 @@ _Static_assert((sizeof(PackedDataUpper6_t) + 4) < 62,
  * to provide a vector of set events as bits.
  */
 typedef enum EVTSRC_ {
-  EVT_DMA             = 0u,
   EVT_TICK_1kHz       = 1u,
-  EVT_TCC             = 2u,
-  EVT_UART            = 3u,
-  EVT_ADC             = 4u,
-  EVT_DMAC_UART_CMPL  = 5u,
-  EVT_DMAC_SMP_CMPL   = 6u,
-  EVT_ECM_CYCLE_CMPL  = 7u,
   EVT_ECM_SET_CMPL    = 8u,
-  EVT_SAVE_RESET      = 9u,
-  EVT_DMAC_I2C_CMPL   = 10u,
-  EVT_TIMER_MC        = 11u,
-  EVT_EIC_PULSE       = 12u,
-  EVT_EEPROM_TMR      = 13u,
-  EVT_TEMP_SAMPLE     = 14u,
   EVT_TEMP_READ       = 15u,
   EVT_CONFIG_CHANGED  = 16u,
   EVT_CONFIG_SAVED    = 17u,
   EVT_SAFE_RESET_REQ  = 18u,
   EVT_PROCESS_CMD     = 19u,
   EVT_PROCESS_DATASET = 20u,
-  EVT_EEPROM_STORE    = 21u,
   EVT_CLEAR_ACCUM     = 22u,
   EVT_ECM_PEND_1S     = 23u,
-  EVT_ECM_TRIG        = 24
+  EVT_ECM_TRIG        = 24u
 } EVTSRC_t;
 
 /*! @brief When enabled, output debug message to serial (USB if available, and

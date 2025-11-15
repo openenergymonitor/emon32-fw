@@ -8,32 +8,6 @@
 #include "driver_SERCOM.h"
 #include "periph_rfm69.h"
 
-void eicConfigureRfmIrq(void) {
-
-  /* Check the status of the nDISABLE_EXT_INTF pin before disabling to catch a
-   * transition while the EIC controller is disabled */
-  bool nDisable = portPinValue(GRP_nDISABLE_EXT, PIN_nDISABLE_EXT);
-  portPinMux(GRP_RFM_INTF, PIN_RFM_IRQ, PMUX_RFM_IRQ);
-
-  EIC->CTRL.reg = 0;
-  while (EIC->STATUS.reg & EIC_STATUS_SYNCBUSY)
-    ;
-  EIC->CONFIG[1].reg = EIC_CONFIG_FILTEN7 | EIC_CONFIG_SENSE7_RISE;
-  EIC->INTENSET.reg  = EIC_INTENSET_EXTINT14;
-  EIC->CTRL.reg      = EIC_CTRL_ENABLE;
-  while (EIC->STATUS.reg & EIC_STATUS_SYNCBUSY)
-    ;
-
-  if (nDisable != portPinValue(GRP_nDISABLE_EXT, PIN_nDISABLE_EXT)) {
-    if (nDisable) {
-      sercomExtIntfEnable();
-    } else {
-      EIC->INTENCLR.reg = EIC_INTENCLR_EXTINT14;
-      sercomExtIntfDisable();
-    }
-  }
-}
-
 void eicSetup(void) {
   /* EIC APB clock is unmasked on reset (16.8.8)
    * GCLK required for edge detection */
