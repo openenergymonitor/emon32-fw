@@ -131,6 +131,8 @@ When a full report is ready, the following actions take place:
 
 Compiling the firmware requires the the [Arm gcc toolchain](https://developer.arm.com/Tools%20and%20Software/GNU%20Toolchain) (may be available as a package in your distribution). The Makefile is for a Cortex-M0+ based microcontrollers, specifically the Microchip ATSAMD21J17 ([datasheet](https://www.microchip.com/en-us/product/ATSAMD21J17), [errata](https://ww1.microchip.com/downloads/en/DeviceDoc/SAMD21-%20Family-Silicon-%20Errata-and-DataSheet-Clarification-DS80000760C.pdf)).
 
+`sudo apt install gcc-arm-none-eabi`
+
 > [!NOTE]
 > To find which version, if any, of the toolchain is on your path, enter `arm-none-eabi-gcc --version`. You can set the path to a compiler off your path by setting the `TC_PATH` variable in `Makefile`.
 
