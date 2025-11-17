@@ -71,7 +71,7 @@ static bool         evtPending(EVTSRC_t evt);
 static void         pulseConfigure(void);
 void                putchar_(char c);
 static void         serialPutsNonBlocking(const char *const s, uint16_t len);
-static bool         rfmConfigure(void);
+static void         rfmConfigure(void);
 static void         ssd1306Setup(void);
 static uint32_t     tempSetup(void);
 static uint32_t     totalEnergy(const Emon32Dataset_t *pData);
@@ -343,7 +343,7 @@ static void serialPutsNonBlocking(const char *const s, uint16_t len) {
   uartPutsNonBlocking(DMA_CHAN_UART, s, len);
 }
 
-static bool rfmConfigure(void) {
+static void rfmConfigure(void) {
   RFMOpt_t rfmOpt = {0};
   rfmOpt.freq     = (RFM_Freq_t)pConfig->dataTxCfg.rfmFreq;
   rfmOpt.group    = pConfig->baseCfg.dataGrp;
@@ -352,10 +352,7 @@ static bool rfmConfigure(void) {
 
   if (rfmInit(&rfmOpt)) {
     rfmSetAESKey("89txbe4p8aik5kt3"); /* Default OEM AES key */
-    return true;
   }
-
-  return false;
 }
 
 void serialPuts(const char *s) {
@@ -487,12 +484,11 @@ int main(void) {
   ucSetup();
   uiLedColour(LED_YELLOW);
 
-  /* If the system is booted while it is connected to an active Pi, then make
-   * sure the external I2C and SPI interfaces are disabled. */
-  if (!portPinValue(GRP_nDISABLE_EXT, PIN_nDISABLE_EXT)) {
-    sercomExtIntfDisable();
+  /* If the system is booted while it is connected to an active Pi, do not write
+   * to the OLED. */
+  if (sercomExtIntfEnabled()) {
+    ssd1306Setup();
   }
-  ssd1306Setup();
 
   /* Load stored values (configuration and accumulated energy) from
    * non-volatile memory (NVM). If the NVM has not been used before then
@@ -506,9 +502,9 @@ int main(void) {
 
   /* Set up RFM module. Even if not used, this will put it in sleep mode. If
    * successful, set OEM's AES key. */
-  pConfig->dataTxCfg.rfmFreq = RFM_FREQ_DEF;
-  pConfig->dataTxCfg.rfmPwr  = RFM_PALEVEL_DEF;
-  rfmConfigure();
+  if (sercomExtIntfEnabled()) {
+    rfmConfigure();
+  }
 
   /* Set up pulse and temperature sensors, if present. */
   pulseConfigure();
@@ -528,10 +524,18 @@ int main(void) {
   adcDMACStart();
 
   for (;;) {
+
     /* While there is an event pending (may be set while another is
      * handled), keep looping. Enter sleep (WFI) when done.
      */
     while (0 != evtPend) {
+
+      /* External interface disable */
+      if (evtPending(EVT_EXT_DISABLE)) {
+        sercomExtIntfDisable();
+        emon32EventClr(EVT_EXT_DISABLE);
+      }
+
       /* 1 ms timer flag */
       if (evtPending(EVT_TICK_1kHz)) {
         evtKiloHertz();

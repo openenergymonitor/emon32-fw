@@ -1,5 +1,6 @@
 #pragma once
 
+#include <stdbool.h>
 #include <stdint.h>
 
 /* Types */
@@ -56,7 +57,7 @@ void portPinMuxClear(unsigned int grp, unsigned int pin);
  *  @param [in] grp : Group number
  *  @param [in] pin : Pin number
  */
-unsigned int portPinValue(unsigned int grp, unsigned int pin);
+bool portPinValue(unsigned int grp, unsigned int pin);
 
 /*! @brief   Configure the ports.
  *           Ports for peripherals are configured in their setup functions

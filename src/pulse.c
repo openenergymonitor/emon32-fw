@@ -31,7 +31,7 @@ void pulseInit(const unsigned int index) {
     portPinDrv(GRP_OPA, opaPUs[index], PIN_DRV_SET);
     timerDelay_ms(1);
   }
-  pinValue[index] = portPinValue(GRP_OPA, pin);
+  pinValue[index] = (unsigned int)portPinValue(GRP_OPA, pin);
 
   /* Use the first read value as the current state */
   pulseLvlLast[index] = (PulseLvl_t)pinValue[index];
@@ -53,7 +53,8 @@ void pulseUpdate(void) {
       level = pulseLvlLast[i];
 
       pinValue[i] <<= 1;
-      pinValue[i] += portPinValue(pulseCfg[i].grp, pulseCfg[i].pin);
+      pinValue[i] +=
+          (unsigned int)portPinValue(pulseCfg[i].grp, pulseCfg[i].pin);
 
       if (0 == (pinValue[i] & mask)) {
         level = PULSE_LVL_LOW;

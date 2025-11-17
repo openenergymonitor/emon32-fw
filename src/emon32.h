@@ -91,6 +91,7 @@ _Static_assert((sizeof(PackedDataUpper6_t) + 4) < 62,
  * to provide a vector of set events as bits.
  */
 typedef enum EVTSRC_ {
+  EVT_EXT_DISABLE     = 0u,
   EVT_TICK_1kHz       = 1u,
   EVT_ECM_SET_CMPL    = 8u,
   EVT_TEMP_READ       = 15u,

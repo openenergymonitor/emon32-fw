@@ -58,9 +58,6 @@ typedef struct UART_Cfg_ {
 /*! @brief Disable the external SPI and I2C interfaces */
 void sercomExtIntfDisable(void);
 
-/*! @brief Enable the external SPI and I2C interfaces */
-void sercomExtIntfEnable(void);
-
 /*! @brief Status of the external SPI and I2C interfaces */
 bool sercomExtIntfEnabled(void);
 

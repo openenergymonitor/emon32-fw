@@ -10,7 +10,7 @@
 #define I2CM_ACTIVATE_TIMEOUT_US 200u /* Time to wait for I2C bus */
 
 static void i2cmCommon(Sercom *pSercom);
-static void i2cmExtPinsSetup(bool enable);
+static void i2cmExtPinsSetup();
 static void sercomSetupSPI(void);
 static void spiExtPinsSetup(bool enable);
 
@@ -43,17 +43,9 @@ static void i2cmCommon(Sercom *pSercom) {
                                SERCOM_I2CM_INTENSET_ERROR;
 }
 
-static void i2cmExtPinsSetup(bool enable) {
-  if (enable) {
-    portPinMux(GRP_SERCOM_I2C_EXT, PIN_I2C_EXT_SDA, PMUX_I2CM_EXT);
-    portPinMux(GRP_SERCOM_I2C_EXT, PIN_I2C_EXT_SCL, PMUX_I2CM_EXT);
-  } else {
-    portPinMuxClear(GRP_SERCOM_I2C_EXT, PIN_I2C_EXT_SDA);
-    portPinMuxClear(GRP_SERCOM_I2C_EXT, PIN_I2C_EXT_SCL);
-
-    portPinDir(GRP_SERCOM_I2C_EXT, PIN_I2C_EXT_SDA, PIN_DIR_IN);
-    portPinDir(GRP_SERCOM_I2C_EXT, PIN_I2C_EXT_SCL, PIN_DIR_IN);
-  }
+static void i2cmExtPinsSetup() {
+  portPinMux(GRP_SERCOM_I2C_EXT, PIN_I2C_EXT_SDA, PMUX_I2CM_EXT);
+  portPinMux(GRP_SERCOM_I2C_EXT, PIN_I2C_EXT_SCL, PMUX_I2CM_EXT);
 }
 
 static void spiExtPinsSetup(bool enable) {
@@ -75,17 +67,8 @@ static void spiExtPinsSetup(bool enable) {
 }
 
 void sercomExtIntfDisable(void) {
-  debugPuts("External interfaces disabled.");
   extIntfEnabled = false;
-  i2cmExtPinsSetup(false);
   spiExtPinsSetup(false);
-}
-
-void sercomExtIntfEnable(void) {
-  debugPuts("External interfaces enabled.");
-  extIntfEnabled = true;
-  i2cmExtPinsSetup(true);
-  spiExtPinsSetup(true);
 }
 
 bool sercomExtIntfEnabled(void) { return extIntfEnabled; }
@@ -94,9 +77,6 @@ void sercomSetup(void) {
   /*****************
    * Debug UART setup
    ******************/
-
-  extIntfEnabled =
-      portPinValue(GRP_nDISABLE_EXT, PIN_nDISABLE_EXT) ? true : false;
 
   UART_Cfg_t uart_dbg_cfg;
   uart_dbg_cfg.sercom    = SERCOM_UART;
@@ -127,6 +107,7 @@ void sercomSetup(void) {
   /*****************
    * I2C Setup
    ******************/
+
   portPinMux(GRP_SERCOM_I2C_INT, PIN_I2C_INT_SDA, PMUX_I2CM_INT);
   portPinMux(GRP_SERCOM_I2C_INT, PIN_I2C_INT_SCL, PMUX_I2CM_INT);
 
@@ -139,6 +120,8 @@ void sercomSetup(void) {
   PM->APBCMASK.reg |= SERCOM_I2CM_EXT_APBCMASK;
   GCLK->CLKCTRL.reg = GCLK_CLKCTRL_ID(SERCOM_I2CM_EXT_GCLK_ID) |
                       GCLK_CLKCTRL_GEN(3u) | GCLK_CLKCTRL_CLKEN;
+
+  extIntfEnabled = !portPinValue(GRP_DISABLE_EXT, PIN_DISABLE_EXT);
 
   i2cmExtPinsSetup(extIntfEnabled);
   i2cmCommon(SERCOM_I2CM_EXT);
@@ -362,11 +345,25 @@ uint8_t i2cDataRead(Sercom *sercom) {
  * =====================================
  */
 
-void spiDeSelect(const Pin_t nSS) { portPinDrv(nSS.grp, nSS.pin, PIN_DRV_SET); }
+void spiDeSelect(const Pin_t nSS) {
+  if (!extIntfEnabled) {
+    return;
+  }
+  portPinDrv(nSS.grp, nSS.pin, PIN_DRV_SET);
+}
 
-void spiSelect(const Pin_t nSS) { portPinDrv(nSS.grp, nSS.pin, PIN_DRV_CLR); }
+void spiSelect(const Pin_t nSS) {
+  if (!extIntfEnabled) {
+    return;
+  }
+  portPinDrv(nSS.grp, nSS.pin, PIN_DRV_CLR);
+}
 
 void spiSendBuffer(Sercom *sercom, const void *pSrc, int n) {
+  if (!extIntfEnabled) {
+    return;
+  }
+
   uint8_t *pData = (uint8_t *)pSrc;
 
   while (n--) {
@@ -375,6 +372,10 @@ void spiSendBuffer(Sercom *sercom, const void *pSrc, int n) {
 }
 
 uint8_t spiSendByte(Sercom *sercom, const uint8_t b) {
+  if (!extIntfEnabled) {
+    return 0;
+  }
+
   while (0 == (sercom->SPI.INTFLAG.reg & SERCOM_SPI_INTFLAG_DRE))
     ;
   sercom->SPI.INTFLAG.reg = SERCOM_SPI_INTFLAG_RXC;

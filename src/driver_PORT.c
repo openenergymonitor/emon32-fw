@@ -47,10 +47,8 @@ void portPinMuxClear(unsigned int grp, unsigned int pin) {
   PORT->Group[grp].PINCFG[pin].reg &= ~PORT_PINCFG_PMUXEN;
 }
 
-unsigned int portPinValue(unsigned int grp, unsigned int pin) {
-  unsigned int ret;
-  ret = (0u == (PORT->Group[grp].IN.reg & (1u << pin))) ? 0u : 1u;
-  return ret;
+bool portPinValue(unsigned int grp, unsigned int pin) {
+  return (0u == (PORT->Group[grp].IN.reg & (1u << pin))) ? false : true;
 }
 
 void portSetup(void) {
@@ -62,7 +60,7 @@ void portSetup(void) {
   for (unsigned int i = 0; pinsGPIO_Out[i][0] != 0xFF; i++) {
     portPinDir(pinsGPIO_Out[i][0], pinsGPIO_Out[i][1], PIN_DIR_OUT);
     /* RFM69 !SS must be HIGH */
-    if ((GRP_PINA == pinsGPIO_Out[i][0]) &&
+    if ((GRP_SERCOM_SPI == pinsGPIO_Out[i][0]) &&
         (PIN_SPI_RFM_SS == pinsGPIO_Out[i][1])) {
       portPinDrv(GRP_PINA, PIN_SPI_RFM_SS, PIN_DRV_SET);
     }
@@ -79,6 +77,9 @@ void portSetup(void) {
     portPinCfg(pinsGPIO_In[i][0], pinsGPIO_In[i][1], PORT_PINCFG_INEN,
                PIN_CFG_SET);
   }
+
+  /* External interface disable is idle low, invert pull */
+  portPinDrv(GRP_DISABLE_EXT, PIN_DISABLE_EXT, PIN_DRV_CLR);
 
   /* Unused pins: input, pull down (Table 23-2) */
   for (unsigned int i = 0; pinsUnused[i][0] != 0xFF; i++) {
