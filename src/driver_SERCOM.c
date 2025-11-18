@@ -10,7 +10,7 @@
 #define I2CM_ACTIVATE_TIMEOUT_US 200u /* Time to wait for I2C bus */
 
 static void i2cmCommon(Sercom *pSercom);
-static void i2cmExtPinsSetup();
+static void i2cmExtPinsSetup(void);
 static void sercomSetupSPI(void);
 static void spiExtPinsSetup(bool enable);
 
@@ -43,7 +43,7 @@ static void i2cmCommon(Sercom *pSercom) {
                                SERCOM_I2CM_INTENSET_ERROR;
 }
 
-static void i2cmExtPinsSetup() {
+static void i2cmExtPinsSetup(void) {
   portPinMux(GRP_SERCOM_I2C_EXT, PIN_I2C_EXT_SDA, PMUX_I2CM_EXT);
   portPinMux(GRP_SERCOM_I2C_EXT, PIN_I2C_EXT_SCL, PMUX_I2CM_EXT);
 }
@@ -121,9 +121,7 @@ void sercomSetup(void) {
   GCLK->CLKCTRL.reg = GCLK_CLKCTRL_ID(SERCOM_I2CM_EXT_GCLK_ID) |
                       GCLK_CLKCTRL_GEN(3u) | GCLK_CLKCTRL_CLKEN;
 
-  extIntfEnabled = !portPinValue(GRP_DISABLE_EXT, PIN_DISABLE_EXT);
-
-  i2cmExtPinsSetup(extIntfEnabled);
+  i2cmExtPinsSetup();
   i2cmCommon(SERCOM_I2CM_EXT);
 
   /*****************
@@ -196,8 +194,6 @@ void sercomSetupUART(const UART_Cfg_t *pCfg) {
 }
 
 static void sercomSetupSPI(void) {
-
-  spiExtPinsSetup(extIntfEnabled);
 
   /* Configure clocks - runs from the OSC8M clock on gen 3 */
   PM->APBCMASK.reg |= SERCOM_SPI_APBCMASK;
@@ -344,6 +340,11 @@ uint8_t i2cDataRead(Sercom *sercom) {
  * SPI Functions
  * =====================================
  */
+
+void spiConfigureExt(void) {
+  extIntfEnabled = !portPinValue(GRP_DISABLE_EXT, PIN_DISABLE_EXT);
+  spiExtPinsSetup(extIntfEnabled);
+}
 
 void spiDeSelect(const Pin_t nSS) {
   if (!extIntfEnabled) {

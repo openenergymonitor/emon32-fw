@@ -2,6 +2,15 @@
 #include "board_def.h"
 #include "emon32_samd.h"
 
+static void input(unsigned int grp, unsigned int pin, bool high);
+
+static void input(unsigned int grp, unsigned int pin, bool high) {
+  portPinDir(grp, pin, PIN_DIR_IN);
+  portPinCfg(grp, pin, PORT_PINCFG_PULLEN, PIN_CFG_SET);
+  portPinDrv(grp, pin, (high ? PIN_DRV_SET : PIN_DRV_CLR));
+  portPinCfg(grp, pin, PORT_PINCFG_INEN, PIN_CFG_SET);
+}
+
 void portPinCfg(unsigned int grp, unsigned int pin, unsigned int cfg,
                 PINCFG_t cs) {
   if (PIN_CFG_SET == cs) {
@@ -68,18 +77,13 @@ void portSetup(void) {
                PIN_CFG_SET);
   }
 
-  /* GPIO inputs  - all inputs currently need pull ups, so default enable */
+  /* GPIO inputs - all inputs currently need pull ups, so default enable */
   for (unsigned int i = 0; pinsGPIO_In[i][0] != 0xFF; i++) {
-    portPinDir(pinsGPIO_In[i][0], pinsGPIO_In[i][1], PIN_DIR_IN);
-    portPinCfg(pinsGPIO_In[i][0], pinsGPIO_In[i][1], PORT_PINCFG_PULLEN,
-               PIN_CFG_SET);
-    portPinDrv(pinsGPIO_In[i][0], pinsGPIO_In[i][1], PIN_DRV_SET);
-    portPinCfg(pinsGPIO_In[i][0], pinsGPIO_In[i][1], PORT_PINCFG_INEN,
-               PIN_CFG_SET);
+    input(pinsGPIO_In[i][0], pinsGPIO_In[i][1], true);
   }
 
   /* External interface disable is idle low, invert pull */
-  portPinDrv(GRP_DISABLE_EXT, PIN_DISABLE_EXT, PIN_DRV_CLR);
+  input(GRP_DISABLE_EXT, PIN_DISABLE_EXT, false);
 
   /* Unused pins: input, pull down (Table 23-2) */
   for (unsigned int i = 0; pinsUnused[i][0] != 0xFF; i++) {

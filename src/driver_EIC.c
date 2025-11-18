@@ -9,6 +9,14 @@
 #include "emon32.h"
 #include "periph_rfm69.h"
 
+void eicEnable(void) {
+  EIC->CTRL.reg = EIC_CTRL_ENABLE;
+  while (EIC->STATUS.reg & EIC_STATUS_SYNCBUSY)
+    ;
+
+  NVIC_EnableIRQ(EIC_IRQn);
+}
+
 void eicSetup(void) {
   /* EIC APB clock is unmasked on reset (16.8.8)
    * GCLK required for edge detection */
@@ -19,12 +27,6 @@ void eicSetup(void) {
   portPinMux(GRP_DISABLE_EXT, PIN_DISABLE_EXT, PORT_PMUX_PMUXE_A);
   EIC->CONFIG[0].reg = EIC_CONFIG_FILTEN0 | EIC_CONFIG_SENSE0_BOTH;
   EIC->INTENSET.reg  = EIC_INTENSET_EXTINT0;
-
-  EIC->CTRL.reg = EIC_CTRL_ENABLE;
-  while (EIC->STATUS.reg & EIC_STATUS_SYNCBUSY)
-    ;
-
-  NVIC_EnableIRQ(EIC_IRQn);
 }
 
 void irq_handler_eic(void) {

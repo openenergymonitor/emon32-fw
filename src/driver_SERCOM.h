@@ -24,11 +24,6 @@ typedef enum I2CM_Status_ {
   I2CM_DISABLED
 } I2CM_Status_t;
 
-typedef struct Sercom_Cfg_ {
-  Sercom *sercomExtI2C;
-  Sercom *sercomExtSPI;
-} SercomCfg_t;
-
 typedef enum UART_BAUD_ {
   UART_BAUD_9600   = 9600,
   UART_BAUD_19200  = 19200,
@@ -94,6 +89,9 @@ void i2cDataWrite(Sercom *sercom, uint8_t data);
  *  @return read data
  */
 uint8_t i2cDataRead(Sercom *sercom);
+
+/*! @brief Configure the external interface */
+void spiConfigureExt(void);
 
 /*! @brief Select an SPI peripheral
  *  @param [in] nSS : grp+pin of chip select line

@@ -484,10 +484,16 @@ int main(void) {
   ucSetup();
   uiLedColour(LED_YELLOW);
 
+  /* Pause to allow any external pins to settle */
+  timerDelay_ms(50);
+  spiConfigureExt();
+  eicEnable();
+
   /* If the system is booted while it is connected to an active Pi, do not write
-   * to the OLED. */
+   * to the OLED or setup the RFM module. */
   if (sercomExtIntfEnabled()) {
     ssd1306Setup();
+    rfmConfigure();
   }
 
   /* Load stored values (configuration and accumulated energy) from
@@ -499,12 +505,6 @@ int main(void) {
 
   /* Load the accumulated energy and pulse values from NVM. */
   lastStoredWh = cumulativeNVMLoad(&nvmCumulative, &dataset);
-
-  /* Set up RFM module. Even if not used, this will put it in sleep mode. If
-   * successful, set OEM's AES key. */
-  if (sercomExtIntfEnabled()) {
-    rfmConfigure();
-  }
 
   /* Set up pulse and temperature sensors, if present. */
   pulseConfigure();
