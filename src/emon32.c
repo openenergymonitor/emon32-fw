@@ -485,9 +485,8 @@ int main(void) {
   uiLedColour(LED_YELLOW);
 
   /* Pause to allow any external pins to settle */
-  timerDelay_ms(50);
+  timerDelay_ms(100);
   spiConfigureExt();
-  eicEnable();
 
   /* If the system is booted while it is connected to an active Pi, do not write
    * to the OLED or setup the RFM module. */
@@ -495,6 +494,11 @@ int main(void) {
     ssd1306Setup();
     rfmConfigure();
   }
+
+  eicEnable();
+  uartEnable(SERCOM_UART,
+             (SERCOM_USART_INTENSET_RXC | SERCOM_USART_INTENSET_ERROR),
+             SERCOM_UART_INTERACTIVE_IRQn);
 
   /* Load stored values (configuration and accumulated energy) from
    * non-volatile memory (NVM). If the NVM has not been used before then

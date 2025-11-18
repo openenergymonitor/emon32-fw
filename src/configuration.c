@@ -1185,4 +1185,6 @@ void SERCOM_UART_INTERACTIVE_HANDLER {
       uartPutcBlocking(SERCOM_UART_INTERACTIVE, rx_char);
     }
   }
+
+  /* Revisit : need to handle the Error interrupt? */
 }

@@ -5,9 +5,7 @@
 #include "board_def.h"
 #include "driver_EIC.h"
 #include "driver_PORT.h"
-#include "driver_SERCOM.h"
 #include "emon32.h"
-#include "periph_rfm69.h"
 
 void eicEnable(void) {
   EIC->CTRL.reg = EIC_CTRL_ENABLE;
@@ -25,7 +23,7 @@ void eicSetup(void) {
 
   /* EXTINT[0] is DISABLE_EXT_INTF */
   portPinMux(GRP_DISABLE_EXT, PIN_DISABLE_EXT, PORT_PMUX_PMUXE_A);
-  EIC->CONFIG[0].reg = EIC_CONFIG_FILTEN0 | EIC_CONFIG_SENSE0_BOTH;
+  EIC->CONFIG[0].reg = EIC_CONFIG_FILTEN0 | EIC_CONFIG_SENSE0_RISE;
   EIC->INTENSET.reg  = EIC_INTENSET_EXTINT0;
 }
 

@@ -14,6 +14,10 @@ static void i2cmExtPinsSetup(void);
 static void sercomSetupSPI(void);
 static void spiExtPinsSetup(bool enable);
 
+static void uartConfigureDMA(void);
+static void uartInterruptEnable(Sercom *sercom, uint32_t interrupt);
+static void uartSetup(const UART_Cfg_t *pCfg);
+
 static volatile bool extIntfEnabled = true;
 
 static void i2cmCommon(Sercom *pSercom) {
@@ -96,13 +100,10 @@ void sercomSetup(void) {
   uart_dbg_cfg.dmaCfg.ctrlb = DMAC_CHCTRLB_LVL(1u) |
                               DMAC_CHCTRLB_TRIGSRC(SERCOM_UART_DMAC_ID_TX) |
                               DMAC_CHCTRLB_TRIGACT_BEAT;
-  sercomSetupUART(&uart_dbg_cfg);
+  uartSetup(&uart_dbg_cfg);
 
   /* Setup DMAC for non-blocking UART (this is optional, unlike ADC) */
   uartConfigureDMA();
-  uartInterruptEnable(SERCOM_UART, SERCOM_USART_INTENSET_RXC);
-  uartInterruptEnable(SERCOM_UART, SERCOM_USART_INTENSET_ERROR);
-  NVIC_EnableIRQ(SERCOM_UART_INTERACTIVE_IRQn);
 
   /*****************
    * I2C Setup
@@ -130,7 +131,7 @@ void sercomSetup(void) {
   sercomSetupSPI();
 }
 
-void sercomSetupUART(const UART_Cfg_t *pCfg) {
+static void uartSetup(const UART_Cfg_t *pCfg) {
   uint16_t baud;
   // const uint64_t br_dbg = (uint64_t)65536 * (F_PERIPH - 16 * pCfg->baud) /
   // F_PERIPH;
@@ -183,11 +184,6 @@ void sercomSetupUART(const UART_Cfg_t *pCfg) {
     ;
 
   pCfg->sercom->USART.BAUD.reg = baud;
-
-  /* Enable requires synchronisation (26.6.6) */
-  pCfg->sercom->USART.CTRLA.reg |= SERCOM_USART_CTRLA_ENABLE;
-  while (pCfg->sercom->USART.STATUS.reg & SERCOM_USART_SYNCBUSY_ENABLE)
-    ;
 
   /* Configure DMA */
   dmacChannelConfigure(pCfg->dmaChannel, &pCfg->dmaCfg);
@@ -242,7 +238,7 @@ void uartPutsBlocking(Sercom *sercom, const char *s) {
     uartPutcBlocking(sercom, *s++);
 }
 
-void uartConfigureDMA(void) {
+static void uartConfigureDMA(void) {
   volatile DmacDescriptor *dmacDesc = dmacGetDescriptor(DMA_CHAN_UART);
   dmacDesc->BTCTRL.reg = DMAC_BTCTRL_VALID | DMAC_BTCTRL_BLOCKACT_NOACT |
                          DMAC_BTCTRL_STEPSIZE_X1 | DMAC_BTCTRL_STEPSEL_SRC |
@@ -262,26 +258,29 @@ void uartPutsNonBlocking(unsigned int dma_chan, const char *const s,
   dmacChannelEnable(dma_chan);
 }
 
+void uartEnable(Sercom *sercom, const uint32_t interrupts,
+                const uint32_t irqn) {
+  uartInterruptEnable(sercom, interrupts);
+  NVIC_EnableIRQ(irqn);
+
+  /* Enable requires synchronisation (26.6.6) */
+  sercom->USART.CTRLA.reg |= SERCOM_USART_CTRLA_ENABLE;
+  while (sercom->USART.STATUS.reg & SERCOM_USART_SYNCBUSY_ENABLE)
+    ;
+}
+
 char uartGetc(Sercom *sercom) { return sercom->USART.DATA.reg; }
 
 bool uartGetcReady(const Sercom *sercom) {
   return (bool)(sercom->USART.INTFLAG.reg & SERCOM_USART_INTFLAG_RXC);
 }
 
-void uartInterruptEnable(Sercom *sercom, uint32_t interrupt) {
+static void uartInterruptEnable(Sercom *sercom, uint32_t interrupt) {
   sercom->USART.INTENSET.reg = interrupt;
-}
-
-void uartInterruptDisable(Sercom *sercom, uint32_t interrupt) {
-  sercom->USART.INTENCLR.reg = interrupt;
 }
 
 uint32_t uartInterruptStatus(const Sercom *sercom) {
   return sercom->USART.INTFLAG.reg;
-}
-
-void uartInterruptClear(Sercom *sercom, uint32_t interrupt) {
-  sercom->USART.INTFLAG.reg = interrupt;
 }
 
 /*
