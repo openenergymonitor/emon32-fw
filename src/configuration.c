@@ -683,7 +683,8 @@ static void printSettingCT(const int ch) {
   printf_(", iLead%d = ", (ch + 1));
   putFloat(config.ctCfg[ch].phase, 0);
   printf_(", iActive%d = %s", (ch + 1), config.ctCfg[ch].ctActive ? "1" : "0");
-  printf_(", vChan1 = %d, vChan2 = %d\r\n", (config.ctCfg[ch].vChan1 + 1),
+  printf_(", v1Chan%d = %d, v2Chan%d = %d\r\n", (ch + 1),
+          (config.ctCfg[ch].vChan1 + 1), (ch + 1),
           (config.ctCfg[ch].vChan2 + 1));
 }
 
@@ -744,7 +745,8 @@ static void printSettingRFFreq(void) {
 static void printSettingV(const int ch) {
   printf_("vCal%d = ", (ch + 1));
   putFloat(config.voltageCfg[ch].voltageCal, 0);
-  printf_(", vActive = %s\r\n", config.voltageCfg[ch].vActive ? "1" : "0");
+  printf_(", vActive%d = %s\r\n", (ch + 1),
+          config.voltageCfg[ch].vActive ? "1" : "0");
 }
 
 static void printSettings(void) {
