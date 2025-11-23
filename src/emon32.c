@@ -492,7 +492,6 @@ int main(void) {
    * to the OLED or setup the RFM module. */
   if (sercomExtIntfEnabled()) {
     ssd1306Setup();
-    rfmConfigure();
   }
 
   eicEnable();
@@ -509,6 +508,10 @@ int main(void) {
 
   /* Load the accumulated energy and pulse values from NVM. */
   lastStoredWh = cumulativeNVMLoad(&nvmCumulative, &dataset);
+
+  if (sercomExtIntfEnabled()) {
+    rfmConfigure();
+  }
 
   /* Set up pulse and temperature sensors, if present. */
   pulseConfigure();
