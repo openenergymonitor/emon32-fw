@@ -300,7 +300,7 @@ typedef enum RFMFreq_ {
 #define RFM_FRFLSB_316    0x00
 // 433 MHz band (433.92 MHz centre frequency)
 #define RFM_FRFMSB_433    0x6C
-#define RFM_FRFMID_433_00 0x80
+#define RFM_FRFMID_433_00 0x40
 #define RFM_FRFMID_433_92 0x7A
 #define RFM_FRFLSB_433_00 0x00
 #define RFM_FRFLSB_433_92 0xE1
