@@ -54,3 +54,18 @@ void rfmSetAddress(const uint16_t addr);
  *  @param [in] aes : 16 character AES key. 0 disables encryption.
  */
 void rfmSetAESKey(const char *aes);
+
+/*! @brief Set the RF frequency
+ *  @param [in] freq : RFM frequency
+ */
+void rfmSetFrequency(const RFM_Freq_t freq);
+
+/*! @brief Set the group ID
+ *  @param [in] grpID : new group ID
+ */
+void rfmSetGroupID(const uint8_t grpID);
+
+/*! @brief Sets the RFM69's power level
+ *  @param [in] paLevel : power level
+ */
+void rfmSetPowerLevel(const uint8_t paLevel);

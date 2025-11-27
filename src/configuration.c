@@ -14,6 +14,7 @@
 #include "emon32.h"
 #include "emon32_build_info.h"
 #include "emon_CM.h"
+#include "periph_rfm69.h"
 #include "util.h"
 
 #include "printf.h"
@@ -1120,8 +1121,8 @@ void configProcessCmd(void) {
     break;
   case 'g':
     if (configureGroupID()) {
+      rfmSetGroupID(config.baseCfg.dataGrp);
       unsavedChange = true;
-      resetReq      = true;
       emon32EventSet(EVT_CONFIG_CHANGED);
     }
     break;
@@ -1153,7 +1154,6 @@ void configProcessCmd(void) {
   case 'n':
     /* Set the node ID */
     if (configureNodeID()) {
-      resetReq      = true;
       unsavedChange = true;
       emon32EventSet(EVT_CONFIG_CHANGED);
     }
@@ -1161,7 +1161,7 @@ void configProcessCmd(void) {
   case 'p':
     /* Configure RF power */
     if (configureRFPower()) {
-      resetReq      = true;
+      rfmSetPowerLevel(config.dataTxCfg.rfmPwr);
       unsavedChange = true;
       emon32EventSet(EVT_CONFIG_CHANGED);
     }
@@ -1207,8 +1207,8 @@ void configProcessCmd(void) {
 
   case 'x':
     if (configureRF433()) {
+      rfmSetFrequency(config.dataTxCfg.rfmFreq);
       unsavedChange = true;
-      resetReq      = true;
       emon32EventSet(EVT_CONFIG_CHANGED);
     }
     break;

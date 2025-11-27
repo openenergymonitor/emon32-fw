@@ -23,6 +23,7 @@ typedef struct RFMRx_ {
 } RFMRx_t;
 
 static bool      rfmAckRecv(uint16_t fromId);
+static void      rfmFreqToBand(const RFM_Freq_t freq, uint8_t *band);
 static void      rfmPacketHandler(void); /* LPL: interruptHandler */
 static uint8_t   rfmReadReg(const unsigned int addr);
 static int16_t   rfmReadRSSI(void);
@@ -52,6 +53,31 @@ static bool rfmAckRecv(uint16_t fromId) {
     return (fromId == rfmRx.senderID) && rfmRx.ackRecv;
   }
   return false;
+}
+
+static void rfmFreqToBand(const RFM_Freq_t freq, uint8_t *band) {
+  switch (freq) {
+  case 0:
+    band[2] = RFM_FRFMSB_868;
+    band[1] = RFM_FRFMID_868;
+    band[0] = RFM_FRFLSB_868;
+    break;
+  case 1:
+    band[2] = RFM_FRFMSB_915;
+    band[1] = RFM_FRFMID_915;
+    band[0] = RFM_FRFLSB_915;
+    break;
+  case 2:
+    band[2] = RFM_FRFMSB_433;
+    band[1] = RFM_FRFMID_433_00;
+    band[0] = RFM_FRFLSB_433_00;
+    break;
+  case 3:
+    band[2] = RFM_FRFMSB_433;
+    band[1] = RFM_FRFMID_433_92;
+    band[0] = RFM_FRFLSB_433_92;
+    break;
+  }
 }
 
 static void rfmPacketHandler(void) {
@@ -146,6 +172,25 @@ void rfmSetAESKey(const char *aes) {
 
   rfmWriteReg(REG_PACKETCONFIG2,
               ((rfmReadReg(REG_PACKETCONFIG2) & 0xFE) | key));
+}
+
+void rfmSetFrequency(const RFM_Freq_t freq) {
+  uint8_t band[3];
+  rfmFreqToBand(freq, band);
+
+  rfmWriteReg(REG_FRFMSB, band[2]);
+  rfmWriteReg(REG_FRFMID, band[1]);
+  rfmWriteReg(REG_FRFLSB, band[0]);
+}
+
+void rfmSetGroupID(const uint8_t grpID) {
+  rfmSetMode(RFM69_MODE_STANDBY);
+  rfmWriteReg(REG_SYNCVALUE2, grpID);
+}
+
+void rfmSetPowerLevel(const uint8_t paLevel) {
+  rfmSetMode(RFM69_MODE_STANDBY);
+  rfmWriteReg(REG_PALEVEL, (RFM_PALEVEL_PA0_ON | paLevel));
 }
 
 static int16_t rfmReadRSSI(void) {
@@ -288,32 +333,8 @@ bool rfmInit(const RFMOpt_t *pOpt) {
     return false;
   }
 
-  uint8_t frf_msb = 0;
-  uint8_t frf_mid = 0;
-  uint8_t frf_lsb = 0;
-
-  switch (pOpt->freq) {
-  case 0:
-    frf_msb = RFM_FRFMSB_868;
-    frf_mid = RFM_FRFMID_868;
-    frf_lsb = RFM_FRFLSB_868;
-    break;
-  case 1:
-    frf_msb = RFM_FRFMSB_915;
-    frf_mid = RFM_FRFMID_915;
-    frf_lsb = RFM_FRFLSB_915;
-    break;
-  case 2:
-    frf_msb = RFM_FRFMSB_433;
-    frf_mid = RFM_FRFMID_433_00;
-    frf_lsb = RFM_FRFLSB_433_00;
-    break;
-  case 3:
-    frf_msb = RFM_FRFMSB_433;
-    frf_mid = RFM_FRFMID_433_92;
-    frf_lsb = RFM_FRFLSB_433_92;
-    break;
-  }
+  uint8_t band[3];
+  rfmFreqToBand(pOpt->freq, band);
 
   /* Configuration parameters */
   const uint8_t config[][2] = {
@@ -323,9 +344,9 @@ bool rfmInit(const RFMOpt_t *pOpt) {
       {REG_BITRATELSB, RFM_BITRATELSB_55555},
       {REG_FDEVMSB, RFM_FDEVMSB_50000},
       {REG_FDEVLSB, RFM_FDEVLSB_50000},
-      {REG_FRFMSB, frf_msb},
-      {REG_FRFMID, frf_mid},
-      {REG_FRFLSB, frf_lsb},
+      {REG_FRFMSB, band[2]},
+      {REG_FRFMID, band[1]},
+      {REG_FRFLSB, band[0]},
       {REG_RXBW, (RFM_RXBW_DCCFREQ_010 | RFM_RXBW_MANT_16 | RFM_RXBW_EXP_2)},
       {REG_DIOMAPPING1, RFM_DIOMAPPING1_DIO0_01},
       {REG_DIOMAPPING2, RFM_DIOMAPPING2_CLKOUT_OFF},
