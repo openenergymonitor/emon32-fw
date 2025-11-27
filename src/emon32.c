@@ -495,9 +495,7 @@ int main(void) {
   }
 
   eicEnable();
-  uartEnable(SERCOM_UART,
-             (SERCOM_USART_INTENSET_RXC | SERCOM_USART_INTENSET_ERROR),
-             SERCOM_UART_INTERACTIVE_IRQn);
+  uartEnableTx(SERCOM_UART);
 
   /* Load stored values (configuration and accumulated energy) from
    * non-volatile memory (NVM). If the NVM has not been used before then
@@ -524,11 +522,13 @@ int main(void) {
   configFirmwareBoardInfo();
 
   /* Set up buffers for ADC data, configure energy processing, and start */
-  uiLedColour(LED_GREEN);
   ecmConfigure();
   dmacCallbackBufferFill(&ecmDmaCallback);
   ecmFlush();
   adcDMACStart();
+  uartEnableRx(SERCOM_UART, SERCOM_UART_INTERACTIVE_IRQn);
+
+  uiLedColour(LED_GREEN);
 
   for (;;) {
 

@@ -112,12 +112,15 @@ void spiSendBuffer(Sercom *sercom, const void *pSrc, int n);
  */
 uint8_t spiSendByte(Sercom *sercom, const uint8_t b);
 
-/*! @brief Enable the UART instance
- *  @param [in] sercom : pointer to SERCOM instance
- *  @param [in] interrupts : interrupts to enable
- *  @param [in] irqn : IRQ number
+/*! @brief Enable the UART instance for Rx
+ *  @param [in] irqn : interrupt number
  */
-void uartEnable(Sercom *sercom, const uint32_t interrupts, const uint32_t irqn);
+void uartEnableRx(Sercom *sercom, const uint32_t irqn);
+
+/*! @brief Enable the UART instance for Tx
+ *  @param [in] sercom : pointer to SERCOM instance
+ */
+void uartEnableTx(Sercom *sercom);
 
 /*! @brief Get a character from the USART data buffer. Only valid when the
  *         INTFLAG.RXC bit it set.

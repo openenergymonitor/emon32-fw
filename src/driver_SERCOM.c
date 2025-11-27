@@ -258,15 +258,28 @@ void uartPutsNonBlocking(unsigned int dma_chan, const char *const s,
   dmacChannelEnable(dma_chan);
 }
 
-void uartEnable(Sercom *sercom, const uint32_t interrupts,
-                const uint32_t irqn) {
-  uartInterruptEnable(sercom, interrupts);
+void uartEnableRx(Sercom *sercom, const uint32_t irqn) {
+  uartInterruptEnable(sercom, SERCOM_USART_INTENSET_RXC);
   NVIC_EnableIRQ(irqn);
 
+  sercom->USART.CTRLB.reg |= SERCOM_USART_CTRLB_RXEN;
+
   /* Enable requires synchronisation (26.6.6) */
-  sercom->USART.CTRLA.reg |= SERCOM_USART_CTRLA_ENABLE;
-  while (sercom->USART.STATUS.reg & SERCOM_USART_SYNCBUSY_ENABLE)
-    ;
+  if (!(sercom->USART.CTRLA.reg & SERCOM_USART_CTRLA_ENABLE)) {
+    sercom->USART.CTRLA.reg |= SERCOM_USART_CTRLA_ENABLE;
+    while (sercom->USART.STATUS.reg & SERCOM_USART_SYNCBUSY_ENABLE)
+      ;
+  }
+}
+
+void uartEnableTx(Sercom *sercom) {
+  sercom->USART.CTRLB.reg |= SERCOM_USART_CTRLB_TXEN;
+  /* Enable requires synchronisation (26.6.6) */
+  if (!(sercom->USART.CTRLA.reg & SERCOM_USART_CTRLA_ENABLE)) {
+    sercom->USART.CTRLA.reg |= SERCOM_USART_CTRLA_ENABLE;
+    while (sercom->USART.STATUS.reg & SERCOM_USART_SYNCBUSY_ENABLE)
+      ;
+  }
 }
 
 char uartGetc(Sercom *sercom) { return sercom->USART.DATA.reg; }
