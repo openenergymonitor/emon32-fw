@@ -2,6 +2,20 @@
 
 This document lists all available serial commands for the emon32 firmware (emonPi3/emonTx6).
 
+## Serial Connection Settings
+
+### USB CDC (Virtual Serial Port)
+- **Baud rate**: Not applicable (USB CDC automatically negotiates)
+- **Data format**: 8 data bits, no parity, 1 stop bit (8N1)
+- **Line termination**: `\r\n` or `\n`
+- **Flow control**: Not required (optional on Windows for some terminal applications)
+
+### Hardware UART
+- **Baud rate**: 115200
+- **Data format**: 8 data bits, no parity, 1 stop bit (8N1)
+- **Line termination**: `\r\n` or `\n`
+- **Flow control**: Not used
+
 ## Quick Start
 
 To test if your serial connection is working, try these commands first:
@@ -45,7 +59,7 @@ When making configuration changes:
 1. Make your changes using the appropriate commands (e.g., `k`, `m`, `f`, etc.)
 2. Verify with `l` (list settings)
 3. Save with `s` (save to NVM)
-4. Some changes require a reset to take effect
+4. Settings that require a reset will automatically trigger a reset when saved
 
 ## Examples
 
@@ -91,24 +105,37 @@ s                     # Save configuration
 ### Set line frequency to 50 Hz
 ```
 f50                   # Set to 50 Hz
-s                     # Save and reset
+s                     # Save (will automatically reset)
 ```
 
 ## Troubleshooting
 
-If you're not seeing any output:
+### No Output on USB CDC
+If you're not seeing any output on USB:
 
 1. Check that your serial terminal is connected (COM port open)
-2. Ensure DTR/RTS are enabled in your terminal settings
+2. On Windows, some terminal applications may require DTR/RTS flow control enabled
 3. Try sending `v` to request board information
 4. Try sending `t` to trigger an immediate data report
 5. Try sending `l` to list configuration
 6. Check if serial logging is enabled with `c1` then `s`
 
+### No Output on Hardware UART
+If you're not seeing any output on the hardware UART:
+
+1. Verify the UART configuration: 115200 baud, 8N1
+2. **Check Rx/Tx connections** - ensure they are the correct way around:
+   - Board TX → Your device RX
+   - Board RX → Your device TX
+3. Try sending `v` to request board information
+4. Verify the cable is properly connected and not loose
+5. Check if serial logging is enabled with `c1` then `s`
+
 ## Notes
 
 - Commands are case-sensitive (lowercase only)
-- Press Enter after typing each command
-- Baud rate doesn't matter for USB CDC (virtual serial port)
+- Line termination: Either `\r\n` or `\n` is accepted
+- USB CDC baud rate doesn't matter (automatically negotiated)
+- Hardware UART uses 115200 baud, 8N1
 - Configuration changes are only temporary until saved with `s`
-- Some commands (like `f` for frequency) require a system reset after saving
+- Settings that require a reset will automatically trigger a reset when saved
