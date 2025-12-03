@@ -216,7 +216,7 @@ void ecmConfigChannel(int_fast8_t ch) {
 
 void configChannelCT(int_fast8_t ch) {
   channelActive[ch + NUM_V] = ecmCfg.ctCfg[ch].active;
-  datasetProc.activeCh      = ecmCfg.ctCfg[ch].active << (ch + NUM_V);
+  datasetProc.activeCh |= ecmCfg.ctCfg[ch].active << (ch + NUM_V);
   ecmCfg.ctCfg[ch].ctCal =
       calibrationAmplitude(ecmCfg.ctCfg[ch].ctCalRaw, false);
 
@@ -227,8 +227,8 @@ void configChannelCT(int_fast8_t ch) {
 }
 
 void configChannelV(int_fast8_t ch) {
-  channelActive[ch]    = ecmCfg.vCfg[ch].vActive;
-  datasetProc.activeCh = ecmCfg.vCfg[ch].vActive << ch;
+  channelActive[ch] = ecmCfg.vCfg[ch].vActive;
+  datasetProc.activeCh |= ecmCfg.vCfg[ch].vActive << ch;
   ecmCfg.vCfg[ch].voltageCal =
       calibrationAmplitude(ecmCfg.vCfg[ch].voltageCalRaw, true);
 }
