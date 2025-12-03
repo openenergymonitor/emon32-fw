@@ -56,6 +56,11 @@ static bool rfmAckRecv(uint16_t fromId) {
 }
 
 static void rfmFreqToBand(const RFM_Freq_t freq, uint8_t *band) {
+  /* Default to 433.92 MHz */
+  band[2] = RFM_FRFMSB_433;
+  band[1] = RFM_FRFMID_433_92;
+  band[0] = RFM_FRFLSB_433_92;
+
   switch (freq) {
   case 0:
     band[2] = RFM_FRFMSB_868;
