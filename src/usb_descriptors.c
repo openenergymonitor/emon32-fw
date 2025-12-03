@@ -39,7 +39,7 @@
    _PID_MAP(MIDI, 3) | _PID_MAP(VENDOR, 4))
 
 #define USB_VID 0x1209
-#define USB_BCD 0x2025
+#define USB_BCD 0x0200
 
 //--------------------------------------------------------------------+
 // Device Descriptors
