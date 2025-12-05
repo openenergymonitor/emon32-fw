@@ -32,7 +32,12 @@ void usbCDCTask(void) {
     for (int i = 0; i < nrx; i++) {
       int ch = tud_cdc_read_char();
       if (-1 != ch) {
-        configCmdChar(((uint8_t)ch));
+        /* Check if we're waiting for a confirmation (bootloader, zero, etc.) */
+        if (!configHandleConfirmation((uint8_t)ch)) {
+          /* Normal command processing */
+          configCmdChar(((uint8_t)ch));
+        }
+        /* Echo character */
         usbCDCTxChar((uint8_t)ch);
       }
     }
@@ -85,3 +90,12 @@ size_t board_get_unique_id(uint8_t id[], size_t max_len) {
 }
 
 void irq_handler_usb(void) { tud_int_handler(0); }
+
+/* TinyUSB CDC RX callback - called from USB interrupt when data is received
+ * This is required since tud_task() is no longer called from interrupt context
+ */
+void tud_cdc_rx_cb(uint8_t itf) {
+  (void)itf; /* Only using interface 0 */
+
+  /* Data available - will be processed by usbCDCTask() in main loop */
+}

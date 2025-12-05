@@ -59,7 +59,7 @@ Emon32Config_t          *pConfig = 0;
 static unsigned int cumulativeNVMLoad(Emon32Cumulative_t *pPkt,
                                       Emon32Dataset_t    *pData);
 static void         cumulativeNVMStore(Emon32Cumulative_t    *pPkt,
-                                       const Emon32Dataset_t *pData);
+                                       const Emon32Dataset_t *pData, bool blocking);
 static void         cumulativeProcess(Emon32Cumulative_t    *pPkt,
                                       const Emon32Dataset_t *pData,
                                       const unsigned int     whDeltaStore);
@@ -115,10 +115,13 @@ static unsigned int cumulativeNVMLoad(Emon32Cumulative_t *pPkt,
 }
 
 /*! @brief Store cumulative energy and pulse values
- *  @param [in] pRes : pointer to cumulative values
+ *  @param [in] pPkt : pointer to cumulative values
+ *  @param [in] pData : pointer to current dataset
+ *  @param [in] blocking : true for blocking write (before reset), false for
+ * async
  */
 static void cumulativeNVMStore(Emon32Cumulative_t    *pPkt,
-                               const Emon32Dataset_t *pData) {
+                               const Emon32Dataset_t *pData, bool blocking) {
   EMON32_ASSERT(pPkt);
   EMON32_ASSERT(pData);
 
@@ -130,7 +133,13 @@ static void cumulativeNVMStore(Emon32Cumulative_t    *pPkt,
     pPkt->pulseCnt[idxPulse] = pData->pulseCnt[idxPulse];
   }
 
-  (void)eepromWriteWL(pPkt, 0);
+  if (blocking) {
+    /* Blocking write - use before system reset to ensure data is saved */
+    eepromWriteWL(pPkt, 0);
+  } else {
+    /* Async write with hardware timer callbacks to avoid blocking */
+    (void)eepromWriteWLAsync(pPkt, 0);
+  }
 }
 
 /*! @brief Calculate the cumulative energy consumption and store if the delta
@@ -158,7 +167,8 @@ static void cumulativeProcess(Emon32Cumulative_t    *pPkt,
   energyOverflow = (latestWh < lastStoredWh);
   deltaWh        = latestWh - lastStoredWh;
   if ((deltaWh >= whDeltaStore) || energyOverflow) {
-    cumulativeNVMStore(pPkt, pData);
+    cumulativeNVMStore(pPkt, pData,
+                       false); /* Async write during normal operation */
     lastStoredWh = latestWh;
   }
 }
@@ -545,6 +555,15 @@ int main(void) {
 
       /* 1 ms timer flag */
       if (evtPending(EVT_TICK_1kHz)) {
+        tud_task();
+        usbCDCTask();
+
+        /* Process any timer callbacks that are ready */
+        timerProcessPendingCallbacks();
+
+        /* Check for confirmation timeout (30s) */
+        configCheckConfirmationTimeout();
+
         evtKiloHertz();
         emon32EventClr(EVT_TICK_1kHz);
       }
@@ -674,7 +693,8 @@ int main(void) {
       }
 
       if (evtPending(EVT_SAFE_RESET_REQ)) {
-        cumulativeNVMStore(&nvmCumulative, &dataset);
+        cumulativeNVMStore(&nvmCumulative, &dataset,
+                           true); /* Blocking write before reset */
         NVIC_SystemReset();
       }
     }

@@ -83,9 +83,31 @@ eepromWrStatus_t eepromWrite(unsigned int addr, const void *pSrc,
  */
 eepromWrStatus_t eepromWriteContinue(void);
 
-/*! @brief Save data to EEPROM with wear leveling.
+/*! @brief Save data to EEPROM with wear leveling (blocking).
  *  @param [in] pPktWr : pointer to write packet
  *  @param [out] pIdx : pointer to the value of the index written to
  *  @return status of the EEPROM write process
  */
 eepromWrStatus_t eepromWriteWL(const void *pPktWr, int *pIdx);
+
+/*! @brief Start an asynchronous wear-leveled write operation (non-blocking).
+ *  @details Uses hardware timer callback queue for precise timing
+ *  @param [in] pPktWr : pointer to write packet
+ *  @param [out] pIdx : pointer to the value of the index to write to (optional)
+ *  @return EEPROM_WR_BUSY if another write is in progress, EEPROM_WR_PEND
+ * otherwise
+ *  @warning The data pointed to by pPktWr must remain valid until the write
+ * completes! Use eepromWriteWLAsyncStatus() or eepromWriteWLBusy() to check
+ * completion.
+ */
+eepromWrStatus_t eepromWriteWLAsync(const void *pPktWr, int *pIdx);
+
+/*! @brief Get the status of the asynchronous wear-leveled write.
+ *  @return Current status of the async write operation
+ */
+eepromWrStatus_t eepromWriteWLAsyncStatus(void);
+
+/*! @brief Check if an asynchronous wear-leveled write is in progress.
+ *  @return true if write is in progress, false otherwise
+ */
+bool eepromWriteWLBusy(void);

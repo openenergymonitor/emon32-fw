@@ -24,6 +24,15 @@
  * Types
  *************************************/
 
+/* Async confirmation state machine */
+typedef enum {
+  CONFIRM_IDLE,
+  CONFIRM_BOOTLOADER,
+  CONFIRM_ZERO_ACCUM,
+  CONFIRM_NVM_OVERWRITE,
+  CONFIRM_RESTORE_DEFAULTS
+} ConfirmState_t;
+
 typedef enum {
   RCAUSE_SYST  = 0x40,
   RCAUSE_WDT   = 0x20,
@@ -69,7 +78,9 @@ static void     printSettingsHR(void);
 static void     printSettingsKV(void);
 static void     printUptime(void);
 static void     putFloat(float val, int flt_len);
+static void     handleConfirmation(char c);
 static char     waitForChar(void);
+static bool     restoreDefaults(void);
 static bool     zeroAccumulators(void);
 
 /*************************************
@@ -79,10 +90,15 @@ static bool     zeroAccumulators(void);
 #define IN_BUFFER_W 64
 static Emon32Config_t config;
 static char           inBuffer[IN_BUFFER_W];
-static int            inBufferIdx   = 0;
-static bool           cmdPending    = false;
-static bool           resetReq      = false;
-static bool           unsavedChange = false;
+
+/* Async confirmation state */
+#define CONFIRM_TIMEOUT_MS 30000u /* 30 second timeout for confirmations */
+static volatile ConfirmState_t confirmState        = CONFIRM_IDLE;
+static volatile uint32_t       confirmStartTime_ms = 0;
+static int                     inBufferIdx         = 0;
+static bool                    cmdPending          = false;
+static bool                    resetReq            = false;
+static bool                    unsavedChange       = false;
 
 /*! @brief Set all configuration values to defaults */
 static void configDefault(void) {
@@ -609,22 +625,14 @@ static bool configureSerialLog(void) {
 }
 
 static void enterBootloader(void) {
-  /* Linker reserves 4 bytes at the bottom of the stack and write the UF2
-   * bootloader key followed by reset. Will enter bootloader upon reset. */
-  char               c;
-  volatile uint32_t *p_blsm =
-      (volatile uint32_t *)(HMCRAMC0_ADDR + HMCRAMC0_SIZE - 4);
-  // Key is uf2-samdx1/inc/uf2.h:DBL_TAP_MAGIC
-  const uint32_t blsm_key = 0xF01669EF;
+  /* Set confirmation state and prompt user
+   * Response will be handled asynchronously by handleConfirmation() */
   serialPuts("> Enter bootloader? All unsaved changes will be lost. 'y' to "
              "proceed.\r\n");
-  c = waitForChar();
-  if ('y' == c) {
-    *p_blsm = blsm_key;
-    NVIC_SystemReset();
-  } else {
-    serialPuts("    - Cancelled.");
-  }
+  __disable_irq();
+  confirmStartTime_ms = timerMillis();
+  confirmState        = CONFIRM_BOOTLOADER;
+  __enable_irq();
 }
 
 /*! @brief Get the board revision, software visible changes only
@@ -759,6 +767,8 @@ static void printSettings(void) {
 
   if (unsavedChange) {
     serialPuts("There are unsaved changes. Command \"s\" to save.\r\n\r\n");
+  } else {
+    serialPuts("All settings saved.\r\n\r\n");
   }
 }
 
@@ -885,56 +895,169 @@ static void printUptime(void) {
           tHours, tMinutes, tSeconds);
 }
 
-/*! @brief Blocking wait for a key from the serial link. If the USB CDC is
- *         connected the key will come from here.
+/*! @brief Check if waiting for confirmation and handle if yes
+ *  @param [in] c : character received
+ *  @return true if character was handled as confirmation, false otherwise
+ */
+bool configHandleConfirmation(const uint8_t c) {
+  if (CONFIRM_IDLE == confirmState) {
+    return false; /* Not waiting for confirmation */
+  }
+
+  /* We're waiting for confirmation - handle it */
+  handleConfirmation((char)c);
+  return true;
+}
+
+/*! @brief Handle confirmation response (async, internal)
+ *  @param [in] c : character received ('y' or 'n' expected)
+ */
+static void handleConfirmation(char c) {
+  volatile uint32_t *p_blsm;
+  const uint32_t     blsm_key = 0xF01669EF;
+
+  switch (confirmState) {
+  case CONFIRM_BOOTLOADER:
+    if ('y' == c) {
+      p_blsm  = (volatile uint32_t *)(HMCRAMC0_ADDR + HMCRAMC0_SIZE - 4);
+      *p_blsm = blsm_key;
+      NVIC_SystemReset();
+    } else {
+      serialPuts("    - Cancelled.\r\n");
+    }
+    __disable_irq();
+    confirmState        = CONFIRM_IDLE;
+    confirmStartTime_ms = 0;
+    __enable_irq();
+    break;
+
+  case CONFIRM_ZERO_ACCUM:
+    if ('y' == c) {
+      eepromInitBlock(EEPROM_WL_OFFSET, 0, (1024 - EEPROM_WL_OFFSET));
+      serialPuts("    - Accumulators cleared.\r\n");
+      emon32EventSet(EVT_CLEAR_ACCUM);
+    } else {
+      serialPuts("    - Cancelled.\r\n");
+    }
+    __disable_irq();
+    confirmState        = CONFIRM_IDLE;
+    confirmStartTime_ms = 0;
+    __enable_irq();
+    break;
+
+  case CONFIRM_NVM_OVERWRITE:
+    /* Reserved for future use: NVM corruption check during startup currently
+     * uses a semi-blocking approach (see configLoadFromNVM) because it happens
+     * before the main loop starts. This case is ready if startup is refactored
+     * to use the async confirmation system.
+     *
+     * Future implementation:
+     *   if ('y' == c) {
+     *     configInitialiseNVM();
+     *     serialPuts("    - NVM overwritten with defaults.\r\n");
+     *   } else {
+     *     serialPuts("    - Using potentially corrupt NVM.\r\n");
+     *   }
+     *   confirmState = CONFIRM_IDLE;
+     *   confirmStartTime_ms = 0;
+     */
+    break;
+
+  case CONFIRM_RESTORE_DEFAULTS:
+    if ('y' == c) {
+      configDefault();
+      serialPuts("    - Restored default values.\r\n");
+      unsavedChange = true;
+      resetReq      = true;
+      emon32EventSet(EVT_CONFIG_CHANGED);
+    } else {
+      serialPuts("    - Cancelled.\r\n");
+    }
+    __disable_irq();
+    confirmState        = CONFIRM_IDLE;
+    confirmStartTime_ms = 0;
+    __enable_irq();
+    break;
+
+  case CONFIRM_IDLE:
+    /* Not waiting for confirmation, ignore */
+    break;
+  }
+}
+
+/*! @brief Check for confirmation timeout and cancel if expired
+ *  @details Call this periodically from main loop to check if a confirmation
+ *           has been pending for too long (30 seconds). If timeout occurs,
+ *           the confirmation is automatically cancelled.
+ */
+void configCheckConfirmationTimeout(void) {
+  if (CONFIRM_IDLE == confirmState) {
+    return; /* Not waiting for confirmation */
+  }
+
+  /* Check if timeout has expired */
+  uint32_t elapsed_ms = timerMillis() - confirmStartTime_ms;
+  if (elapsed_ms >= CONFIRM_TIMEOUT_MS) {
+    serialPuts("    - Confirmation timeout, cancelled.\r\n");
+    confirmState = CONFIRM_IDLE;
+  }
+}
+
+/*! @brief Blocking wait for a key from the UART serial link
+ *  @note USB CDC confirmations are now handled asynchronously
  */
 static char waitForChar(void) {
   /* Disable the NVIC for the interrupt if needed while waiting for the
    * character otherwise it is handled by the configuration buffer.
    */
   char c;
-  if (usbCDCIsConnected()) {
-    while (!usbCDCRxAvailable())
-      ;
-    c = usbCDCRxGetChar();
-  } else {
-    int irqEnabled = (NVIC->ISER[0] &
-                      (1 << ((uint32_t)(SERCOM_UART_INTERACTIVE_IRQn) & 0x1F)))
-                         ? 1
-                         : 0;
-    if (irqEnabled) {
-      NVIC_DisableIRQ(SERCOM_UART_INTERACTIVE_IRQn);
-    }
+  int  irqEnabled =
+      (NVIC->ISER[0] & (1 << ((uint32_t)(SERCOM_UART_INTERACTIVE_IRQn) & 0x1F)))
+           ? 1
+           : 0;
+  if (irqEnabled) {
+    NVIC_DisableIRQ(SERCOM_UART_INTERACTIVE_IRQn);
+  }
 
-    while (0 == (uartInterruptStatus(SERCOM_UART) & SERCOM_USART_INTFLAG_RXC))
-      ;
-    c = uartGetc(SERCOM_UART);
+  while (0 == (uartInterruptStatus(SERCOM_UART) & SERCOM_USART_INTFLAG_RXC))
+    ;
+  c = uartGetc(SERCOM_UART);
 
-    if (irqEnabled) {
-      NVIC_EnableIRQ(SERCOM_UART_INTERACTIVE_IRQn);
-    }
+  if (irqEnabled) {
+    NVIC_EnableIRQ(SERCOM_UART_INTERACTIVE_IRQn);
   }
 
   return c;
 }
 
-/*! @brief Zero the accumulator portion of the NVM
- *  @return true if cleared, false if cancelled
+/*! @brief Restore default configuration values (async)
+ *  @return always returns true (async operation initiated)
+ */
+static bool restoreDefaults(void) {
+  /* Set confirmation state and prompt user
+   * Response will be handled asynchronously by handleConfirmation() */
+  serialPuts("> Restore default values? Unsaved changes will be lost. 'y' to "
+             "proceed.\r\n");
+  __disable_irq();
+  confirmStartTime_ms = timerMillis();
+  confirmState        = CONFIRM_RESTORE_DEFAULTS;
+  __enable_irq();
+  return true; /* Async operation started */
+}
+
+/*! @brief Zero the accumulator portion of the NVM (async)
+ *  @return always returns true (async operation initiated)
  */
 static bool zeroAccumulators(void) {
-  char c;
+  /* Set confirmation state and prompt user
+   * Response will be handled asynchronously by handleConfirmation() */
   serialPuts(
       "> Zero accumulators. This can not be undone. 'y' to proceed.\r\n");
-
-  c = waitForChar();
-  if ('y' == c) {
-    eepromInitBlock(EEPROM_WL_OFFSET, 0, (1024 - EEPROM_WL_OFFSET));
-    serialPuts("    - Accumulators cleared.\r\n");
-    return true;
-  } else {
-    serialPuts("    - Cancelled.\r\n");
-    return false;
-  }
+  __disable_irq();
+  confirmStartTime_ms = timerMillis();
+  confirmState        = CONFIRM_ZERO_ACCUM;
+  __enable_irq();
+  return true; /* Async operation started */
 }
 
 void configCmdChar(const uint8_t c) {
@@ -1006,8 +1129,24 @@ Emon32Config_t *configLoadFromNVM(void) {
     crc16_ccitt = calcCRC16_ccitt(&config, cfgSize - 2u);
     if (crc16_ccitt != config.crc16_ccitt) {
       serialPuts("  - NVM may be corrupt. Overwrite with default? (y/n)\r\n");
+
+      /* NVM corruption check happens at startup - semi-blocking is acceptable
+       * here since the system hasn't fully initialized yet. We keep USB
+       * processing active via tud_task() to maintain the connection, while
+       * UART uses blocking wait. Once the system is running, all confirmations
+       * use the async state machine (handleConfirmation) instead.
+       */
       while ('y' != c && 'n' != c) {
-        c = waitForChar();
+        /* Keep USB processing active while waiting */
+        if (usbCDCIsConnected()) {
+          tud_task();
+          if (usbCDCRxAvailable()) {
+            c = usbCDCRxGetChar();
+          }
+        } else {
+          c = waitForChar(); /* Use blocking wait for UART */
+          break;
+        }
       }
       if ('y' == c) {
         configInitialiseNVM();
@@ -1167,13 +1306,7 @@ void configProcessCmd(void) {
     }
     break;
   case 'r':
-    configDefault();
-
-    serialPuts("> Restored default values.\r\n");
-
-    unsavedChange = true;
-    resetReq      = true;
-    emon32EventSet(EVT_CONFIG_CHANGED);
+    restoreDefaults();
     break;
   case 's':
     /* Save to EEPROM config space after recalculating CRC and indicate if a
