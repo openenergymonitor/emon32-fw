@@ -601,7 +601,8 @@ RAMFUNC ECM_STATUS_t ecmInjectSample(void) {
 
   /* If no zero-crossing has been detected in 100 ms, fall back to assumed
    * Vrms */
-  if ((*ecmCfg.timeMicrosDelta)(t_ZClast) > 100000) {
+  if (((*ecmCfg.timeMicrosDelta)(t_ZClast) > 100000) &&
+      (0.0f != ecmCfg.assumedVrms)) {
     useAssumedV = true;
   } else {
     useAssumedV = false;
