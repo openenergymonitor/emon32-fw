@@ -29,8 +29,9 @@ typedef enum {
   CONFIRM_IDLE,
   CONFIRM_BOOTLOADER,
   CONFIRM_ZERO_ACCUM,
-  CONFIRM_NVM_OVERWRITE,
-  CONFIRM_RESTORE_DEFAULTS
+  CONFIRM_NVM_OVERWRITE
+  /* CONFIRM_RESTORE_DEFAULTS - Removed pending OEM decision on restore defaults
+     confirmation */
 } ConfirmState_t;
 
 typedef enum {
@@ -80,7 +81,7 @@ static void     printUptime(void);
 static void     putFloat(float val, int flt_len);
 static void     handleConfirmation(char c);
 static char     waitForChar(void);
-static bool     restoreDefaults(void);
+/* static bool     restoreDefaults(void); - Removed pending OEM decision */
 static bool     zeroAccumulators(void);
 
 /*************************************
@@ -963,21 +964,24 @@ static void handleConfirmation(char c) {
      */
     break;
 
-  case CONFIRM_RESTORE_DEFAULTS:
-    if ('y' == c) {
-      configDefault();
-      serialPuts("    - Restored default values.\r\n");
-      unsavedChange = true;
-      resetReq      = true;
-      emon32EventSet(EVT_CONFIG_CHANGED);
-    } else {
-      serialPuts("    - Cancelled.\r\n");
-    }
-    __disable_irq();
-    confirmState        = CONFIRM_IDLE;
-    confirmStartTime_ms = 0;
-    __enable_irq();
-    break;
+    /* Removed pending OEM decision on restore defaults confirmation
+     *
+     * case CONFIRM_RESTORE_DEFAULTS:
+     *   if ('y' == c) {
+     *     configDefault();
+     *     serialPuts("    - Restored default values.\r\n");
+     *     unsavedChange = true;
+     *     resetReq      = true;
+     *     emon32EventSet(EVT_CONFIG_CHANGED);
+     *   } else {
+     *     serialPuts("    - Cancelled.\r\n");
+     *   }
+     *   __disable_irq();
+     *   confirmState        = CONFIRM_IDLE;
+     *   confirmStartTime_ms = 0;
+     *   __enable_irq();
+     *   break;
+     */
 
   case CONFIRM_IDLE:
     /* Not waiting for confirmation, ignore */
@@ -1030,20 +1034,18 @@ static char waitForChar(void) {
   return c;
 }
 
-/*! @brief Restore default configuration values (async)
- *  @return always returns true (async operation initiated)
+/* Removed pending OEM decision on restore defaults confirmation
+ *
+ * static bool restoreDefaults(void) {
+ *   serialPuts("> Restore default values? Unsaved changes will be lost. 'y' to
+ * " "proceed.\r\n");
+ *   __disable_irq();
+ *   confirmStartTime_ms = timerMillis();
+ *   confirmState        = CONFIRM_RESTORE_DEFAULTS;
+ *   __enable_irq();
+ *   return true;
+ * }
  */
-static bool restoreDefaults(void) {
-  /* Set confirmation state and prompt user
-   * Response will be handled asynchronously by handleConfirmation() */
-  serialPuts("> Restore default values? Unsaved changes will be lost. 'y' to "
-             "proceed.\r\n");
-  __disable_irq();
-  confirmStartTime_ms = timerMillis();
-  confirmState        = CONFIRM_RESTORE_DEFAULTS;
-  __enable_irq();
-  return true; /* Async operation started */
-}
 
 /*! @brief Zero the accumulator portion of the NVM (async)
  *  @return always returns true (async operation initiated)
@@ -1306,7 +1308,13 @@ void configProcessCmd(void) {
     }
     break;
   case 'r':
-    restoreDefaults();
+    configDefault();
+
+    serialPuts("> Restored default values.\r\n");
+
+    unsavedChange = true;
+    resetReq      = true;
+    emon32EventSet(EVT_CONFIG_CHANGED);
     break;
   case 's':
     /* Save to EEPROM config space after recalculating CRC and indicate if a
