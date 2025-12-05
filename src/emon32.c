@@ -122,12 +122,12 @@ static void cumulativeNVMStore(Emon32Cumulative_t    *pPkt,
   EMON32_ASSERT(pPkt);
   EMON32_ASSERT(pData);
 
-  for (int idxCT = 0; idxCT < NUM_CT; idxCT++) {
+  for (unsigned int idxCT = 0; idxCT < NUM_CT; idxCT++) {
     pPkt->wattHour[idxCT] = pData->pECM->CT[idxCT].wattHour;
   }
 
-  for (int idxPulse = 0; idxPulse < NUM_OPA; idxPulse++) {
-    pPkt->pulseCnt[0] = pData->pulseCnt[0];
+  for (unsigned int idxPulse = 0; idxPulse < NUM_OPA; idxPulse++) {
+    pPkt->pulseCnt[idxPulse] = pData->pulseCnt[idxPulse];
   }
 
   (void)eepromWriteWL(pPkt, 0);
