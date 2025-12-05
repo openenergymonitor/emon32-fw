@@ -454,6 +454,12 @@ static void eepromWLAsyncCallback(void) {
       if (!timerScheduleCallback(eepromWLAsyncCallback, EEPROM_WR_TIME)) {
         wlAsyncCtx.state = WL_ASYNC_ERROR; /* Callback queue full */
       }
+    } else if (status == EEPROM_WR_COMPLETE) {
+      /* Header write completed immediately (small write), start data write */
+      wlAsyncCtx.state = WL_ASYNC_WRITING_DATA;
+      if (!timerScheduleCallback(eepromWLAsyncCallback, 0)) {
+        wlAsyncCtx.state = WL_ASYNC_ERROR; /* Callback queue full */
+      }
     } else if (status == EEPROM_WR_FAIL) {
       wlAsyncCtx.state = WL_ASYNC_ERROR;
     }
@@ -470,6 +476,12 @@ static void eepromWLAsyncCallback(void) {
       if (status == EEPROM_WR_PEND) {
         wlAsyncCtx.state = WL_ASYNC_WAITING_DATA;
         if (!timerScheduleCallback(eepromWLAsyncCallback, EEPROM_WR_TIME)) {
+          wlAsyncCtx.state = WL_ASYNC_ERROR; /* Callback queue full */
+        }
+      } else if (status == EEPROM_WR_COMPLETE) {
+        /* Data write also completed immediately, finish up */
+        wlAsyncCtx.state = WL_ASYNC_WAITING_DATA;
+        if (!timerScheduleCallback(eepromWLAsyncCallback, 0)) {
           wlAsyncCtx.state = WL_ASYNC_ERROR; /* Callback queue full */
         }
       } else if (status == EEPROM_WR_FAIL) {
@@ -501,7 +513,11 @@ static void eepromWLAsyncCallback(void) {
       int idxWr = wlAsyncCtx.idx + 1u;
       if (idxWr == wlBlkCnt) {
         unsigned int validByte;
-        eepromRead(wlAsyncCtx.addrWr, &validByte, 1u);
+        if (!eepromRead(wlAsyncCtx.addrWr, &validByte, 1u)) {
+          /* Read failed - cannot update valid byte, treat as error */
+          wlAsyncCtx.state = WL_ASYNC_ERROR;
+          break;
+        }
         wlCurrentValid = nextValidByte(validByte);
         idxWr          = 0;
       }
@@ -537,10 +553,15 @@ bool eepromWriteWLBusy(void) {
 eepromWrStatus_t eepromWriteWLAsync(const void *pPktWr, int *pIdx) {
   EMON32_ASSERT(pPktWr);
 
-  /* Check if another write is in progress */
-  if (eepromWriteWLBusy()) {
+  /* Atomic check-and-set to prevent race condition */
+  __disable_irq();
+  if (wlAsyncCtx.state != WL_ASYNC_IDLE) {
+    __enable_irq();
     return EEPROM_WR_BUSY;
   }
+  /* Reserve the state machine immediately */
+  wlAsyncCtx.state = WL_ASYNC_WRITING_HEADER;
+  __enable_irq();
 
   /* Find the next write location if not yet set */
   if (-1 == wlIdxNxtWr) {
@@ -563,10 +584,9 @@ eepromWrStatus_t eepromWriteWLAsync(const void *pPktWr, int *pIdx) {
   }
 
   /* Start the state machine by scheduling the first callback */
-  wlAsyncCtx.state = WL_ASYNC_WRITING_HEADER;
   if (!timerScheduleCallback(eepromWLAsyncCallback, 0)) {
     /* Callback queue full - cannot start async write */
-    wlAsyncCtx.state = WL_ASYNC_ERROR;
+    wlAsyncCtx.state = WL_ASYNC_IDLE; /* Release reservation */
     return EEPROM_WR_FAIL;
   }
 
