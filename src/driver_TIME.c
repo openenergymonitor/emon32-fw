@@ -17,10 +17,11 @@ static volatile uint32_t timeSecondsCounter = 0;
 static bool TIMER_DELAYInUse = false;
 
 /* Queue sized for expected callback load:
- * - 1x EEPROM async write
- * - 3x spare for future use
+ * - 1x EEPROM async write (needs up to 6 callbacks: header + multi-page data +
+ * retries)
+ * - Additional spare for concurrent operations
  */
-#define TIMER_CALLBACK_QUEUE_SIZE 4
+#define TIMER_CALLBACK_QUEUE_SIZE 8
 
 typedef struct {
   TimerCallback_t callback;

@@ -54,6 +54,8 @@ typedef enum wlAsyncState_ {
   WL_ASYNC_IDLE,
   WL_ASYNC_WRITING_HEADER,
   WL_ASYNC_WAITING_HEADER,
+  WL_ASYNC_START_DATA_WRITE, /* Initiate data write (may need to wait for
+                                timing) */
   WL_ASYNC_WRITING_DATA,
   WL_ASYNC_WAITING_DATA,
   WL_ASYNC_COMPLETE,
@@ -394,6 +396,13 @@ eepromWrStatus_t eepromWrite(unsigned int addr, const void *pSrc,
       return EEPROM_WR_COMPLETE;
     }
 
+    /* Check if enough time has passed since last write. If not, return TOO_SOON
+     * instead of busy-waiting. This allows async callers to reschedule.
+     */
+    if (timerMicrosDelta(tLastWrite_us) < EEPROM_WR_TIME) {
+      return EEPROM_WR_TOO_SOON;
+    }
+
     wrLocal.n_residual = n;
     wrLocal.pData      = (uint8_t *)pSrc;
     wrLocal.addr       = addr;
@@ -405,9 +414,7 @@ eepromWrStatus_t eepromWrite(unsigned int addr, const void *pSrc,
     }
   }
 
-  /* Hold off write if too close to the last one. */
-  while (timerMicrosDelta(tLastWrite_us) < EEPROM_WR_TIME)
-    ;
+  /* Update timestamp when starting actual I2C transaction */
   tLastWrite_us = timerMicros();
 
   unsigned int nBytes = 0;
@@ -469,27 +476,42 @@ static void eepromWLAsyncCallback(void) {
     /* Continue header write */
     status = eepromWrite(0, 0, 0);
     if (status == EEPROM_WR_COMPLETE) {
-      /* Header done, start data write */
-      wlAsyncCtx.state = WL_ASYNC_WRITING_DATA;
-      status           = eepromWrite(wlAsyncCtx.addrWr + sizeof(WLHeader_t),
-                                     wlAsyncCtx.pData, wlAsyncCtx.dataLen);
-      if (status == EEPROM_WR_PEND) {
-        wlAsyncCtx.state = WL_ASYNC_WAITING_DATA;
-        if (!timerScheduleCallback(eepromWLAsyncCallback, EEPROM_WR_TIME)) {
-          wlAsyncCtx.state = WL_ASYNC_ERROR; /* Callback queue full */
-        }
-      } else if (status == EEPROM_WR_COMPLETE) {
-        /* Data write also completed immediately, finish up */
-        wlAsyncCtx.state = WL_ASYNC_WAITING_DATA;
-        if (!timerScheduleCallback(eepromWLAsyncCallback, 0)) {
-          wlAsyncCtx.state = WL_ASYNC_ERROR; /* Callback queue full */
-        }
-      } else if (status == EEPROM_WR_FAIL) {
-        wlAsyncCtx.state = WL_ASYNC_ERROR;
+      /* Header done, transition to START_DATA_WRITE state */
+      wlAsyncCtx.state = WL_ASYNC_START_DATA_WRITE;
+      /* Schedule callback immediately to attempt data write start */
+      if (!timerScheduleCallback(eepromWLAsyncCallback, 0)) {
+        wlAsyncCtx.state = WL_ASYNC_ERROR; /* Callback queue full */
       }
     } else if (status == EEPROM_WR_PEND) {
       /* Still pending, schedule next callback */
       if (!timerScheduleCallback(eepromWLAsyncCallback, EEPROM_WR_TIME)) {
+        wlAsyncCtx.state = WL_ASYNC_ERROR; /* Callback queue full */
+      }
+    } else if (status == EEPROM_WR_FAIL) {
+      wlAsyncCtx.state = WL_ASYNC_ERROR;
+    }
+    break;
+
+  case WL_ASYNC_START_DATA_WRITE:
+    /* Attempt to start data write - may return TOO_SOON */
+    status = eepromWrite(wlAsyncCtx.addrWr + sizeof(WLHeader_t),
+                         wlAsyncCtx.pData, wlAsyncCtx.dataLen);
+    if (status == EEPROM_WR_TOO_SOON) {
+      /* Too soon since last write, reschedule after EEPROM_WR_TIME */
+      if (!timerScheduleCallback(eepromWLAsyncCallback, EEPROM_WR_TIME)) {
+        wlAsyncCtx.state = WL_ASYNC_ERROR; /* Callback queue full */
+      }
+      /* Stay in START_DATA_WRITE state to retry */
+    } else if (status == EEPROM_WR_PEND) {
+      /* Data write started, transition to WAITING_DATA */
+      wlAsyncCtx.state = WL_ASYNC_WAITING_DATA;
+      if (!timerScheduleCallback(eepromWLAsyncCallback, EEPROM_WR_TIME)) {
+        wlAsyncCtx.state = WL_ASYNC_ERROR; /* Callback queue full */
+      }
+    } else if (status == EEPROM_WR_COMPLETE) {
+      /* Data write completed immediately (shouldn't happen but handle it) */
+      wlAsyncCtx.state = WL_ASYNC_WAITING_DATA;
+      if (!timerScheduleCallback(eepromWLAsyncCallback, 0)) {
         wlAsyncCtx.state = WL_ASYNC_ERROR; /* Callback queue full */
       }
     } else if (status == EEPROM_WR_FAIL) {
@@ -542,6 +564,7 @@ bool eepromWriteWLBusy(void) {
   return (wlAsyncCtx.state != WL_ASYNC_IDLE) &&
          (wlAsyncCtx.state != WL_ASYNC_COMPLETE) &&
          (wlAsyncCtx.state != WL_ASYNC_ERROR);
+  /* Note: WL_ASYNC_START_DATA_WRITE is considered busy */
 }
 
 /*! @brief Start an asynchronous wear-leveled write operation

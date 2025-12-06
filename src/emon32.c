@@ -138,7 +138,16 @@ static void cumulativeNVMStore(Emon32Cumulative_t    *pPkt,
     eepromWriteWL(pPkt, 0);
   } else {
     /* Async write with hardware timer callbacks to avoid blocking */
-    (void)eepromWriteWLAsync(pPkt, 0);
+    eepromWrStatus_t status = eepromWriteWLAsync(pPkt, 0);
+    if (status == EEPROM_WR_BUSY) {
+      /* Previous async write still in progress - this is expected occasionally
+       */
+      debugPuts("EEPROM async write skipped (busy)\r\n");
+    } else if (status == EEPROM_WR_FAIL) {
+      /* Failed to start async write - callback queue full or other error */
+      debugPuts("EEPROM async write failed!\r\n");
+    }
+    /* EEPROM_WR_PEND is success - write has been queued */
   }
 }
 
@@ -167,8 +176,14 @@ static void cumulativeProcess(Emon32Cumulative_t    *pPkt,
   energyOverflow = (latestWh < lastStoredWh);
   deltaWh        = latestWh - lastStoredWh;
   if ((deltaWh >= whDeltaStore) || energyOverflow) {
-    cumulativeNVMStore(pPkt, pData,
-                       false); /* Async write during normal operation */
+    /* TESTING: Async EEPROM writes enabled with fixed implementation.
+     * Fixes applied:
+     * - No busy-waits in callbacks (TOO_SOON status, eeprom.c:400-402)
+     * - Callback queue increased 4→8 (driver_TIME.c:23)
+     * - Error handling with debug output (below)
+     * Monitor debug serial for "EEPROM async write" messages.
+     */
+    cumulativeNVMStore(pPkt, pData, false); /* false = async (TESTING) */
     lastStoredWh = latestWh;
   }
 }

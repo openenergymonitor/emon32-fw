@@ -13,7 +13,8 @@ typedef enum eepromWrStatus_ {
   EEPROM_WR_BUSY,
   EEPROM_WR_COMPLETE,
   EEPROM_WR_FAIL,
-  EEPROM_WR_WL_COMPLETE
+  EEPROM_WR_WL_COMPLETE,
+  EEPROM_WR_TOO_SOON /* Too soon since last write, caller should retry later */
 } eepromWrStatus_t;
 
 /*! @brief Discover the size of the EEPROM
