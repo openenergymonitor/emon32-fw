@@ -85,6 +85,17 @@ _Static_assert((sizeof(Emon32Config_t) < EEPROM_WL_OFFSET),
  */
 void configCmdChar(const uint8_t c);
 
+/*! @brief Check if waiting for confirmation and handle if yes
+ *  @param [in] c : character received
+ *  @return true if character was handled as confirmation, false otherwise
+ */
+bool configHandleConfirmation(const uint8_t c);
+
+/*! @brief Check for confirmation timeout (call periodically from main loop)
+ *  @details Checks if a confirmation has been pending for >30s and cancels it
+ */
+void configCheckConfirmationTimeout(void);
+
 /*! @brief Print the board and firmware information to serial */
 void configFirmwareBoardInfo(void);
 

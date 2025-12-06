@@ -59,3 +59,36 @@ uint32_t timerUptime(void);
 
 /*! @brief Increment the uptime counter */
 void timerUptimeIncr(void);
+
+/* Timed callback queue system */
+
+/*! @brief Callback function type for timed events
+ *  @note Callbacks execute in MAIN LOOP context (not ISR)
+ *        They can perform blocking operations safely
+ */
+typedef void (*TimerCallback_t)(void);
+
+/*! @brief Schedule a callback to be executed after a specified delay
+ *  @param [in] callback : function to call
+ *  @param [in] delay_us : delay in microseconds
+ *  @return true if scheduled successfully, false if queue is full
+ */
+bool timerScheduleCallback(TimerCallback_t callback, uint32_t delay_us);
+
+/*! @brief Cancel a pending callback
+ *  @param [in] callback : function to cancel
+ *  @return true if found and cancelled, false otherwise
+ */
+bool timerCancelCallback(TimerCallback_t callback);
+
+/*! @brief Check if a callback is pending
+ *  @param [in] callback : function to check
+ *  @return true if pending, false otherwise
+ */
+bool timerCallbackPending(TimerCallback_t callback);
+
+/*! @brief Execute pending callbacks (call from main loop)
+ *  @details Executes all callbacks that were triggered by timer interrupts
+ *           Must be called regularly from main loop
+ */
+void timerProcessPendingCallbacks(void);
