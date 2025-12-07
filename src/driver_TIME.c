@@ -1,3 +1,4 @@
+#include "board_def.h"
 #include "emon32_samd.h"
 
 #include "driver_TIME.h"
@@ -209,9 +210,9 @@ void timerSetup(void) {
   timerSync(TIMER_TICK);
 
   /* Setup SysTick for 1 ms periodic tick
-   * Core clock is 48 MHz, so 48000 ticks = 1 ms
+   * Core clock is F_CORE, so (F_CORE / 1000) ticks = 1 ms
    */
-  SysTick->LOAD = 48000u - 1u;
+  SysTick->LOAD = (F_CORE / 1000u) - 1u;
   SysTick->VAL  = 0u;
   SysTick->CTRL = SysTick_CTRL_CLKSOURCE_Msk | /* Use processor clock */
                   SysTick_CTRL_TICKINT_Msk |   /* Enable interrupt */
