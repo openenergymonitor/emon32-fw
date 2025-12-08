@@ -137,22 +137,6 @@ static eepromWLStatus_t wlFindLast(void) {
     }
   }
 
-  /* Set wlCurrentValid based on what was found. If wlIdxNxtWr is still 0,
-   * all blocks have the same valid byte - advance to next valid byte so new
-   * writes are distinguishable. Otherwise, use the valid byte from the most
-   * recently written block (at index wlIdxNxtWr - 1).
-   */
-  if (wlIdxNxtWr == 0) {
-    /* All blocks identical - advance valid byte for next write */
-    wlCurrentValid = nextValidByte(wlHeader.valid);
-  } else {
-    /* Use valid byte from last written block */
-    int lastWrittenIdx  = wlIdxNxtWr - 1;
-    int lastWrittenAddr = EEPROM_WL_OFFSET + (lastWrittenIdx * wlBlkSize);
-    eepromRead(lastWrittenAddr, &wlHeader, 4u);
-    wlCurrentValid = wlHeader.valid;
-  }
-
   return status;
 }
 
@@ -351,12 +335,6 @@ void eepromWLClear(void) {
     int addr = EEPROM_WL_OFFSET + (i * wlBlkSize);
     eepromWrite(addr, &wlHeader, sizeof(wlHeader));
   }
-
-  /* Set wlCurrentValid to 1 so the next write is distinguishable from cleared
-   * blocks (which have valid=0). Without this, wlFindLast() can't find the
-   * written block after reboot since all blocks would have the same valid byte.
-   */
-  wlCurrentValid = 1;
 }
 
 void eepromWLReset(int len) {

@@ -69,7 +69,6 @@ static void     printSettingsHR(void);
 static void     printSettingsKV(void);
 static void     printUptime(void);
 static void     putFloat(float val, int flt_len);
-static void     readAccumulators(void);
 static char     waitForChar(void);
 static bool     zeroAccumulators(void);
 
@@ -919,31 +918,6 @@ static char waitForChar(void) {
   return c;
 }
 
-/*! @brief Read and display the current accumulator values from NVM */
-static void readAccumulators(void) {
-  Emon32Cumulative_t cumulative;
-  eepromWLStatus_t   status;
-  bool               eepromOK;
-
-  status   = eepromReadWL(&cumulative, 0);
-  eepromOK = (EEPROM_WL_OK == status);
-
-  serialPuts("> Accumulators");
-  if (!eepromOK) {
-    serialPuts(" (no valid NVM data)");
-  }
-  serialPuts(":\r\n");
-
-  for (unsigned int i = 0; i < NUM_CT; i++) {
-    uint32_t wh = eepromOK ? cumulative.wattHour[i] : 0;
-    printf_("  E%d = %" PRIu32 " Wh\r\n", (i + 1), wh);
-  }
-  for (unsigned int i = 0; i < NUM_OPA; i++) {
-    uint32_t pulse = eepromOK ? cumulative.pulseCnt[i] : 0;
-    printf_("  pulse%d = %" PRIu32 "\r\n", (i + 1), pulse);
-  }
-}
-
 /*! @brief Zero the accumulator portion of the NVM
  *  @return true if cleared, false if cancelled
  */
@@ -1063,7 +1037,6 @@ void configProcessCmd(void) {
       " - e           : enter bootloader\r\n"
       " - f<n>        : line frequency (Hz)\r\n"
       " - g<n>        : set network group (default = 210)\r\n"
-      " - i           : read energy accumulators\r\n"
       " - j<n>        : JSON serial format. n = 0: OFF, n = 1: ON\r\n"
       " - k<x> <a> <y.y> <z.z> v1 v2\r\n"
       "   - Configure an analog input\r\n"
@@ -1086,7 +1059,6 @@ void configProcessCmd(void) {
       " - r           : restore defaults\r\n"
       " - s           : save settings to NVM\r\n"
       " - t           : trigger report on next cycle\r\n"
-      " - u           : update (store) accumulators to NVM\r\n"
       " - v           : firmware and board information\r\n"
       " - w<n>        : RF active. n = 0: OFF, n = 1: ON\r\n"
       " - x<n>        : 433 MHz compatibility. n = 0: 433.92 MHz, n = 1: "
@@ -1153,9 +1125,6 @@ void configProcessCmd(void) {
       unsavedChange = true;
       emon32EventSet(EVT_CONFIG_CHANGED);
     }
-    break;
-  case 'i':
-    readAccumulators();
     break;
   case 'j':
     if (configureJSON()) {
@@ -1225,9 +1194,6 @@ void configProcessCmd(void) {
     break;
   case 't':
     emon32EventSet(EVT_ECM_TRIG);
-    break;
-  case 'u':
-    emon32EventSet(EVT_STORE_ACCUM);
     break;
   case 'v':
     configFirmwareBoardInfo();
