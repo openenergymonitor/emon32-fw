@@ -59,7 +59,7 @@ Emon32Config_t          *pConfig = 0;
 static unsigned int cumulativeNVMLoad(Emon32Cumulative_t *pPkt,
                                       Emon32Dataset_t    *pData);
 static void         cumulativeNVMStore(Emon32Cumulative_t    *pPkt,
-                                       const Emon32Dataset_t *pData, bool blocking);
+                                       const Emon32Dataset_t *pData);
 static void         cumulativeProcess(Emon32Cumulative_t    *pPkt,
                                       const Emon32Dataset_t *pData,
                                       const unsigned int     whDeltaStore);
@@ -117,11 +117,9 @@ static unsigned int cumulativeNVMLoad(Emon32Cumulative_t *pPkt,
 /*! @brief Store cumulative energy and pulse values
  *  @param [in] pPkt : pointer to cumulative values
  *  @param [in] pData : pointer to current dataset
- *  @param [in] blocking : true for blocking write (before reset), false for
- * async
  */
 static void cumulativeNVMStore(Emon32Cumulative_t    *pPkt,
-                               const Emon32Dataset_t *pData, bool blocking) {
+                               const Emon32Dataset_t *pData) {
   EMON32_ASSERT(pPkt);
   EMON32_ASSERT(pData);
 
@@ -133,22 +131,7 @@ static void cumulativeNVMStore(Emon32Cumulative_t    *pPkt,
     pPkt->pulseCnt[idxPulse] = pData->pulseCnt[idxPulse];
   }
 
-  if (blocking) {
-    /* Blocking write - use before system reset to ensure data is saved */
-    eepromWriteWL(pPkt, 0);
-  } else {
-    /* Async write with hardware timer callbacks to avoid blocking */
-    eepromWrStatus_t status = eepromWriteWLAsync(pPkt, 0);
-    if (status == EEPROM_WR_BUSY) {
-      /* Previous async write still in progress - this is expected occasionally
-       */
-      debugPuts("EEPROM async write skipped (busy)\r\n");
-    } else if (status == EEPROM_WR_FAIL) {
-      /* Failed to start async write - callback queue full or other error */
-      debugPuts("EEPROM async write failed!\r\n");
-    }
-    /* EEPROM_WR_PEND is success - write has been queued */
-  }
+  eepromWriteWL(pPkt, 0);
 }
 
 /*! @brief Calculate the cumulative energy consumption and store if the delta
@@ -183,7 +166,7 @@ static void cumulativeProcess(Emon32Cumulative_t    *pPkt,
      * - Error handling with debug output (below)
      * Monitor debug serial for "EEPROM async write" messages.
      */
-    cumulativeNVMStore(pPkt, pData, false); /* false = async (TESTING) */
+    cumulativeNVMStore(pPkt, pData);
     lastStoredWh = latestWh;
   }
 }
@@ -708,8 +691,7 @@ int main(void) {
       }
 
       if (evtPending(EVT_SAFE_RESET_REQ)) {
-        cumulativeNVMStore(&nvmCumulative, &dataset,
-                           true); /* Blocking write before reset */
+        cumulativeNVMStore(&nvmCumulative, &dataset);
         NVIC_SystemReset();
       }
     }
