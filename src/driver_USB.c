@@ -8,7 +8,7 @@
 
 bool usbCDCIsConnected(void) { return tud_cdc_connected(); }
 
-void usbCDCPutsBlocking(const char *s) { tud_cdc_write_str(s); };
+void usbCDCPutsBlocking(const char *s) { tud_cdc_write_str(s); }
 
 bool usbCDCRxAvailable(void) { return tud_cdc_available(); }
 
@@ -40,13 +40,10 @@ void usbCDCTask(void) {
 }
 
 void usbCDCTxChar(uint8_t c) {
-  static size_t n = 0;
-  tud_cdc_write_char(c);
-  n++;
-  if (!(n % 64)) {
+  if (!tud_cdc_write_available()) {
     tud_cdc_write_flush();
-    tud_task();
   }
+  tud_cdc_write_char(c);
 }
 
 void usbCDCTxFlush(void) { tud_cdc_write_flush(); }
