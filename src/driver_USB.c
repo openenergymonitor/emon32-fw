@@ -8,7 +8,31 @@
 
 bool usbCDCIsConnected(void) { return tud_cdc_connected(); }
 
-void usbCDCPutsBlocking(const char *s) { tud_cdc_write_str(s); }
+void usbCDCPutsBlocking(const char *s) {
+  const size_t csize = CFG_TUD_CDC_TX_BUFSIZE;
+  size_t       ccnt  = 0;
+  size_t       n     = 0;
+  uint8_t     *p     = (uint8_t *)s;
+
+  /* Flush any residual characters in Tx buffer */
+  tud_cdc_write_flush();
+  tud_task();
+
+  /* Send in chunks of TX_BUFSIZE, then flush residual */
+  while (*p++) {
+    n++;
+    if (!(n % csize)) {
+      tud_cdc_write(s + (ccnt++ * csize), csize);
+      tud_cdc_write_flush();
+      tud_task();
+    }
+  }
+  if (n % csize) {
+    tud_cdc_write(s + (ccnt * csize), (n % csize));
+    tud_cdc_write_flush();
+    tud_task();
+  }
+}
 
 bool usbCDCRxAvailable(void) { return tud_cdc_available(); }
 
@@ -40,15 +64,16 @@ void usbCDCTask(void) {
 }
 
 void usbCDCTxChar(uint8_t c) {
-  if (usbCDCTxFull()) {
-    tud_cdc_write_flush();
-  }
+  static size_t n = 0;
   tud_cdc_write_char(c);
+  n++;
+  if (!(n % 64)) {
+    tud_cdc_write_flush();
+    tud_task();
+  }
 }
 
 void usbCDCTxFlush(void) { tud_cdc_write_flush(); }
-
-bool usbCDCTxFull(void) { return !tud_cdc_write_available(); }
 
 void usbSetup(void) {
   /* Clocking:
