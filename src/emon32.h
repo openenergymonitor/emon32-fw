@@ -100,6 +100,7 @@ typedef enum EVTSRC_ {
   EVT_SAFE_RESET_REQ  = 18u,
   EVT_PROCESS_CMD     = 19u,
   EVT_PROCESS_DATASET = 20u,
+  EVT_STORE_ACCUM     = 21u,
   EVT_CLEAR_ACCUM     = 22u,
   EVT_ECM_PEND_1S     = 23u,
   EVT_ECM_TRIG        = 24u

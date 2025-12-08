@@ -549,6 +549,14 @@ int main(void) {
         emon32EventClr(EVT_TICK_1kHz);
       }
 
+      /* Configuration request to store accumulator values to NVM on demand. */
+      if (evtPending(EVT_STORE_ACCUM)) {
+        cumulativeNVMStore(&nvmCumulative, &dataset);
+        lastStoredWh = totalEnergy(&dataset);
+        serialPuts("> Accumulators stored to NVM.\r\n");
+        emon32EventClr(EVT_STORE_ACCUM);
+      }
+
       /* Configuration request to clear all accumulator values (energy and pulse
        * count). The NVM is overwritten with 0s and the index of the next
        * read/write is reset. Clear the running counters in the main loop, any
