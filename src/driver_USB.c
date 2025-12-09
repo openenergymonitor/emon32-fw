@@ -36,9 +36,8 @@ void usbCDCTask(void) {
         if (!configHandleConfirmation((uint8_t)ch)) {
           /* Normal command processing */
           configCmdChar(((uint8_t)ch));
+          usbCDCTxChar((uint8_t)ch);
         }
-        /* Echo character */
-        usbCDCTxChar((uint8_t)ch);
       }
     }
   }

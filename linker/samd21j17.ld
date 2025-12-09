@@ -27,6 +27,12 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
+PHDRS
+{
+  text PT_LOAD FLAGS(5); /* RX */
+  data PT_LOAD FLAGS(6); /* RW */
+}
+
 MEMORY
 {
   bootloader (rx) : ORIGIN = 0x00000000, LENGTH = 0x2000 /* 8K */
@@ -85,17 +91,17 @@ SECTIONS
     KEEP (*crtend.o(.dtors))
 
     . = ALIGN(4);
-  } > flash
+  } > flash : text
 
   .ARM.extab : {
     *(.ARM.extab* .gnu.linkonce.armextab.*)
-  } > flash
+  } > flash : text
 
   .ARM.exidx : {
     PROVIDE(__exidx_start = .);
     *(.ARM.exidx* .gnu.linkonce.armexidx.*)
     PROVIDE(__exidx_end = .);
-  } > flash
+  } > flash : text
 
   .data :
   {
@@ -105,7 +111,7 @@ SECTIONS
     *(.data .data.*);
     . = ALIGN(4);
     _edata = .;
-  } > ram AT> flash
+  } > ram AT> flash : data
 
   _etext = LOADADDR(.data);
 
