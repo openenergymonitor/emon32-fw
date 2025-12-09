@@ -78,6 +78,7 @@ static uint32_t     totalEnergy(const Emon32Dataset_t *pData);
 static void transmitData(const Emon32Dataset_t *pSrc, const TransmitOpt_t *pOpt,
                          char *txBuffer);
 static void ucSetup(void);
+static void waitWithUSB(uint32_t t_ms);
 
 /*************************************
  * Functions
@@ -481,6 +482,18 @@ static void ucSetup(void) {
   usbSetup();
 }
 
+static void waitWithUSB(uint32_t t_ms) {
+  uint32_t t_start    = timerMillis();
+  uint32_t t_last_usb = t_start;
+  while (timerMillisDelta(t_start) < t_ms) {
+    if (1 == timerMillisDelta(t_last_usb)) {
+      tud_task();
+      usbCDCTask();
+      t_last_usb = timerMillis();
+    }
+  }
+}
+
 int main(void) {
 
   Emon32Dataset_t    dataset               = {0};
@@ -493,7 +506,7 @@ int main(void) {
   uiLedColour(LED_YELLOW);
 
   /* Pause to allow any external pins to settle */
-  timerDelay_ms(100);
+  waitWithUSB(100);
   spiConfigureExt();
 
   /* If the system is booted while it is connected to an active Pi, do not write
@@ -526,7 +539,7 @@ int main(void) {
   /* Wait 1s to allow USB to enumerate as serial. Not always possible, but gives
    * the possibility. The board information can be accessed through the serial
    * console later. */
-  timerDelay_ms(1000);
+  waitWithUSB(1000);
   configFirmwareBoardInfo();
 
   /* Set up buffers for ADC data, configure energy processing, and start */
