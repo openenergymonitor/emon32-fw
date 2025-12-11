@@ -80,7 +80,8 @@ static void     printSettingsKV(void);
 static void     printUptime(void);
 static void     putFloat(float val, int flt_len);
 static void     handleConfirmation(char c);
-static char     waitForChar(void);
+/* static char     waitForChar(void); - Removed, NVM corruption now auto-loads
+ * defaults */
 /* static bool     restoreDefaults(void); - Removed pending OEM decision */
 static bool     zeroAccumulators(void);
 
@@ -106,30 +107,36 @@ static void configDefault(void) {
   config.key = CONFIG_NVM_KEY;
 
   /* Single phase, 50 Hz, 240 VAC, 10 s report period */
-  config.baseCfg.nodeID       = NODE_ID_DEF;
-  config.baseCfg.mainsFreq    = MAINS_FREQ_DEF;
-  config.baseCfg.reportTime   = REPORT_TIME_DEF;
+  config.baseCfg.nodeID     = NODE_ID_DEF;
+  config.baseCfg.mainsFreq  = MAINS_FREQ_DEF;
+  config.baseCfg.reportTime = REPORT_TIME_DEF;
+  config.baseCfg.reportCycles =
+      configTimeToCycles(REPORT_TIME_DEF, MAINS_FREQ_DEF);
   config.baseCfg.assumedVrms  = ASSUMED_VRMS_DEF;
   config.baseCfg.whDeltaStore = DELTA_WH_STORE_DEF;
   config.baseCfg.dataGrp      = GROUP_ID_DEF;
   config.baseCfg.logToSerial  = true;
   config.baseCfg.useJson      = false;
-  config.dataTxCfg.useRFM     = true;
-  config.dataTxCfg.rfmPwr     = RFM_PALEVEL_DEF;
-  config.dataTxCfg.rfmFreq    = RFM_FREQ_DEF;
+  config.baseCfg.debugSerial  = false;
+  (void)memset(config.baseCfg.res0, 0, sizeof(config.baseCfg.res0));
+  config.dataTxCfg.useRFM  = true;
+  config.dataTxCfg.rfmPwr  = RFM_PALEVEL_DEF;
+  config.dataTxCfg.rfmFreq = RFM_FREQ_DEF;
+  config.dataTxCfg.res0    = 0;
 
   for (int idxV = 0u; idxV < NUM_V; idxV++) {
     config.voltageCfg[idxV].voltageCal = 100.0f;
     config.voltageCfg[idxV].vActive    = (0 == idxV);
   }
 
-  /* 4.2 degree shift @ 50 Hz */
-  for (int idxCT = 0u; idxCT < NUM_CT; idxCT++) {
+  /* 4.2 degree shift @ 50 Hz. Initialize ALL slots including reserved. */
+  for (int idxCT = 0u; idxCT < (NUM_CT + CT_RES); idxCT++) {
     config.ctCfg[idxCT].ctCal    = 100.0f;
     config.ctCfg[idxCT].phase    = 4.2f;
     config.ctCfg[idxCT].vChan1   = 0;
     config.ctCfg[idxCT].vChan2   = 0;
     config.ctCfg[idxCT].ctActive = (idxCT < NUM_CT_ACTIVE_DEF);
+    config.ctCfg[idxCT].res0     = 0;
   }
 
   /* OneWire/Pulse configuration:
@@ -150,6 +157,17 @@ static void configDefault(void) {
   config.opaCfg[1].opaActive = true;
   config.opaCfg[1].period    = 0;
   config.opaCfg[1].puEn      = true;
+
+  /* Initialize reserved OPA slots */
+  for (int idxOPA = NUM_OPA; idxOPA < (NUM_OPA + PULSE_RES); idxOPA++) {
+    config.opaCfg[idxOPA].func      = 0;
+    config.opaCfg[idxOPA].opaActive = false;
+    config.opaCfg[idxOPA].period    = 0;
+    config.opaCfg[idxOPA].puEn      = false;
+  }
+
+  /* Zero all reserved bytes before CRC calculation */
+  (void)memset(config.res0, 0, sizeof(config.res0));
 
   config.crc16_ccitt = calcCRC16_ccitt(&config, (sizeof(config) - 2u));
 }
@@ -381,8 +399,9 @@ static bool configureDatalog(void) {
       serialPuts("> Log report time out of range.\r\n");
     } else {
       config.baseCfg.reportTime = convF.val;
-      ecmConfigReportCycles(
-          configTimeToCycles(convF.val, config.baseCfg.mainsFreq));
+      config.baseCfg.reportCycles =
+          configTimeToCycles(convF.val, config.baseCfg.mainsFreq);
+      ecmConfigReportCycles(config.baseCfg.reportCycles);
 
       printSettingDatalog();
       return true;
@@ -1007,33 +1026,6 @@ void configCheckConfirmationTimeout(void) {
   }
 }
 
-/*! @brief Blocking wait for a key from the UART serial link
- *  @note USB CDC confirmations are now handled asynchronously
- */
-static char waitForChar(void) {
-  /* Disable the NVIC for the interrupt if needed while waiting for the
-   * character otherwise it is handled by the configuration buffer.
-   */
-  char c;
-  int  irqEnabled =
-      (NVIC->ISER[0] & (1 << ((uint32_t)(SERCOM_UART_INTERACTIVE_IRQn) & 0x1F)))
-           ? 1
-           : 0;
-  if (irqEnabled) {
-    NVIC_DisableIRQ(SERCOM_UART_INTERACTIVE_IRQn);
-  }
-
-  while (0 == (uartInterruptStatus(SERCOM_UART) & SERCOM_USART_INTFLAG_RXC))
-    ;
-  c = uartGetc(SERCOM_UART);
-
-  if (irqEnabled) {
-    NVIC_EnableIRQ(SERCOM_UART_INTERACTIVE_IRQn);
-  }
-
-  return c;
-}
-
 /* Removed pending OEM decision on restore defaults confirmation
  *
  * static bool restoreDefaults(void) {
@@ -1112,7 +1104,6 @@ Emon32Config_t *configLoadFromNVM(void) {
 
   const uint32_t cfgSize     = sizeof(config);
   uint16_t       crc16_ccitt = 0;
-  char           c           = 0;
 
   /* Load from "static" part of EEPROM. If the key does not match
    * CONFIG_NVM_KEY as this is the first time it has been run, run the built
@@ -1130,34 +1121,12 @@ Emon32Config_t *configLoadFromNVM(void) {
      */
     crc16_ccitt = calcCRC16_ccitt(&config, cfgSize - 2u);
     if (crc16_ccitt != config.crc16_ccitt) {
-      serialPuts("  - NVM may be corrupt. Overwrite with default? (y/n)\r\n");
-
-      /* NVM corruption check happens at startup - semi-blocking is acceptable
-       * here since the system hasn't fully initialized yet. We keep USB
-       * processing active via tud_task() to maintain the connection, while
-       * UART uses blocking wait. Once the system is running, all confirmations
-       * use the async state machine (handleConfirmation) instead.
-       */
-      while ('y' != c && 'n' != c) {
-        /* Keep USB processing active while waiting */
-        if (usbCDCIsConnected()) {
-          tud_task();
-          if (usbCDCRxAvailable()) {
-            c = usbCDCRxGetChar();
-          }
-        } else {
-          c = waitForChar(); /* Use blocking wait for UART */
-          break;
-        }
-      }
-      if ('y' == c) {
-        configInitialiseNVM();
-      }
+      serialPuts(
+          "  - NVM corrupt. Loading defaults (save with 's' to fix).\r\n");
+      configDefault();
+      unsavedChange = true;
     }
   }
-
-  config.baseCfg.reportCycles =
-      configTimeToCycles(config.baseCfg.reportTime, config.baseCfg.mainsFreq);
 
   return &config;
 }

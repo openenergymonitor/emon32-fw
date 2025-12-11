@@ -248,11 +248,23 @@ void eepromInitConfig(const void *pSrc, const unsigned int n) {
   /* Write the first line and wait, then loop through until all n bytes have
    * been written.
    */
-  const uint8_t *p = (uint8_t *)pSrc;
+  const uint8_t   *p = (uint8_t *)pSrc;
+  eepromWrStatus_t wrStatus;
 
-  eepromWrite(0, p, n);
-  while (EEPROM_WR_COMPLETE != eepromWrite(0, 0, 0))
-    ;
+  wrStatus = eepromWrite(0, p, n);
+  if ((wrStatus != EEPROM_WR_PEND) && (wrStatus != EEPROM_WR_COMPLETE)) {
+    return; /* Write failed immediately */
+  }
+
+  /* Wait for write to complete with proper delays (like eepromWriteWL) */
+  while (EEPROM_WR_COMPLETE != wrStatus) {
+    timerDelay_us(EEPROM_WR_TIME);
+    wrStatus = eepromWrite(0, 0, 0);
+  }
+
+  /* Wait for final EEPROM internal write cycle to complete (per datasheet: 5ms
+   * max) */
+  timerDelay_us(EEPROM_WR_TIME);
 }
 
 bool eepromRead(unsigned int addr, void *pDst, unsigned int n) {
