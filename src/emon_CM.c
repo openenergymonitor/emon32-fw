@@ -23,6 +23,14 @@
 #define ZC_HYST      2  /* Zero crossing hysteresis */
 #define ZC_HYST_AV   8  /* Zero crossing hysteresis when using assumd voltage */
 #define EQUIL_CYCLES 8  /* Number of cycles to discard at startup */
+#define ZC_MIN_VPEAK                                                           \
+  40 /* Minimum peak voltage to accept zero-crossings (40 counts = ~14V mains) \
+      */
+#define ZC_PERIOD_MIN_US                                                       \
+  14000 /* Minimum period between crossings (14ms = ~71Hz, 60Hz +13.5%         \
+           tolerance) */
+#define ZC_PERIOD_MAX_US                                                       \
+  25000 /* Maximum period between crossings (25ms = 40Hz) */
 
 _Static_assert(!(PROC_DEPTH & (PROC_DEPTH - 1)),
                "PROC_DEPTH is not a power of 2.");
@@ -109,7 +117,7 @@ typedef struct vSmp_ {
 static inline q15_t __STRUNCATE(int32_t val) RAMFUNC;
 static q15_t        applyCorrection(q15_t smp) RAMFUNC;
 static float        calcRMS(CalcRMS_t *pSrc) RAMFUNC;
-static bool         zeroCrossingSW(q15_t smpV) RAMFUNC;
+static bool         zeroCrossingSW(q15_t smpV, uint32_t timeNow_us) RAMFUNC;
 
 static void  accumSwapClear(void);
 static float calibrationAmplitude(float cal, bool isV);
@@ -310,12 +318,21 @@ static void accumSwapClear(void) {
 
 /*! @brief Zero crossing detection, software
  *  @param [in] smpV : current voltage sample
+ *  @param [in] timeNow_us : current time in microseconds
  *  @return true for positive crossing, false otherwise
  */
-RAMFUNC bool zeroCrossingSW(q15_t smpV) {
-  static Polarity_t  polarityLast = POL_POS;
-  static int_fast8_t hystCnt      = ZC_HYST;
-  Polarity_t         polarityNow  = (smpV < 0) ? POL_NEG : POL_POS;
+RAMFUNC bool zeroCrossingSW(q15_t smpV, uint32_t timeNow_us) {
+  static Polarity_t  polarityLast     = POL_POS;
+  static int_fast8_t hystCnt          = ZC_HYST;
+  static q15_t       vPeakSinceLastZC = 0;
+  static uint32_t    lastZC_us        = 0;
+  Polarity_t         polarityNow      = (smpV < 0) ? POL_NEG : POL_POS;
+
+  /* Track peak voltage magnitude since last zero-crossing */
+  q15_t absV = (smpV < 0) ? -smpV : smpV;
+  if (absV > vPeakSinceLastZC) {
+    vPeakSinceLastZC = absV;
+  }
 
   if (polarityNow != polarityLast) {
     hystCnt--;
@@ -323,7 +340,28 @@ RAMFUNC bool zeroCrossingSW(q15_t smpV) {
       hystCnt      = ZC_HYST;
       polarityLast = polarityNow;
       if (POL_POS == polarityNow) {
-        return true;
+        /* Validate zero-crossing before accepting it:
+         * 1. Must have seen sufficient voltage amplitude
+         * 2. Period since last crossing must be reasonable
+         */
+        bool validAmplitude = (vPeakSinceLastZC >= ZC_MIN_VPEAK) || useAssumedV;
+        bool validPeriod    = true;
+
+        if (lastZC_us != 0 && timeNow_us != 0) {
+          uint32_t period_us = timeNow_us - lastZC_us;
+          /* Accept period if within reasonable bounds for 40-71 Hz */
+          validPeriod        = (period_us >= ZC_PERIOD_MIN_US &&
+                         period_us <= ZC_PERIOD_MAX_US) ||
+                        useAssumedV;
+        }
+
+        if (validAmplitude && validPeriod) {
+          lastZC_us        = timeNow_us;
+          vPeakSinceLastZC = 0; /* Reset for next cycle */
+          return true;
+        }
+        /* Invalid crossing - reset peak tracker anyway */
+        vPeakSinceLastZC = 0;
       }
     }
   } else {
@@ -583,10 +621,11 @@ RAMFUNC ECM_STATUS_t ecmInjectSample(void) {
   /* Flag if there has been a (-) -> (+) crossing, always on V1. Check for
    * zero-crossing, swap buffers and pend event.
    */
-  if (zeroCrossingSW(smpSet.smpV[0])) {
+  uint32_t timeNow_us = (ecmCfg.timeMicros != 0) ? (*ecmCfg.timeMicros)() : 0;
+  if (zeroCrossingSW(smpSet.smpV[0], timeNow_us)) {
 
     zcFlag   = true;
-    t_ZClast = (*ecmCfg.timeMicros)();
+    t_ZClast = timeNow_us;
 
     if (0 == discardCycles) {
       accumCollecting->cycles++;
@@ -600,10 +639,15 @@ RAMFUNC ECM_STATUS_t ecmInjectSample(void) {
   }
 
   /* If no zero-crossing has been detected in 100 ms, fall back to assumed
-   * Vrms */
-  if (((*ecmCfg.timeMicrosDelta)(t_ZClast) > 100000) &&
-      (0.0f != ecmCfg.assumedVrms)) {
+   * Vrms (or time-based reporting if assumedVrms not configured) */
+  if ((*ecmCfg.timeMicrosDelta)(t_ZClast) > 100000) {
     useAssumedV = true;
+    /* Force discard phase to complete if stuck waiting for valid crossings */
+    if (discardCycles > 0) {
+      discardCycles = 0;
+      accumSwapClear();
+      accumCollecting->tStart_us = (*ecmCfg.timeMicros)();
+    }
   } else {
     useAssumedV = false;
   }
@@ -681,7 +725,15 @@ RAMFUNC ECMDataset_t *ecmProcessSet(void) {
       rms.sDelta = accumProcessing->processV[idxV].sumV_deltas;
       rms.sSqr   = accumProcessing->processV[idxV].sumV_sqr;
 
-      datasetProc.rmsV[idxV] = useAssumedV ? ecmCfg.assumedVrms : calcRMS(&rms);
+      float voltage = useAssumedV ? ecmCfg.assumedVrms : calcRMS(&rms);
+
+      /* Check if signal amplitude is sufficient (not just noise).
+       * Threshold: ~0.5V indicates no sensor connected (just ADC noise) */
+      if (!useAssumedV && (voltage < 0.5f)) {
+        voltage = 0.0f;
+      }
+
+      datasetProc.rmsV[idxV] = voltage;
     } else {
       datasetProc.rmsV[idxV] = 0.0f;
     }
@@ -693,8 +745,14 @@ RAMFUNC ECMDataset_t *ecmProcessSet(void) {
       rms.sDelta = accumProcessing->processV[i + NUM_V].sumV_deltas;
       rms.sSqr   = accumProcessing->processV[i + NUM_V].sumV_sqr;
 
-      datasetProc.rmsV[i + NUM_V] =
-          useAssumedV ? ecmCfg.assumedVrms : calcRMS(&rms);
+      float voltage = useAssumedV ? ecmCfg.assumedVrms : calcRMS(&rms);
+
+      /* Check if signal amplitude is sufficient (not just noise) */
+      if (!useAssumedV && (voltage < 0.5f)) {
+        voltage = 0.0f;
+      }
+
+      datasetProc.rmsV[i + NUM_V] = voltage;
     }
   }
 
