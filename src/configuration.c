@@ -1333,6 +1333,8 @@ void configProcessCmd(void) {
   inBufferClear(arglen + 1);
 }
 
+bool configUnsavedChanges(void) { return unsavedChange; }
+
 int configTimeToCycles(const float time, const int mainsFreq) {
   return qfp_float2uint(qfp_fmul(time, qfp_int2float(mainsFreq)));
 }

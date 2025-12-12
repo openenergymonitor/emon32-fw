@@ -107,6 +107,11 @@ Emon32Config_t *configLoadFromNVM(void);
 /*! @brief Process a pending command from the UART */
 void configProcessCmd(void);
 
+/*! @brief Indicate if there are unsaved changes
+ *  @return true if there are unsaved changes, false otherwise
+ */
+bool configUnsavedChanges(void);
+
 /*! @brief Fetch the version and revision information
  *  @return Version and revision struct
  */

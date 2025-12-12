@@ -305,7 +305,12 @@ static void evtKiloHertz(void) {
   if (txBlink.txIndicate &&
       (timerMillisDelta(txBlink.timeBlink) > TX_INDICATE_T)) {
     txBlink.txIndicate = false;
-    uiLedColour(LED_GREEN);
+
+    if (configUnsavedChanges()) {
+      uiLedColour(LED_YELLOW);
+    } else {
+      uiLedColour(LED_GREEN);
+    }
   }
 
   /* Track milliseconds to indicate uptime */
@@ -553,7 +558,7 @@ int main(void) {
   char               txBuffer[TX_BUFFER_W] = {0};
 
   ucSetup();
-  uiLedColour(LED_YELLOW);
+  uiLedColour(LED_RED);
 
   /* Pause to allow any external pins to settle */
   waitWithUSB(100);
@@ -599,7 +604,11 @@ int main(void) {
   adcDMACStart();
   uartEnableRx(SERCOM_UART, SERCOM_UART_INTERACTIVE_IRQn);
 
-  uiLedColour(LED_GREEN);
+  if (configUnsavedChanges()) {
+    uiLedColour(LED_YELLOW);
+  } else {
+    uiLedColour(LED_GREEN);
+  }
 
   for (;;) {
 
