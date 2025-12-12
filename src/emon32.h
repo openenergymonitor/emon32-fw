@@ -13,7 +13,7 @@ _Static_assert((sizeof(bool) == 1), "bool must be 1 byte");
 
 #define DOWNSAMPLE_DSP     1u   /* 0: no downsampling; 1: half band LPF */
 #define NUM_CT_ACTIVE_DEF  6    /* Onboard CTs only */
-#define DELTA_WH_STORE_DEF 200u /* Threshold, in Wh, to store to NVM */
+#define DELTA_EP_STORE_DEF 200u /* Threshold, in Wh/count, to store to NVM */
 #define NODE_ID_DEF        17u  /* Node ID for reports */
 #define GROUP_ID_DEF       210u /* Group ID default for OEM */
 #define MAINS_FREQ_DEF     50u  /* Mains frequency */
