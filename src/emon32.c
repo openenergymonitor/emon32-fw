@@ -31,20 +31,20 @@
 #include "qfplib-m0-full.h"
 
 typedef struct EPAccum_ {
-  uint32_t E;
-  uint32_t P;
+  uint32_t E; /* Energy */
+  uint32_t P; /* Pulse */
 } EPAccum_t;
 
 typedef struct TransmitOpt_ {
-  bool    json;
-  bool    useRFM;
-  bool    logSerial;
-  uint8_t node;
+  bool    json;      /* Use JSON format */
+  bool    useRFM;    /* Use wireless */
+  bool    logSerial; /* Log to serial */
+  uint8_t node;      /*  Node ID */
 } TransmitOpt_t;
 
 typedef struct TxBlink_ {
-  bool         txIndicate;
-  unsigned int timeBlink;
+  bool         txIndicate; /* Tx in progress */
+  unsigned int timeBlink;  /* Time to blink LED for */
 } TxBlink_t;
 
 /*************************************
@@ -66,7 +66,7 @@ static void cumulativeNVMStore(Emon32Cumulative_t    *pPkt,
                                const Emon32Dataset_t *pData);
 static void cumulativeProcess(Emon32Cumulative_t    *pPkt,
                               const Emon32Dataset_t *pData,
-                              const unsigned int     whDeltaStore);
+                              const unsigned int     epDeltaStore);
 static void datasetAddPulse(Emon32Dataset_t *pDst);
 static void ecmConfigure(void);
 static void ecmDmaCallback(void);
@@ -149,11 +149,11 @@ static void cumulativeNVMStore(Emon32Cumulative_t    *pPkt,
  *         since last storage is greater than a configurable threshold
  *  @param [in] pPkt : pointer to an NVM packet
  *  @param [in] pData : pointer to the current dataset
- *  @param [in] whDeltaStore : Wh delta between stores to NVM
+ *  @param [in] epDeltaStore : Wh/pulse delta between stores to NVM
  */
 static void cumulativeProcess(Emon32Cumulative_t    *pPkt,
                               const Emon32Dataset_t *pData,
-                              const unsigned int     whDeltaStore) {
+                              const unsigned int     epDeltaStore) {
   EMON32_ASSERT(pPkt);
   EMON32_ASSERT(pData);
 
@@ -174,7 +174,7 @@ static void cumulativeProcess(Emon32Cumulative_t    *pPkt,
    * for storage threshold. */
   deltaPulse = ep.P - lastStoredEP.P;
   deltaWh    = ep.E - lastStoredEP.E;
-  if ((deltaWh >= whDeltaStore) || (deltaPulse >= whDeltaStore) || epOverflow) {
+  if ((deltaWh >= epDeltaStore) || (deltaPulse >= epDeltaStore) || epOverflow) {
     /* TESTING: Async EEPROM writes enabled with fixed implementation.
      * Fixes applied:
      * - No busy-waits in callbacks (TOO_SOON status, eeprom.c:400-402)
@@ -713,7 +713,7 @@ int main(void) {
          * configured energy delta then save the accumulated energy to NVM.
          */
         cumulativeProcess(&nvmCumulative, &dataset,
-                          pConfig->baseCfg.whDeltaStore);
+                          pConfig->baseCfg.epDeltaStore);
 
         /* Blink the STATUS LED, and clear the event. */
         uiLedColour(LED_RED);

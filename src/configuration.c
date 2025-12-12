@@ -113,7 +113,7 @@ static void configDefault(void) {
   config.baseCfg.reportCycles =
       configTimeToCycles(REPORT_TIME_DEF, MAINS_FREQ_DEF);
   config.baseCfg.assumedVrms  = ASSUMED_VRMS_DEF;
-  config.baseCfg.whDeltaStore = DELTA_WH_STORE_DEF;
+  config.baseCfg.epDeltaStore = DELTA_EP_STORE_DEF;
   config.baseCfg.dataGrp      = GROUP_ID_DEF;
   config.baseCfg.logToSerial  = true;
   config.baseCfg.useJson      = false;
