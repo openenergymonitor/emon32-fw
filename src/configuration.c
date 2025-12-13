@@ -788,7 +788,9 @@ static void printAccumulators(void) {
   eepromOK = (EEPROM_WL_OK == status);
 
   serialPuts("Accumulators (can be updated by command 'u')");
-  if (!eepromOK) {
+  if (status == EEPROM_WL_BUSY) {
+    serialPuts(" (write in progress)");
+  } else if (!eepromOK) {
     serialPuts(" (no valid NVM data)");
   }
   printf_(" [%d]:\r\n", idx);

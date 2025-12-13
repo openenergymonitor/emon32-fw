@@ -63,7 +63,7 @@ Emon32Config_t          *pConfig       = 0;
 
 static void cumulativeNVMLoad(Emon32Cumulative_t *pPkt, Emon32Dataset_t *pData);
 static void cumulativeNVMStore(Emon32Cumulative_t    *pPkt,
-                               const Emon32Dataset_t *pData);
+                               const Emon32Dataset_t *pData, bool blocking);
 static void cumulativeProcess(Emon32Cumulative_t    *pPkt,
                               const Emon32Dataset_t *pData,
                               const unsigned int     epDeltaStore);
@@ -130,7 +130,7 @@ static void cumulativeNVMLoad(Emon32Cumulative_t *pPkt,
  *  @param [in] pData : pointer to current dataset
  */
 static void cumulativeNVMStore(Emon32Cumulative_t    *pPkt,
-                               const Emon32Dataset_t *pData) {
+                               const Emon32Dataset_t *pData, bool blocking) {
   EMON32_ASSERT(pPkt);
   EMON32_ASSERT(pData);
 
@@ -142,7 +142,22 @@ static void cumulativeNVMStore(Emon32Cumulative_t    *pPkt,
     pPkt->pulseCnt[idxPulse] = pData->pulseCnt[idxPulse];
   }
 
-  eepromWriteWL(pPkt, 0);
+  if (blocking) {
+    /* Blocking write - use before system reset to ensure data is saved */
+    eepromWriteWL(pPkt, 0);
+  } else {
+    /* Async write with hardware timer callbacks to avoid blocking */
+    eepromWrStatus_t status = eepromWriteWLAsync(pPkt, 0);
+    if (status == EEPROM_WR_BUSY) {
+      /* Previous async write still in progress - this is expected occasionally
+       */
+      debugPuts("EEPROM async write skipped (busy)\r\n");
+    } else if (status == EEPROM_WR_FAIL) {
+      /* Failed to start async write - callback queue full or other error */
+      debugPuts("EEPROM async write failed!\r\n");
+    }
+    /* EEPROM_WR_PEND is success - write has been queued */
+  }
 }
 
 /*! @brief Calculate the cumulative energy consumption and store if the delta
@@ -174,15 +189,9 @@ static void cumulativeProcess(Emon32Cumulative_t    *pPkt,
    * for storage threshold. */
   deltaPulse = ep.P - lastStoredEP.P;
   deltaWh    = ep.E - lastStoredEP.E;
+
   if ((deltaWh >= epDeltaStore) || (deltaPulse >= epDeltaStore) || epOverflow) {
-    /* TESTING: Async EEPROM writes enabled with fixed implementation.
-     * Fixes applied:
-     * - No busy-waits in callbacks (TOO_SOON status, eeprom.c:400-402)
-     * - Callback queue increased 4→8 (driver_TIME.c:23)
-     * - Error handling with debug output (below)
-     * Monitor debug serial for "EEPROM async write" messages.
-     */
-    cumulativeNVMStore(pPkt, pData);
+    cumulativeNVMStore(pPkt, pData, false);
     lastStoredEP.E = ep.E;
     lastStoredEP.P = ep.P;
   }
@@ -640,16 +649,8 @@ int main(void) {
 
       /* Configuration request to store accumulator values to NVM on demand. */
       if (evtPending(EVT_STORE_ACCUM)) {
-        int idx;
-        for (unsigned int idxCT = 0; idxCT < NUM_CT; idxCT++) {
-          nvmCumulative.wattHour[idxCT] = dataset.pECM->CT[idxCT].wattHour;
-        }
-        for (unsigned int idxPulse = 0; idxPulse < NUM_OPA; idxPulse++) {
-          nvmCumulative.pulseCnt[idxPulse] = dataset.pulseCnt[idxPulse];
-        }
-        (void)eepromWriteWL(&nvmCumulative, &idx);
-        totalEnergy(&dataset, &lastStoredEP);
-        printf_("> Stored [%d]\r\n", idx);
+        cumulativeNVMStore(&nvmCumulative, &dataset, false);
+        printf_("> Storing...\r\n");
         emon32EventClr(EVT_STORE_ACCUM);
       }
 
@@ -763,7 +764,7 @@ int main(void) {
       }
 
       if (evtPending(EVT_SAFE_RESET_REQ)) {
-        cumulativeNVMStore(&nvmCumulative, &dataset);
+        cumulativeNVMStore(&nvmCumulative, &dataset, true);
         NVIC_SystemReset();
       }
     }

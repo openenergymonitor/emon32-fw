@@ -361,21 +361,38 @@ static void processCallbackQueue(uint32_t current_us) {
  * safety.
  */
 void timerProcessPendingCallbacks(void) {
-  for (int i = 0; i < TIMER_CALLBACK_QUEUE_SIZE; i++) {
-    if (callbackQueue[i].pending_exec) {
-      __disable_irq();
-      bool            should_exec   = callbackQueue[i].pending_exec;
-      TimerCallback_t cb            = callbackQueue[i].callback;
-      callbackQueue[i].pending_exec = false;
-      __enable_irq();
+  uint32_t current_us = timerMicros();
 
-      /* Execute callback in main loop context (safe, can block)
-       * The callback pointer 'cb' is safe to use here because the queue entry
-       * is no longer active, so the ISR won't modify it.
+  for (int i = 0; i < TIMER_CALLBACK_QUEUE_SIZE; i++) {
+    TimerCallback_t cb          = NULL;
+    bool            should_exec = false;
+
+    __disable_irq();
+
+    if (callbackQueue[i].pending_exec) {
+      /* Callback marked pending by ISR - execute it */
+      should_exec                   = true;
+      cb                            = callbackQueue[i].callback;
+      callbackQueue[i].pending_exec = false;
+    } else if (callbackQueue[i].active) {
+      /* Check if this active callback is overdue (ISR may have missed it).
+       * This handles the case where delay_us=0 and the compare interrupt
+       * never fired because the counter already passed the target value.
        */
-      if (should_exec && cb) {
-        cb();
+      uint32_t time_until = callbackQueue[i].target_us - current_us;
+      if (time_until > 0x80000000u || time_until == 0) {
+        /* Time has passed or is exactly now - execute it */
+        should_exec             = true;
+        cb                      = callbackQueue[i].callback;
+        callbackQueue[i].active = false;
       }
+    }
+
+    __enable_irq();
+
+    /* Execute callback in main loop context (safe, can block) */
+    if (should_exec && cb) {
+      cb();
     }
   }
 }
