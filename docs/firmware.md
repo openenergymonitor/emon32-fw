@@ -19,7 +19,7 @@ The easiest way to update the emonPi3's firmware is to use the firmware upload t
 
 To update the emonPi3 using the command line, you can use the [BOSSA](https://github.com/shumatech/BOSSA) application. The following steps are taken:
 
-- Open a serial connection using, for example, `screen` to `/dev/ttyS0`.
+- Open a serial connection using, for example, `minicom` to `/dev/ttyS0` (`minicom -D /dev/ttyS0 -b 115200`)
 - Enter 'e' and then press Enter.
 - You will be prompted to reboot to enter the bootloader. Any unsaved configuration changes at this point will be lost. Press 'y' to continue, or any other key to cancel.
 - The emonPi3's LED will slowly pulse green indicating it is in the bootloader.
@@ -31,10 +31,10 @@ To update the emonPi3 using the command line, you can use the [BOSSA](https://gi
 To update the emonTx6's firmware, the following steps are taken:
 
 - Connect a USB cable to the emonTx6's USB-C socket.
-- Open a serial connection using, for example, `screen` or the Arduino serial monitor.
+- Open a serial connection using, for example, `minicom` (e.g. `minicom -D /dev/ttyACM0 -b 115200`) or the Arduino serial monitor.
 - Enter 'e' and then press Enter.
 - You will be prompted to reboot to enter the bootloader. Any unsaved configuration changes at this point will be lost. Press 'y' to continue, or any other key to cancel.
-- The emonTx6's LED will slowly pulse red (revisit: check colour!) and a drive called `EMONBOOT` will appear in the file manager.
+- The emonTx6's LED will slowly pulse red and a drive called `EMONBOOT` will appear in the file manager.
 - Drag and drop the firmware image ending `.uf2` to the `EMONBOOT` folder.
 - The emonTx6 will reboot and enter the application.
 
@@ -61,7 +61,7 @@ arm-none-eabi-gcc --version
 Clone the `emon32-fw` repo and compile the firmware:
 
 ```{bash}
-git clone https://github.com/awjlogan/emon32-fw
+git clone https://github.com/openenergymonitor/emon32-fw
 cd emon32-fw
 make -j
 ```

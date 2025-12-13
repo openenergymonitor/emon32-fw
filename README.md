@@ -1,6 +1,6 @@
 # _emon32_ Firmware
 
-This describes the firmware provided for the [_emon32_ energy monitoring](https://github.com/awjlogan/emon32) system. The software is modular, and should be easily portable to other microcontrollers and implementations.
+This describes the firmware provided for the [_emon32_ energy monitoring](https://github.com/openenergymonitor/emon32) system. The software is modular, and should be easily portable to other microcontrollers and implementations.
 
 This firmware is intended to be used with the [OpenEnergyMonitor](https://openenergymonitor.org) platform. Hardware systems are available directly from them.
 
@@ -10,7 +10,7 @@ This firmware is intended to be used with the [OpenEnergyMonitor](https://openen
 
 Issues can be reported:
 
-- As a [GitHub issue](https://github.com/awjlogan/emon32-fw/issues)
+- As a [GitHub issue](https://github.com/openenergymonitor/emon32-fw/issues)
 - On the [OpenEnergyMonitor forums](https://community.openenergymonitor.org/)
 
 Please include as much information as possible (run the `v` command on the serial link), including at least:
@@ -36,7 +36,7 @@ Contributions are welcome! Small PRs can be accepted at any time. Please get in 
 Most default parameters can be adjusted in `emon32.h`.
 
 > [!NOTE]
-> This section assumes you are using the [emonPi3](https://github.com/awjlogan/emon32).
+> This section assumes you are using the [emonPi3](https://github.com/openenergymonitor/emon32).
 
 The following default values are set out of the box.
 

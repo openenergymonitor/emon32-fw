@@ -1,4 +1,4 @@
-# emonPi3 and emonTx6 Install Guide
+# emonPi3 and emonTx6 Installation Guide
 
 The following guide covers installation of the [emonPi3 and emonTx6 6x input energy monitor](overview.md).
 
@@ -22,13 +22,13 @@ The following guide covers installation of the [emonPi3 and emonTx6 6x input ene
 - Please contact us if you have any questions
 ```
 
-1. Clip the CT current sensors around Live OR Neutral cable of the AC circuit to be measured (not both), note CT direction K -> L (L: Load), That’s on the Line conductor, the arrow points *away* from the load on the Neutral.
+1. Clip the CT current sensors around Live OR Neutral cable of the AC circuit to be measured (not both). Note the CT direction K -> L (L: Load), that’s on the conductor Line, the arrow points *away* from the load on the Neutral.
 
-2. Plug the CT current sensors into emonPi3 via 3.5 mm jack plugs
+2. Plug the CT current sensors into emonPi3 using the 3.5 mm jack plugs
 
 3. Plug emonVs RJ45 cable into emonPi3
 
-4. Plug emonVs into mains power via a domestic wall socket
+4. Plug emonVs into mains power into a domestic wall socket
 
 5. (Optional) If you have the Raspberry Pi 4 variant of the emonPi3 a hard wired Ethernet internet/LAN connection can be connected.
 
@@ -52,7 +52,7 @@ A good place to start is to assess the location where you wish to install the em
 
 There are two different ways of installing the [emonVs voltage sensor](https://shop.openenergymonitor.com/power-supplies/):
 
-**Using the mains plug supplied:** If you have a convenient socket nearby this will be the easiest and quickest option.<br>
+**Using the mains plug supplied:** If you have a convenient socket nearby this will be the easiest and quickest option.
 
 **Direct installation:** The emonVs can be hardwired by a suitably competent person into a 6 A or lower circuit protection device in the fuse board (consumer unit) or a 3 A fused spur. The supplied emonVs mains power cable has a cross sectional area of 1.0 mm<sup>2</sup>. This can provide a tidy installation if no socket is available and helps ensure higher monitoring uptime if sockets are at risk of being unplugged for use by other appliances.
 
@@ -84,13 +84,19 @@ The emonPi3/emonTx6 requires voltage output CT sensors by default. There are 6.8
 With 6 CT sensor cables and often more cable than you need, it's easy for an installation to look like a hive of wires! A little electrical trunking can go a long way to tidying it all up, allowing for excess cable to be looped back on itself.
 ```
 
-## emonPi3 Installation
+## emonPi3 and emonTx6 Installation
 
 - The emonPi3 can be wall mounted using the wall mounting kit supplied. Installation on its side, with the aluminium side plates on the top and bottom can help reduce risk of things falling onto the sockets and can make for an easier installation in terms of CT sensor routing.
 
-- Plug in the CT sensors, note which CT sensor is plugged into each input on the emonPi3 as each input needs to have the correct calibration applied.
+- Plug in the CT sensors. Note which CT sensor is plugged into each input on the emonPi3 as each input needs to have the correct calibration applied.
 
-- Connect the RJ45 cable (ethernet sized connector with 8 pins) from the emonVs voltage sensor and power supply to the RJ45 socket on the opposite side of the case to the CT sensor sockets. (If you have the Raspberry Pi 4 variant of the emonPi3 the Raspberry Pi Ethernet socket is on the same side as the CT sensors, avoid plugging the emonVs RJ45 cable into the Ethernet socket and vice versa).
+- Connect the RJ45 cable (ethernet sized connector with 8 pins) from the emonVs voltage sensor and power supply to the RJ45 socket on the opposite side of the case to the CT sensor sockets.
+
+- The emonPi3/emonTx6's LED will start red, and then turn green for normal operation.
+
+```{admonition}
+If you have the Raspberry Pi 4 variant of the emonPi3 the Raspberry Pi Ethernet socket is on the same side as the CT sensors, avoid plugging the emonVs RJ45 cable into the Ethernet socket and vice versa.
+```
 
 ## emonPi3 Only Further Steps
 
@@ -121,16 +127,16 @@ When the emonPi3 is first powered up the WiFi Access Point is enabled for 10 min
 
 ### Connecting via Ethernet
 
-If a wired ethernet connection is available and you have the emonPi3 hardware that supports Ethernet (e.g Raspberry Pi 4 shop option), this does usually give the most reliable result. We recommend using shielded Ethernet cable to reduce potential electromagnetic interference. Simply plug the Ethernet cable into the Ethernet port found next to the USB ports and CT sensor inputs - *NOT the RJ45 port used for the emonVs voltage sensor and power supply*.
+If a wired ethernet connection is available and you have the emonPi3 hardware that supports Ethernet (e.g Raspberry Pi 4 shop option), this provides the most reliable result. We recommend using shielded Ethernet cable to reduce potential electromagnetic interference. Simply plug the Ethernet cable into the Ethernet port found next to the USB ports and CT sensor inputs.
 
 Scroll to page 3 on the emonPi3 display to find the assigned IP address.
 
 ### Connecting via WiFi
 
-**When the emonPi3 is powered up it will create a Wi-Fi Access Point** called `emonPi`. Connect to this using password `emonpi2016`. On Android devices a captive portal option should pop up with the option to 'Sign in'. This will bring up the Wi-Fi configuration interface.
+**When the emonPi3 is powered up it will create a WiFi Access Point** called `emonPi`. Connect to this using password `emonpi2016`. On Android devices a captive portal option should pop up with the option to 'Sign in'. This will bring up the Wi-Fi configuration interface.
 
 ```{note}
-Captive portal and the new Wifi setup interface is available on emonSD_01Feb24 or newer. You may wish to upgrade to the latest emonSD image see the emonSD download section.
+Captive portal and the new WiFi setup interface is available on emonSD_01Feb24 or newer. You may wish to upgrade to the latest emonSD image see the emonSD download section.
 ```
 
 ```{note}
@@ -175,9 +181,9 @@ CT calibration is usually pre-configured in the shop as part of the order proces
 
 - Navigate to `Setup > Admin > Serial Config`
 - Click on `Stop EmonHub` to temporarily stop the EmonHub service while we perform calibration.
-- Select serial port `/dev/ttyAMA0` and click `Connect`.
+- Select serial port `/dev/ttyS0` and click `Connect`.
 - After a couple of seconds the emonPi3 will print out its current configuration which will populate the interface (if it does not do this type `l` and click `Send` to reload the calibration details from the emonPi3 measurement board).
-- Adjust the  CT rating to match the CT sensor that you have installed on each channel.
+- Adjust the CT rating to match the CT sensor that you have installed on each channel.
 - Click on `Save Changes` to ensure that the new configuration is recorded such that it persists when you power cycle the board.
 - When finished, click on `Stop Serial` to disconnect the serial configuration tool and then `Start EmonHub` to restart the EmonHub service.
 

@@ -20,7 +20,7 @@ The emonPi3 is usually pre-configured in the shop as part of the order process b
 
 ## Directly via serial
 
-It is possible to configure the emonPi3/Tx6 directly through the USB serial port or UART using `screen` or other similar tool. When using a UART, the settings are 115200, 8N1, `\r\n` line ending.
+It is possible to configure the emonPi3/Tx6 directly through the USB serial port or UART using `minicom` or other similar tool. When using a UART, the settings are 115200, 8N1, `\r\n` line ending.
 
 The following details the available commands and their function.
 
