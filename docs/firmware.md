@@ -26,6 +26,11 @@ To update the emonPi3 using the command line, you can use the [BOSSA](https://gi
 - To check the bootloader is responsive, run `bossac -p /dev/ttyS0 -i`.
 - To upload the compiled firmare, run `bossac -p /dev/ttyS0 -e -w -v -R --offset=0x2000 path/to/bin`.
 
+- If BOSSA is not installed, it can be installed by:
+- `git clone https://github.com/shumatech/BOSSA`
+- `cd BOSSA`
+- `make bossac`
+
 ### emonTx6
 
 To update the emonTx6's firmware, the following steps are taken:
