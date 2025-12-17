@@ -50,7 +50,7 @@ To test if your serial connection is working, try these commands first:
 | **v** | Show firmware and board information |
 | **w\<n>** | RF module active<br>- `w0`: Disable RF<br>- `w1`: Enable RF |
 | **x\<n>** | 433 MHz RF frequency compatibility<br>- `x0`: 433.92 MHz (standard)<br>- `x1`: 433.00 MHz (legacy compatibility) |
-| **z** | Zero energy accumulators (reset Wh counters) |
+| **z** | Zero energy/pulse accumulators (reset Wh/pulse counters)<br>- `z`: Zero all accumulators (E1-E12, pulse1-2) with confirmation<br>- `ze1` to `ze12`: Zero individual energy accumulator (e.g., `ze3` zeros E3 only)<br>- `zp1` to `zp2`: Zero individual pulse accumulator (e.g., `zp1` zeros pulse1 only)<br>All commands require 'y' confirmation |
 
 ## Configuration Workflow
 
@@ -107,6 +107,15 @@ s                     # Save configuration
 f50                   # Set to 50 Hz
 s                     # Save (will automatically reset)
 ```
+
+### Zero accumulator counters
+```
+z                     # Zero all accumulators (requires 'y' confirmation)
+ze3                   # Zero only E3 accumulator (requires 'y' confirmation)
+zp1                   # Zero only pulse1 accumulator (requires 'y' confirmation)
+```
+
+**Note:** Individual accumulator reset reads current values from NVM, zeros the specified accumulator, and writes back. The runtime counter continues from zero for that accumulator.
 
 ## Troubleshooting
 
