@@ -17,7 +17,7 @@
 #define REPORT_V    1 /* Number of V channels to report */
 #define SMP_TICK    1000000u / SAMPLE_RATE / (VCT_TOTAL)
 #define TEST_TIME   100E6 /* Time to run in microseconds */
-#define VRMS_GOLD   235.0f
+#define VRMS_GOLD   240.0f
 #define MAX_A       (1 << (ADC_RES_BITS - 1))
 
 typedef struct wave_ {
@@ -221,7 +221,7 @@ int main(int argc, char *argv[]) {
   pEcmCfg->mainsFreq    = 50;
   pEcmCfg->reportTime_us =
       (1000000 / pEcmCfg->mainsFreq) * pEcmCfg->reportCycles;
-  pEcmCfg->assumedVrms     = 235;
+  pEcmCfg->assumedVrms     = 240;
   pEcmCfg->samplePeriod    = 13;
   pEcmCfg->timeMicros      = &timeMicros;
   pEcmCfg->timeMicrosDelta = &timeMicrosDelta;
@@ -449,5 +449,5 @@ static void voltageToWave(double vRMS, wave_t *w) {
   w->offset  = 0;
   w->omega   = 2 * M_PI * MAINS_FREQ;
   w->phi     = 0;
-  w->s       = vPk / 405.0;
+  w->s       = vPk / (400.0 * 1.003);
 }

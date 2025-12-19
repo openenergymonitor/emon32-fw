@@ -78,6 +78,7 @@ typedef struct CTCfgUnpacked_ {
   int   vChan1;
   int   vChan2;
   int   wattHourInit;
+  int   idxInterpolate;
 } CTCfg_t;
 
 typedef struct ECMCfg_ {
