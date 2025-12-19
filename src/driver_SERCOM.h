@@ -95,6 +95,21 @@ void i2cDataWrite(Sercom *sercom, uint8_t data);
  */
 uint8_t i2cDataRead(Sercom *sercom);
 
+/*! @brief Get I2C error interrupt count
+ *  @return number of I2C error interrupts caught
+ */
+uint32_t i2cGetErrorCount(void);
+
+/*! @brief Get last I2C STATUS register value from error interrupt
+ *  @return STATUS register value from last error
+ */
+uint16_t i2cGetLastStatus(void);
+
+/*! @brief Check if I2C error occurred and clear flag
+ *  @return true if error pending, false otherwise
+ */
+bool i2cCheckErrorPending(void);
+
 /*! @brief Configure the external interface */
 void spiConfigureExt(void);
 

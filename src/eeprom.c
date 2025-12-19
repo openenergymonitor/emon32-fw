@@ -394,10 +394,12 @@ eepromWLStatus_t eepromReadWL(void *pPktRd, int *pIdx) {
 
   /* Retry once on CRC mismatch - I2C reads can occasionally be corrupted */
   if (crcData != header.crc16_ccitt) {
-    printf_("EEPROM CRC retry: hdr=0x%04X data=0x%04X\r\n", header.crc16_ccitt,
-            crcData);
+    uint16_t crcFirst = crcData;
     eepromRead(addrRd, pPktRd, wlData_n);
     crcData = calcCRC16_ccitt(pPktRd, sizeof(Emon32Cumulative_t));
+    printf_("EEPROM CRC retry: hdr=0x%04X 1st=0x%04X 2nd=0x%04X %s\r\n",
+            header.crc16_ccitt, crcFirst, crcData,
+            (crcData == header.crc16_ccitt) ? "OK" : "FAIL");
   }
 
   if (crcData != header.crc16_ccitt) {

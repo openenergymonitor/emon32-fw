@@ -1266,6 +1266,11 @@ void configProcessCmd(void) {
       emon32EventSet(EVT_CONFIG_CHANGED);
     }
     break;
+  case 'i':
+    /* I2C diagnostics */
+    printf_("I2C error count: %" PRIu32 "\r\n", i2cGetErrorCount());
+    printf_("I2C last status: 0x%04X\r\n", i2cGetLastStatus());
+    break;
   case 'j':
     if (configureJSON()) {
       unsavedChange = true;
