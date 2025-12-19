@@ -566,6 +566,10 @@ RAMFUNC ECM_STATUS_t ecmInjectSample(void) {
   bool            zcFlag      = false;
 
   static int_fast8_t idxInject;
+  const int_fast8_t  idxLast = (idxInject - 1) & (PROC_DEPTH - 1);
+
+  /* Hold the previous CT value for interpolation if required */
+  static q15_t smpCTLast[NUM_CT];
 
   if (0 != ecmCfg.timeMicros) {
     t_start = (*ecmCfg.timeMicros)();
@@ -604,17 +608,16 @@ RAMFUNC ECM_STATUS_t ecmInjectSample(void) {
 
   for (int_fast8_t idxCT = 0; idxCT < NUM_CT; idxCT++) {
     if (channelActive[idxCT + NUM_V]) {
-      int32_t     thisCT = smpSet.smpCT[idxCT];
-      int_fast8_t v1     = ecmCfg.ctCfg[idxCT].vChan1;
-      int_fast8_t v2     = ecmCfg.ctCfg[idxCT].vChan2;
 
-      /* Calculate the required voltages to interpolate between */
-      int_fast8_t idxV_N =
-          (idxInject - ecmCfg.ctCfg[idxCT].idxInterpolate) & (PROC_DEPTH - 1);
-      int_fast8_t idxV_Nminus1 = (idxV_N - 1) & (PROC_DEPTH - 1);
+      int32_t thisCT   = (0 == ecmCfg.ctCfg[idxCT].idxInterpolate)
+                             ? smpSet.smpCT[idxCT]
+                             : smpCTLast[idxCT];
+      smpCTLast[idxCT] = smpSet.smpCT[idxCT];
 
-      int32_t thisV = vSampleBuffer[idxV_N].smpV[v1];
-      int32_t lastV = vSampleBuffer[idxV_Nminus1].smpV[v1];
+      int_fast8_t v1    = ecmCfg.ctCfg[idxCT].vChan1;
+      int_fast8_t v2    = ecmCfg.ctCfg[idxCT].vChan2;
+      int32_t     thisV = vSampleBuffer[idxInject].smpV[v1];
+      int32_t     lastV = vSampleBuffer[idxLast].smpV[v1];
 
       accumCollecting->processCT[idxCT].sumPA[0] += (int64_t)(thisCT * lastV);
       accumCollecting->processCT[idxCT].sumPB[0] += (int64_t)(thisCT * thisV);
@@ -623,8 +626,8 @@ RAMFUNC ECM_STATUS_t ecmInjectSample(void) {
 
       /* L-L load */
       if (v1 != v2) {
-        thisV = vSampleBuffer[idxV_N].smpV[v2];
-        lastV = vSampleBuffer[idxV_Nminus1].smpV[v2];
+        thisV = vSampleBuffer[idxInject].smpV[v2];
+        lastV = vSampleBuffer[idxLast].smpV[v2];
         accumCollecting->processCT[idxCT].sumPA[1] += (int64_t)(thisCT * lastV);
         accumCollecting->processCT[idxCT].sumPB[1] += (int64_t)(thisCT * thisV);
       }
