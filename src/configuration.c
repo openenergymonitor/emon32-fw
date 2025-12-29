@@ -29,6 +29,7 @@ typedef enum {
   CONFIRM_IDLE,
   CONFIRM_BOOTLOADER,
   CONFIRM_ZERO_ACCUM,
+  CONFIRM_ZERO_ACCUM_INDIVIDUAL,
   CONFIRM_NVM_OVERWRITE
   /* CONFIRM_RESTORE_DEFAULTS - Removed pending OEM decision on restore defaults
      confirmation */
@@ -97,10 +98,11 @@ static char           inBuffer[IN_BUFFER_W];
 /* Async confirmation state */
 static volatile ConfirmState_t confirmState        = CONFIRM_IDLE;
 static volatile uint32_t       confirmStartTime_ms = 0;
-static int                     inBufferIdx         = 0;
-static bool                    cmdPending          = false;
-static bool                    resetReq            = false;
-static bool                    unsavedChange       = false;
+static int8_t clearAccumIdx = -1; /* -1=all, 0-11=E1-E12, 12-13=P1-P2 */
+static int    inBufferIdx   = 0;
+static bool   cmdPending    = false;
+static bool   resetReq      = false;
+static bool   unsavedChange = false;
 
 /*! @brief Set all configuration values to defaults */
 static void configDefault(void) {
@@ -996,6 +998,36 @@ static void handleConfirmation(char c) {
     __enable_irq();
     break;
 
+  case CONFIRM_ZERO_ACCUM_INDIVIDUAL:
+    if ('y' == c) {
+      Emon32Cumulative_t cumulative;
+      int                idx;
+      /* Read current NVM data */
+      if (EEPROM_WL_OK == eepromReadWL(&cumulative, &idx)) {
+        /* Clear the specific accumulator */
+        if (clearAccumIdx < NUM_CT) {
+          cumulative.wattHour[clearAccumIdx] = 0;
+          printf_("    - Accumulator E%d cleared.\r\n", clearAccumIdx + 1);
+        } else {
+          cumulative.pulseCnt[clearAccumIdx - NUM_CT] = 0;
+          printf_("    - Accumulator pulse%d cleared.\r\n",
+                  clearAccumIdx - NUM_CT + 1);
+        }
+        /* Write back to NVM - runtime counters continue accumulating */
+        eepromWriteWLAsync(&cumulative, &idx);
+      } else {
+        serialPuts("    - Failed to read NVM.\r\n");
+      }
+    } else {
+      serialPuts("    - Cancelled.\r\n");
+    }
+    __disable_irq();
+    confirmState        = CONFIRM_IDLE;
+    confirmStartTime_ms = 0;
+    clearAccumIdx       = -1;
+    __enable_irq();
+    break;
+
   case CONFIRM_NVM_OVERWRITE:
     /* Reserved for future use: NVM corruption check during startup currently
      * uses a semi-blocking approach (see configLoadFromNVM) because it happens
@@ -1070,16 +1102,75 @@ void configCheckConfirmationTimeout(void) {
  * }
  */
 
-/*! @brief Zero the accumulator portion of the NVM (async confirmation) */
+/*! @brief Zero all accumulators (async confirmation) */
 static void zeroAccumulators(void) {
-  /* Set confirmation state and prompt user
-   * Response will be handled asynchronously by handleConfirmation() */
+  clearAccumIdx = -1; /* -1 means all accumulators */
   serialPuts(
       "> Zero accumulators. This can not be undone. 'y' to proceed.\r\n");
   __disable_irq();
   confirmStartTime_ms = timerMillis();
   confirmState        = CONFIRM_ZERO_ACCUM;
   __enable_irq();
+}
+
+/*! @brief Zero individual accumulator (async confirmation)
+ *  @param [in] idx : accumulator index (0-11=E1-E12, 12-13=P1-P2)
+ */
+static void zeroAccumulatorIndividual(int8_t idx) {
+  clearAccumIdx = idx;
+  if (idx < NUM_CT) {
+    printf_(
+        "> Zero accumulator E%d. This can not be undone. 'y' to proceed.\r\n",
+        idx + 1);
+  } else {
+    printf_("> Zero accumulator pulse%d. This can not be undone. 'y' to "
+            "proceed.\r\n",
+            idx - NUM_CT + 1);
+  }
+  __disable_irq();
+  confirmStartTime_ms = timerMillis();
+  confirmState        = CONFIRM_ZERO_ACCUM_INDIVIDUAL;
+  __enable_irq();
+}
+
+/*! @brief Parse z command and zero accumulators (z, ze1-12, zp1-2) */
+static void parseAndZeroAccumulator(void) {
+  /* z - zero all */
+  if (inBuffer[1] == '\0') {
+    zeroAccumulators();
+    return;
+  }
+
+  /* ze1-12 - zero energy accumulator */
+  if (inBuffer[1] == 'e' && inBuffer[2] >= '1' && inBuffer[2] <= '9') {
+    int num = inBuffer[2] - '0';
+    /* Check for two-digit number (ze10-12) */
+    if (inBuffer[3] >= '0' && inBuffer[3] <= '9') {
+      num = num * 10 + (inBuffer[3] - '0');
+    }
+    if (num >= 1 && num <= NUM_CT) {
+      zeroAccumulatorIndividual(num - 1); /* Convert to 0-indexed */
+    } else {
+      printf_("Invalid energy accumulator index. Use ze1-%d.\r\n", NUM_CT);
+    }
+    return;
+  }
+
+  /* zp1-2 - zero pulse accumulator */
+  if (inBuffer[1] == 'p' && inBuffer[2] >= '1' &&
+      inBuffer[2] <= '0' + NUM_OPA) {
+    int num = inBuffer[2] - '0';
+    if (num >= 1 && num <= NUM_OPA) {
+      zeroAccumulatorIndividual(NUM_CT + num - 1); /* Pulse index starts after
+                                                       energy */
+    } else {
+      printf_("Invalid pulse accumulator index. Use zp1-%d.\r\n", NUM_OPA);
+    }
+    return;
+  }
+
+  /* Invalid format */
+  serialPuts("Invalid command. Use z, ze1-12, or zp1-2.\r\n");
 }
 
 void configCmdChar(const uint8_t c) {
@@ -1203,7 +1294,9 @@ void configProcessCmd(void) {
       " - w<n>        : RF active. n = 0: OFF, n = 1: ON\r\n"
       " - x<n>        : 433 MHz compatibility. n = 0: 433.92 MHz, n = 1: "
       "433.00 MHz\r\n"
-      " - z           : zero energy accumulators\r\n\r\n";
+      " - z           : zero all accumulators (E1-E12, pulse1-2)\r\n"
+      " - ze<n>       : zero individual energy accumulator (n=1-12)\r\n"
+      " - zp<n>       : zero individual pulse accumulator (n=1-2)\r\n\r\n";
 
   /* Convert \r or \n to 0, and get the length until then. */
   while (!termFound && (arglen < IN_BUFFER_W)) {
@@ -1356,8 +1449,7 @@ void configProcessCmd(void) {
     }
     break;
   case 'z':
-    /* Async confirmation - EVT_CLEAR_ACCUM set in handleConfirmation() */
-    zeroAccumulators();
+    parseAndZeroAccumulator();
     break;
   }
 
