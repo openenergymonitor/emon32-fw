@@ -127,6 +127,20 @@ When a full report is ready, the following actions take place:
 
 ## Compiling and uploading
 
+### Script to compile and upload
+
+A script [flash-emonpi3.sh](./flash-emonpi3.sh) is provided to compile and upload new firmware via the USB-C port.
+
+#### Script Requirements
+
+The Script requires that `picocom` is installed to provide the connection to put the device into bootloader mode.
+
+`sudo apt install picocom`
+
+#### Usage
+
+`./flash-emonpi3.sh --build` - to make and upload.
+
 ### Compiling
 
 Compiling the firmware requires the the [Arm gcc toolchain](https://developer.arm.com/Tools%20and%20Software/GNU%20Toolchain) (may be available as a package in your distribution). The Makefile is for a Cortex-M0+ based microcontrollers, specifically the Microchip ATSAMD21J17 ([datasheet](https://www.microchip.com/en-us/product/ATSAMD21J17), [errata](https://ww1.microchip.com/downloads/en/DeviceDoc/SAMD21-%20Family-Silicon-%20Errata-and-DataSheet-Clarification-DS80000760C.pdf)).
