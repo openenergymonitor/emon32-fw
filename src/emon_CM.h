@@ -65,6 +65,7 @@ typedef struct GainOffset_ {
 typedef struct VCfg_ {
   float voltageCal;
   float voltageCalRaw;
+  float phase;
   bool  vActive;
 } VCfg_t;
 
@@ -78,6 +79,8 @@ typedef struct CTCfgUnpacked_ {
   int32_t vChan1;
   int32_t vChan2;
   int32_t wattHourInit;
+  int32_t idxInterpolateCT;
+  int32_t idxInterpolateV;
 } CTCfg_t;
 
 typedef struct ECMCfg_ {

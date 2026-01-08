@@ -25,3 +25,5 @@ float qfp_int642float(int64_t a) { return (float)a; }
 float qfp_uint2float(unsigned int a) { return (float)a; }
 
 int qfp_float2int_z(float a) { return (int)a; }
+
+int qfp_float2int(float a) { return (int)a; }
