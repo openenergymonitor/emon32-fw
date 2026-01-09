@@ -22,7 +22,7 @@ uint32_t ds18b20InitSensors(const DS18B20_conf_t *pCfg);
 /*! @brief Start a temperature conversion on all OneWire devices
  *  @return true for success, false if no presence pulse detected
  */
-bool ds18b20StartSample(const int32_t opaIdx);
+bool ds18b20StartSample(const uint8_t opaIdx);
 
 /*! @brief Read the temperature data from a OneWire device
  *  @param [in] dev : index of OneWire device

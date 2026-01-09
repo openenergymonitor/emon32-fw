@@ -14,10 +14,10 @@ static bool isnumeric(const char c) {
   return false;
 }
 
-void utilStrReverse(char *pBuf, uint32_t len) {
-  char     tmp;
-  uint32_t idxEnd = len - 1u;
-  for (uint32_t idx = 0; idx < (len / 2); idx++) {
+void utilStrReverse(char *pBuf, size_t len) {
+  char   tmp;
+  size_t idxEnd = len - 1u;
+  for (size_t idx = 0; idx < (len / 2); idx++) {
     tmp          = pBuf[idx];
     pBuf[idx]    = pBuf[idxEnd];
     pBuf[idxEnd] = tmp;
@@ -25,16 +25,16 @@ void utilStrReverse(char *pBuf, uint32_t len) {
   }
 }
 
-uint32_t utilStrlen(const char *pBuf) {
-  uint32_t charCnt = 0;
+size_t utilStrlen(const char *pBuf) {
+  size_t charCnt = 0;
   while (*pBuf++) {
     charCnt++;
   }
   return charCnt;
 }
 
-uint32_t utilItoa(char *pBuf, int32_t val, ITOA_BASE_t base) {
-  uint32_t    charCnt    = 0;
+size_t utilItoa(char *pBuf, int32_t val, const ITOA_BASE_t base) {
+  size_t      charCnt    = 0;
   bool        isNegative = false;
   char *const pBase      = pBuf;
 
@@ -81,9 +81,9 @@ uint32_t utilItoa(char *pBuf, int32_t val, ITOA_BASE_t base) {
   return charCnt;
 }
 
-ConvInt_t utilAtoi(char *pBuf, ITOA_BASE_t base) {
+ConvInt_t utilAtoi(char *pBuf, const ITOA_BASE_t base) {
   bool      isNegative = false;
-  uint32_t  len;
+  size_t    len;
   uint32_t  mulCnt = 1;
   ConvInt_t conv   = {false, 0};
 
@@ -130,8 +130,8 @@ bool utilCharPrintable(const char c) {
   return (((c >= 32) && (c <= 126)) || ('\r' == c) || ('\n' == c));
 }
 
-uint32_t utilFtoa(char *pBuf, float val) {
-  uint32_t    charCnt    = 0;
+size_t utilFtoa(char *pBuf, float val) {
+  size_t      charCnt    = 0;
   bool        isNegative = false;
   char *const pBase      = pBuf;
 
@@ -177,7 +177,7 @@ uint32_t utilFtoa(char *pBuf, float val) {
 
 ConvFloat_t utilAtof(char *pBuf) {
   bool        isNegative = false;
-  uint32_t    len        = 0;
+  size_t      len        = 0;
   uint32_t    mulCnt     = 1u;
   uint32_t    fraction   = 0u;
   ConvFloat_t conv       = {false, 0.0f};

@@ -38,7 +38,7 @@ void usbCDCPutsBlocking(const char *s) {
 
 bool usbCDCRxAvailable(void) { return tud_cdc_available(); }
 
-uint8_t usbCDCRxGetChar(void) {
+int32_t usbCDCRxGetChar(void) {
   if (tud_cdc_available()) {
     return tud_cdc_read_char();
   }
@@ -53,18 +53,19 @@ void usbCDCTask(void) {
 
   /* Flush write buffer and read any available characters */
   tud_cdc_write_flush();
-  int32_t nrx = tud_cdc_available();
-  if (nrx) {
-    for (int32_t i = 0; i < nrx; i++) {
-      int32_t ch = tud_cdc_read_char();
-      if (-1 != ch) {
-        /* Check if we're waiting for a confirmation (bootloader, zero, etc.) */
-        if (!configHandleConfirmation((uint8_t)ch)) {
-          /* Normal command processing */
-          configCmdChar(((uint8_t)ch));
-        }
-      }
+  uint32_t nrx = tud_cdc_available();
+  for (uint32_t i = 0; i < nrx; i++) {
+    int32_t ch = tud_cdc_read_char();
+    if (-1 == ch) {
+      continue;
     }
+    /* Check if we're waiting for a confirmation (bootloader, zero, etc.) */
+    if (configHandleConfirmation((uint8_t)ch)) {
+      continue;
+    }
+    /* Normal command processing */
+    configCmdChar((uint8_t)ch);
+    usbCDCTxChar((uint8_t)ch);
   }
 }
 

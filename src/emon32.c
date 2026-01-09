@@ -226,7 +226,7 @@ void ecmConfigure(void) {
    * used for storage, and avoids any awkward alignment from packing.
    */
 
-  extern const int_fast8_t ainRemap[NUM_CT];
+  extern const int8_t ainRemap[NUM_CT];
 
   ECMCfg_t *ecmCfg = ecmConfigGet();
 
@@ -502,7 +502,7 @@ static void totalEnergy(const Emon32Dataset_t *pData, EPAccum_t *pAcc) {
 static void transmitData(const Emon32Dataset_t *pSrc, const TransmitOpt_t *pOpt,
                          char *txBuffer) {
 
-  int32_t nSerial = dataPackSerial(pSrc, txBuffer, TX_BUFFER_W, pOpt->json);
+  size_t nSerial = dataPackSerial(pSrc, txBuffer, TX_BUFFER_W, pOpt->json);
 
   if (pOpt->useRFM) {
 
@@ -511,9 +511,9 @@ static void transmitData(const Emon32Dataset_t *pSrc, const TransmitOpt_t *pOpt,
     }
 
     if (sercomExtIntfEnabled()) {
-      int32_t     retryCount = 0;
-      RFMSend_t   rfmResult;
-      int_fast8_t nPacked = dataPackPacked(pSrc, rfmGetBuffer(), PACKED_LOWER);
+      uint8_t   retryCount = 0;
+      RFMSend_t rfmResult;
+      int8_t    nPacked = dataPackPacked(pSrc, rfmGetBuffer(), PACKED_LOWER);
 
       rfmSetAddress(pOpt->node);
 

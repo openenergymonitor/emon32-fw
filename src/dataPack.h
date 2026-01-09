@@ -1,6 +1,7 @@
 #pragma once
 
 #include <stdbool.h>
+#include <stddef.h>
 
 #include "emon32.h"
 
@@ -21,8 +22,8 @@ typedef enum PackedRange_ {
  *  @param [in] json : false -> K:V; true -> JSON
  *  @return the number of the characters that would be packed
  */
-int32_t dataPackSerial(const Emon32Dataset_t *pData, char *pDst, int32_t m,
-                       bool json);
+size_t dataPackSerial(const Emon32Dataset_t *pData, char *pDst, const size_t m,
+                      const bool json);
 
 /*! @brief Pack the voltage, power, energy, temperature, and pulse data into a
  *         packed structure for transmission over RFM link.
@@ -31,5 +32,5 @@ int32_t dataPackSerial(const Emon32Dataset_t *pData, char *pDst, int32_t m,
  *  @param [in] range : select the packing range when packet size > buffer
  *  @return number of bytes in the packet
  */
-int_fast8_t dataPackPacked(const Emon32Dataset_t *restrict pData,
-                           void *restrict pPacked, PackedRange_t range);
+int8_t dataPackPacked(const Emon32Dataset_t *restrict pData,
+                      void *restrict pPacked, const PackedRange_t range);

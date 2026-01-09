@@ -1,6 +1,7 @@
 #pragma once
 
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 
 typedef enum ITOA_BASE_ { ITOA_BASE10, ITOA_BASE16 } ITOA_BASE_t;
@@ -26,7 +27,7 @@ ConvFloat_t utilAtof(char *pBuf);
  *  @param [in] base : select base 10 or base 16 conversion
  *  @return converted integer and status
  */
-ConvInt_t utilAtoi(char *pBuf, ITOA_BASE_t base);
+ConvInt_t utilAtoi(char *pBuf, const ITOA_BASE_t base);
 
 /*! @brief Indicate if a character is printable
  *  @param [in] c : character to check
@@ -40,7 +41,7 @@ bool utilCharPrintable(const char c);
  *  @param [in] val : value to convert
  *  @return the number of characters (including NULL).
  */
-uint32_t utilFtoa(char *pBuf, float val);
+size_t utilFtoa(char *pBuf, float val);
 
 /*! @brief Convert integer to null terminated string.
  *  @param [in] pBuf : pointer to string buffer, at least 11 characters
@@ -48,16 +49,16 @@ uint32_t utilFtoa(char *pBuf, float val);
  *  @param [in] base : select base 10 or base 16 conversion
  *  @return the number of characters (including NULL).
  */
-uint32_t utilItoa(char *pBuf, int32_t val, ITOA_BASE_t base);
+size_t utilItoa(char *pBuf, int32_t val, const ITOA_BASE_t base);
 
 /*! @brief Returns the number of characters up to, but not including, NULL
  *  @param [in] pBuf : pointer to the NULL terminated string buffer
- *  @param number of characters, not including NULL
+ *  @return number of characters, not including NULL
  */
-uint32_t utilStrlen(const char *pBuf);
+size_t utilStrlen(const char *pBuf);
 
 /*! @brief Reverse an array (typically string)
  *  @param [in] pBuf : pointer to the buffer
  *  @param [in] len : length of buffer to reverse
  */
-void utilStrReverse(char *pBuf, uint32_t len);
+void utilStrReverse(char *pBuf, size_t len);

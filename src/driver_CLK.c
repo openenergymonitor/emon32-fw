@@ -16,7 +16,7 @@ void clkSetup(void) {
    */
 
   /* Disable BOD during configuration to avoid spurious reset */
-  SYSCTRL->BOD33.reg &= ~SYSCTRL_BOD33_ENABLE;
+  SYSCTRL->BOD33.bit.ENABLE = 0;
   while (!(SYSCTRL->PCLKSR.reg & SYSCTRL_PCLKSR_B33SRDY))
     ;
 
@@ -27,7 +27,7 @@ void clkSetup(void) {
   SYSCTRL->BOD33.reg =
       SYSCTRL_BOD33_LEVEL(48) | SYSCTRL_BOD33_ACTION_NONE | SYSCTRL_BOD33_HYST;
 
-  SYSCTRL->BOD33.reg |= SYSCTRL_BOD33_ENABLE;
+  SYSCTRL->BOD33.bit.ENABLE = 1;
   while (!(SYSCTRL->PCLKSR.reg & SYSCTRL_PCLKSR_B33SRDY))
     ;
 
@@ -36,11 +36,11 @@ void clkSetup(void) {
     ;
 
   /* Now at ~3V3, set BOD33 to reset the micro on brown out */
-  SYSCTRL->BOD33.reg &= ~SYSCTRL_BOD33_ENABLE;
+  SYSCTRL->BOD33.bit.ENABLE = 0;
   while (!(SYSCTRL->PCLKSR.reg & SYSCTRL_PCLKSR_B33SRDY))
     ;
   SYSCTRL->BOD33.reg |= SYSCTRL_BOD33_ACTION_RESET;
-  SYSCTRL->BOD33.reg |= SYSCTRL_BOD33_ENABLE;
+  SYSCTRL->BOD33.bit.ENABLE = 1;
   while (!(SYSCTRL->PCLKSR.reg & SYSCTRL_PCLKSR_B33SRDY))
     ;
 
@@ -103,9 +103,9 @@ void clkSetup(void) {
                          SYSCTRL_DFLLMUL_FSTEP(0xA);
   SYNC_DFLL();
 
-  SYSCTRL->DFLLCTRL.reg |= SYSCTRL_DFLLCTRL_MODE;
+  SYSCTRL->DFLLCTRL.bit.MODE = 1;
   SYNC_DFLL();
-  SYSCTRL->DFLLCTRL.reg |= SYSCTRL_DFLLCTRL_ENABLE;
+  SYSCTRL->DFLLCTRL.bit.ENABLE = 1;
   SYNC_DFLL();
 
   /* 5. Flash wait - 1 @ 3V3/48 MHz (37.12 NVM Characteristics) */

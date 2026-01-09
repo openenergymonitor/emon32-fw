@@ -91,7 +91,7 @@ typedef struct ECMCfg_ {
   uint32_t reportTime_us; /* Report time in microseconds */
   float    assumedVrms;   /* Assume RMS voltage if not found */
 
-  int_fast8_t mapCTLog[NUM_CT]; /* Map of CT to microcontroller pins */
+  int8_t mapCTLog[NUM_CT]; /* Map of CT to microcontroller pins */
 
   GainOffset_t correction; /* Gain and offset correction */
 
@@ -149,7 +149,7 @@ ECMCfg_t *ecmConfigGet(void);
 /*! @brief Configure a channel.
  *  @param [in] ch : channel, logical index.
  */
-void ecmConfigChannel(int_fast8_t ch);
+void ecmConfigChannel(int8_t ch);
 
 /*! @brief Having set all configuration values, calculate all required constant
  *         values

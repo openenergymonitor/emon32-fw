@@ -66,8 +66,8 @@ typedef struct wlAsyncCtx_ {
   uint32_t         addrWr;
   WLHeader_t       header;
   const uint8_t   *pData;
-  uint32_t         dataLen;
-  int32_t          idx;
+  size_t           dataLen;
+  uint32_t         idx;
   eepromWrStatus_t lastStatus;
   int32_t          busyRetries; /* Counter for BUSY retries */
 } wlAsyncCtx_t;
@@ -84,13 +84,13 @@ static I2CM_Status_t    writeBytes(wrLocal_t *wr, uint32_t n);
 static int32_t eepromSizeBytes = EEPROM_SIZE;
 
 /* Precalculate wear limiting addresses. */
-static const int32_t wlBlkCnt  = (EEPROM_SIZE - EEPROM_WL_OFFSET) / WL_PKT_SIZE;
-static const int32_t wlBlkSize = WL_PKT_SIZE;
+static const uint32_t wlBlkCnt = (EEPROM_SIZE - EEPROM_WL_OFFSET) / WL_PKT_SIZE;
+static const int32_t  wlBlkSize = WL_PKT_SIZE;
 
-static int32_t wlCurrentValid = 0; /* Current valid byte for wear levelling */
-static int32_t wlIdxNxtWr     = 0; /* Index of the next wear levelled write */
-static int32_t wlData_n       = 0; /* Length of data  stored in the WL area */
-static uint8_t wlData[WL_PKT_SIZE];
+static int32_t  wlCurrentValid = 0; /* Current valid byte for wear levelling */
+static uint32_t wlIdxNxtWr     = 0; /* Index of the next wear levelled write */
+static size_t   wlData_n       = 0; /* Length of data  stored in the WL area */
+static uint8_t  wlData[WL_PKT_SIZE];
 
 /* Async write context. Accessed from main loop only (callbacks run in main, not
  * ISR). Marked volatile for defensive programming in case future refactoring
@@ -277,7 +277,7 @@ void eepromDump(void) {
   }
 }
 
-void eepromInitBlock(uint32_t startAddr, const uint32_t val, uint32_t n) {
+void eepromInitBlock(uint32_t startAddr, const uint32_t val, size_t n) {
   /* Page aligned start, divisible by number of page bytes, <= EEPROM size */
   EMON32_ASSERT((startAddr % EEPROM_PAGE_SIZE) == 0);
   EMON32_ASSERT((n % EEPROM_PAGE_SIZE) == 0);
@@ -312,7 +312,7 @@ void eepromInitBlock(uint32_t startAddr, const uint32_t val, uint32_t n) {
   }
 }
 
-void eepromInitConfig(const void *pSrc, const uint32_t n) {
+void eepromInitConfig(const void *pSrc, const size_t n) {
   /* Write the first line and wait, then loop through until all n bytes have
    * been written.
    */
@@ -335,7 +335,7 @@ void eepromInitConfig(const void *pSrc, const uint32_t n) {
   timerDelay_us(EEPROM_WR_TIME);
 }
 
-bool eepromRead(uint32_t addr, void *pDst, uint32_t n) {
+bool eepromRead(uint32_t addr, void *pDst, size_t n) {
   I2CM_Status_t i2cm_s;
   uint8_t      *pData   = pDst;
   Address_t     address = calcAddress(addr);
@@ -379,11 +379,11 @@ bool eepromRead(uint32_t addr, void *pDst, uint32_t n) {
   return true;
 }
 
-eepromWLStatus_t eepromReadWL(void *pPktRd, int32_t *pIdx) {
+eepromWLStatus_t eepromReadWL(void *pPktRd, uint32_t *pIdx) {
   /* Check for correct indexing, find it not yet set. Read into struct from
    * correct location.
    */
-  int32_t          idxRd;
+  uint32_t         idxRd;
   uint32_t         addrRd;
   uint16_t         crcData;
   WLHeader_t       header;
@@ -397,13 +397,13 @@ eepromWLStatus_t eepromReadWL(void *pPktRd, int32_t *pIdx) {
     return EEPROM_WL_BUSY;
   }
 
-  if (-1 == wlIdxNxtWr) {
+  if (UINT32_MAX == wlIdxNxtWr) {
     status = wlFindLast();
   }
 
   idxRd = wlIdxNxtWr - 1u;
 
-  if (-1 == idxRd) {
+  if (UINT32_MAX == idxRd) {
     idxRd = (wlBlkCnt - 1);
   }
   if (pIdx) {
@@ -449,14 +449,14 @@ void eepromWLClear(void) {
   }
 }
 
-void eepromWLReset(int32_t len) {
+void eepromWLReset(const size_t len) {
   EMON32_ASSERT(len && (len <= (wlBlkSize - (int32_t)sizeof(WLHeader_t))));
 
-  wlIdxNxtWr = -1;
+  wlIdxNxtWr = UINT32_MAX;
   wlData_n   = len;
 }
 
-eepromWrStatus_t eepromWrite(uint32_t addr, const void *pSrc, uint32_t n) {
+eepromWrStatus_t eepromWrite(uint32_t addr, const void *pSrc, const size_t n) {
 
   /* Make byte count and address static to allow re-entrant writes */
   static wrLocal_t wrLocal;
@@ -678,7 +678,7 @@ static void eepromWLAsyncCallback(void) {
     status = eepromWrite(0, 0, 0);
     if (status == EEPROM_WR_COMPLETE) {
       /* Data write complete, update wear leveling index */
-      int32_t idxWr = wlAsyncCtx.idx + 1u;
+      uint32_t idxWr = wlAsyncCtx.idx + 1u;
       if (idxWr == wlBlkCnt) {
         uint32_t validByte;
         if (!eepromRead(wlAsyncCtx.addrWr, &validByte, 1u)) {
@@ -721,7 +721,7 @@ bool eepromWriteWLBusy(void) { return (wlAsyncCtx.state != WL_ASYNC_IDLE); }
  *  @return EEPROM_WR_BUSY if another write is in progress, EEPROM_WR_PEND
  * otherwise
  */
-eepromWrStatus_t eepromWriteWLAsync(const void *pPktWr, int32_t *pIdx) {
+eepromWrStatus_t eepromWriteWLAsync(const void *pPktWr, uint32_t *pIdx) {
   EMON32_ASSERT(pPktWr);
 
   /* Atomic check-and-set to prevent race condition */
@@ -735,7 +735,7 @@ eepromWrStatus_t eepromWriteWLAsync(const void *pPktWr, int32_t *pIdx) {
   __enable_irq();
 
   /* Find the next write location if not yet set */
-  if (-1 == wlIdxNxtWr) {
+  if (UINT32_MAX == wlIdxNxtWr) {
     wlFindLast();
   }
 
@@ -768,16 +768,16 @@ eepromWrStatus_t eepromWriteWLAsync(const void *pPktWr, int32_t *pIdx) {
   return EEPROM_WR_PEND;
 }
 
-eepromWrStatus_t eepromWriteWL(const void *pPktWr, int32_t *pIdx) {
+eepromWrStatus_t eepromWriteWL(const void *pPktWr, uint32_t *pIdx) {
   /* Check for correct indexing, find if not yet set; this is indicated by
-   * wlIdxNxtWr == -1. Write output to new levelled position.
+   * wlIdxNxtWr == UINT32_MAX. Write output to new levelled position.
    */
-  int32_t          idxWr;
+  uint32_t         idxWr;
   uint32_t         addrWr;
   WLHeader_t       header;
   eepromWrStatus_t wrStatus;
 
-  if (-1 == wlIdxNxtWr) {
+  if (UINT32_MAX == wlIdxNxtWr) {
     wlFindLast();
   }
 

@@ -25,17 +25,18 @@
 
 /* "Fat" string with current length and buffer size. */
 typedef struct StrN {
-  char   *str; /* Pointer to the string */
-  int32_t n;   /* Length of the string  */
-  int32_t m;   /* Buffer length */
+  char  *str; /* Pointer to the string */
+  size_t n;   /* Length of the string  */
+  size_t m;   /* Buffer length */
 } StrN_t;
 
-static void    catId(StrN_t *strD, int32_t id, int32_t field, bool json);
-static void    catMsg(StrN_t *strD, int32_t msg, bool json);
-static void    initFields(StrN_t *pD, char *pS, const int32_t m);
+static void    catId(StrN_t *strD, const int32_t id, const int32_t field,
+                     const bool json);
+static void    catMsg(StrN_t *strD, const int32_t msg, const bool json);
+static void    initFields(StrN_t *pD, char *pS, const size_t m);
 static int32_t strnFtoa(StrN_t *strD, const float v);
 static int32_t strnItoa(StrN_t *strD, const int32_t v);
-static int32_t strnCat(StrN_t *strD, const StrN_t *strS);
+static size_t  strnCat(StrN_t *strD, const StrN_t *strS);
 static int32_t strnLen(StrN_t *str);
 
 static char   tmpStr[CONV_STR_W] = {0};
@@ -56,7 +57,8 @@ const StrN_t baseStr[12] = {
  *  @param [in] field : field name index, e.g. "STR_V"
  *  @param [in] json : select format
  */
-static void catId(StrN_t *strD, int32_t id, int32_t field, bool json) {
+static void catId(StrN_t *strD, const int32_t id, const int32_t field,
+                  const bool json) {
   strD->n += strnCat(strD, &baseStr[STR_COMMA]);
   if (json) {
     strD->n += strnCat(strD, &baseStr[STR_DQUOTE]);
@@ -75,7 +77,7 @@ static void catId(StrN_t *strD, int32_t id, int32_t field, bool json) {
  *  @param [in] msg : message number
  *  @param [in] json : select format
  */
-static void catMsg(StrN_t *strD, int32_t msg, bool json) {
+static void catMsg(StrN_t *strD, const int32_t msg, const bool json) {
   /* <{">MSG<">:<"><#><"> */
 
   if (json) {
@@ -96,7 +98,7 @@ static void catMsg(StrN_t *strD, int32_t msg, bool json) {
  *  @param [in] pS : pointer to string buffer
  *  @param [in] m : maximum width of the string
  */
-static void initFields(StrN_t *pD, char *pS, const int32_t m) {
+static void initFields(StrN_t *pD, char *pS, const size_t m) {
   /* Setup destination string */
   pD->str = pS;
   pD->n   = 0;
@@ -146,12 +148,12 @@ static int32_t strnItoa(StrN_t *strD, const int32_t v) {
  *  @param [in] strS : pointer to string to concatenate onto strD
  *  @return number of characters concatenated
  */
-static int32_t strnCat(StrN_t *strD, const StrN_t *strS) {
+static size_t strnCat(StrN_t *strD, const StrN_t *strS) {
   /* Check bounds to make sure it won't go over the end. If so, return the
    * actual number of bytes that are copied.
    */
-  int32_t newLen;
-  int32_t bytesToCopy;
+  size_t newLen;
+  size_t bytesToCopy;
 
   bytesToCopy = strS->n;
   newLen      = strS->n + strD->n;
@@ -177,8 +179,8 @@ static int32_t strnLen(StrN_t *str) {
   return i;
 }
 
-int32_t dataPackSerial(const Emon32Dataset_t *pData, char *pDst, int32_t m,
-                       bool json) {
+size_t dataPackSerial(const Emon32Dataset_t *pData, char *pDst, const size_t m,
+                      const bool json) {
   EMON32_ASSERT(pData);
   EMON32_ASSERT(pDst);
 
@@ -234,8 +236,8 @@ int32_t dataPackSerial(const Emon32Dataset_t *pData, char *pDst, int32_t m,
   return strn.n;
 }
 
-int_fast8_t dataPackPacked(const Emon32Dataset_t *pData, void *pPacked,
-                           PackedRange_t range) {
+int8_t dataPackPacked(const Emon32Dataset_t *pData, void *pPacked,
+                      const PackedRange_t range) {
 
   /* Both upper and lower packets share the same initial data structure.
    * Differentiate for pulse or temperature readings. */

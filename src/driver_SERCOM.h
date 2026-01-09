@@ -37,16 +37,16 @@ typedef enum UART_BAUD_ {
 typedef struct UART_Cfg_ {
   Sercom     *sercom;
   UART_BAUD_t baud;
-  int32_t     apbc_mask;
-  int32_t     gclk_id;
-  int32_t     gclk_gen;
-  int32_t     pad_tx;
-  int32_t     pad_rx;
-  int32_t     port_grp;
-  int32_t     pin_tx;
-  int32_t     pin_rx;
-  int32_t     pmux;
-  int32_t     dmaChannel;
+  uint32_t    apbc_mask;
+  uint8_t     gclk_id;
+  uint8_t     gclk_gen;
+  uint8_t     pad_tx;
+  uint8_t     pad_rx;
+  uint8_t     port_grp;
+  uint8_t     pin_tx;
+  uint8_t     pin_rx;
+  uint8_t     pmux;
+  uint8_t     dmaChannel;
   DMACCfgCh_t dmaCfg;
 } UART_Cfg_t;
 
@@ -66,29 +66,29 @@ void sercomSetup(void);
  *  @param [in] sclPin : SCL pin number
  *  @param [in] pmux : Pin mux value for I2C function
  */
-void i2cBusRecovery(Sercom *sercom, uint32_t grp, uint32_t sdaPin,
-                    uint32_t sclPin, uint32_t pmux);
+void i2cBusRecovery(Sercom *sercom, const uint8_t grp, const uint8_t sdaPin,
+                    const uint8_t sclPin, const uint8_t pmux);
 
 /*! @brief Set I2C address. If dma is 1, then a packet of len bytes is sent
  *         or received.
  *  @param [in] sercom : SERCOM instance
  *  @param [in] addr : address and RW bit
  */
-I2CM_Status_t i2cActivate(Sercom *sercom, uint8_t addr);
+I2CM_Status_t i2cActivate(Sercom *sercom, const uint8_t addr);
 
 /*! @brief Requester acknowledge command
  *  @param [in] sercom : SERCOM instance
  *  @param [in] ack : 0: ACK, 1: NACK
  *  @param [in] cmd : command
  */
-void i2cAck(Sercom *sercom, I2CM_Ack_t ack, I2CM_AckCmd_t cmd);
+void i2cAck(Sercom *sercom, const I2CM_Ack_t ack, const I2CM_AckCmd_t cmd);
 
 /*! @brief Write to completer
  *  @param [in] sercom : SERCOM instance
  *  @param [in] data : data byte
  *  @return I2CM_SUCCESS, I2CM_TIMEOUT, I2CM_NOACK, or I2CM_ERROR
  */
-I2CM_Status_t i2cDataWrite(Sercom *sercom, uint8_t data);
+I2CM_Status_t i2cDataWrite(Sercom *sercom, const uint8_t data);
 
 /*! @brief Read byte from I2C completer
  *  @param [in] sercom : SERCOM instance
@@ -115,7 +115,7 @@ void spiSelect(const Pin_t nSS);
  *  @param [in] pSrc : pointer to the source buffer
  *  @param [in] n : number of bytes to send
  */
-void spiSendBuffer(Sercom *sercom, const void *pSrc, int32_t n);
+void spiSendBuffer(Sercom *sercom, const void *pSrc, size_t n);
 
 /*! @brief Send a byte on the configured SPI channel
  *  @param [in] sercom : pointer to the SERCOM instance
@@ -168,4 +168,5 @@ void uartPutsBlocking(Sercom *sercom, const char *s);
  *  @param [in] s : Pointer to the string
  *  @param [in] len : Length of the string (not including NULL)
  */
-void uartPutsNonBlocking(uint32_t dma_chan, const char *const s, uint16_t len);
+void uartPutsNonBlocking(uint8_t dma_chan, const char *const s,
+                         const uint16_t len);

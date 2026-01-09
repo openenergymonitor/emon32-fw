@@ -67,4 +67,4 @@ TempDev_t tempReadSerial(const TEMP_INTF_t intf, const uint8_t dev);
  *  @param [in] dev : device index
  *  @return status of the sample start
  */
-TempStatus_t tempStartSample(const TEMP_INTF_t intf, const uint32_t dev);
+TempStatus_t tempStartSample(const TEMP_INTF_t intf, const uint8_t dev);
