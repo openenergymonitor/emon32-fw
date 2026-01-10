@@ -34,6 +34,11 @@ typedef struct TempRead_ {
   int16_t      temp;
 } TempRead_t;
 
+/*! @brief Populate the table of OneWire devices
+ *  @return pointer to the address table
+ */
+uint64_t *tempAddress1WGet(void);
+
 /*! @brief Return the temperature as a float
  *  @param [in] intf : interface type
  *  @param [in] tFixed : fixed point temperature
@@ -41,12 +46,26 @@ typedef struct TempRead_ {
  */
 float tempAsFloat(const TEMP_INTF_t intf, const int16_t tFixed);
 
+/*! @brief Clear any saved temperature settings */
+void tempInitClear(void);
+
 /*! @brief Find and initialise sensors
  *  @param [in] intf : interface type
  *  @param [in] pParams : parameters for given interface type
  *  @return number of sensors found
  */
 uint32_t tempInitSensors(const TEMP_INTF_t intf, const void *pParams);
+
+/*! @brief Generate a mapping of physical to logical sensors
+ *  @param [in] pAddr : pointer to array of logical sensors
+ */
+void tempMapDevices(const TEMP_INTF_t intf, const void *pAddr);
+
+/*! @brief Get the map index for this sensor
+ *  @param [in] dev : physical device index
+ *  @return logical device index
+ */
+unsigned int tempMapToLogical(const TEMP_INTF_t intf, const uint8_t dev);
 
 /*! @brief Read an existing temperature sample
  *  @param [in] intf : interface type

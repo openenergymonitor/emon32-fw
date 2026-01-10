@@ -14,11 +14,6 @@
  * https://www.analog.com/en/app-notes/1wire-search-algorithm.html
  */
 
-typedef struct OneWireT_ {
-  uint64_t address;
-  uint8_t  opaIdx;
-} OneWireT_t;
-
 typedef struct __attribute__((__packed__)) Scratch_ {
   int16_t temp;
   uint8_t th;
@@ -36,8 +31,9 @@ _Static_assert(9 == sizeof(Scratch_t), "Scratch_t is not 9 bytes.");
 static DS18B20_conf_t cfg[NUM_OPA];
 
 /* Device address table */
-static OneWireT_t devTable[TEMP_MAX_ONEWIRE];
-static uint32_t   addressRemap[TEMP_MAX_ONEWIRE];
+static uint64_t devTableAddr[TEMP_MAX_ONEWIRE] = {0};
+static uint8_t  devTableOpa[TEMP_MAX_ONEWIRE]  = {0};
+static uint8_t  devRemap[TEMP_MAX_ONEWIRE]     = {0};
 
 /* OneWire functions & state variables */
 static uint8_t  calcCRC8(const uint8_t crc, const uint8_t value);
@@ -285,6 +281,8 @@ static void oneWireWriteBytes(const void *pSrc, const uint8_t n,
   }
 }
 
+uint64_t *ds18b20AddressGet(void) { return devTableAddr; }
+
 uint32_t ds18b20InitSensors(const DS18B20_conf_t *pCfg) {
   EMON32_ASSERT(pCfg);
 
@@ -310,21 +308,33 @@ uint32_t ds18b20InitSensors(const DS18B20_conf_t *pCfg) {
 
     /* Only count DS18B20 devices. */
     if (DS18B_FAMILY_CODE == (uint8_t)ROM_NO) {
-      devTable[deviceCount].address = ROM_NO;
-      devTable[deviceCount].opaIdx  = opaIdx;
+      devTableAddr[deviceCount] = ROM_NO;
+      devTableOpa[deviceCount]  = opaIdx;
       deviceCount++;
     }
 
     searchResult = oneWireNext(opaIdx);
   }
 
-  /* REVISIT : populate remapping table from saved sensors */
-  for (uint32_t i = 0; i < TEMP_MAX_ONEWIRE; i++) {
-    addressRemap[i] = i;
-  }
-
   return deviceCount;
 }
+
+void ds18b20MapSensors(const uint64_t *pAddr) {
+  /* Default to physical == logical index. If a matching saved address is found,
+   * then swap the remapping indices */
+  for (int i = 0; i < TEMP_MAX_ONEWIRE; i++) {
+    devRemap[i] = i;
+    for (int j = 0; j < TEMP_MAX_ONEWIRE; j++) {
+      if (devTableAddr[i] == pAddr[j]) {
+        devRemap[j] = devRemap[i];
+        devRemap[i] = j;
+        break;
+      }
+    }
+  }
+}
+
+uint8_t ds18b20MapToLogical(const unsigned int dev) { return devRemap[dev]; }
 
 bool ds18b20StartSample(const int32_t opaIdx) {
   const uint8_t CMD_SKIP_ROM  = 0xCC;
@@ -347,22 +357,22 @@ TempRead_t ds18b20ReadSample(const uint32_t dev) {
   const int16_t DS_TNEG55DEG     = -880;
   const int16_t DS_T125DEG       = 2000;
 
-  const uint64_t *addrDev  = &devTable[dev].address;
+  const uint64_t *addrDev  = &devTableAddr[dev];
   Scratch_t       scratch  = {0};
   const uint8_t  *pScratch = (uint8_t *)&scratch;
   uint8_t         crcDS    = 0;
   TempRead_t      tempRes  = {0};
 
   /* Check for presence pulse before continuing */
-  if (!oneWireReset(devTable[dev].opaIdx)) {
+  if (!oneWireReset(devTableOpa[dev])) {
     tempRes.status = TEMP_NO_SENSORS;
     return tempRes;
   }
 
-  oneWireWriteBytes(&CMD_MATCH_ROM, 1, devTable[dev].opaIdx);
-  oneWireWriteBytes(addrDev, 8, devTable[dev].opaIdx);
-  oneWireWriteBytes(&CMD_READ_SCRATCH, 1, devTable[dev].opaIdx);
-  oneWireReadBytes(&scratch, 9, devTable[dev].opaIdx);
+  oneWireWriteBytes(&CMD_MATCH_ROM, 1, devTableOpa[dev]);
+  oneWireWriteBytes(addrDev, 8, devTableOpa[dev]);
+  oneWireWriteBytes(&CMD_READ_SCRATCH, 1, devTableOpa[dev]);
+  oneWireReadBytes(&scratch, 9, devTableOpa[dev]);
 
   /* Check CRC for received data */
   for (int32_t i = 0; i < 8; i++) {
@@ -400,8 +410,8 @@ TempRead_t ds18b20ReadSample(const uint32_t dev) {
 TempDev_t ds18b20ReadSerial(const uint32_t dev) {
   TempDev_t device;
 
-  device.id   = devTable[dev].address;
-  device.intf = (0 == devTable[dev].opaIdx) ? TEMP_INTF_OPA1 : TEMP_INTF_OPA2;
+  device.id   = devTableAddr[dev];
+  device.intf = (0 == devTableOpa[dev]) ? TEMP_INTF_OPA1 : TEMP_INTF_OPA2;
 
   return device;
 }

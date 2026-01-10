@@ -13,11 +13,27 @@ typedef struct DS18B20_conf_ {
   uint8_t opaIdx;
 } DS18B20_conf_t;
 
+/*! @brief Get the table of found device addresses
+ *  @return : pointer to address table
+ */
+uint64_t *ds18b20AddressGet(void);
+
 /*! @brief Configure the OneWire port and find sensors
  *  @param [in] pCfg: pointer to the configuration struct
  *  @return number of sensors found
  */
 uint32_t ds18b20InitSensors(const DS18B20_conf_t *pCfg);
+
+/*! @brief Map the found OneWire sensors to logical index
+ *  @param [in] pAddr : array of logical addresses
+ */
+void ds18b20MapSensors(const uint64_t *pAddr);
+
+/*! @brief Return the logical index of the physical device
+ *  @param [in] dev : physical device index
+ *  @return the logical device index
+ */
+uint8_t ds18b20MapToLogical(const unsigned int dev);
 
 /*! @brief Start a temperature conversion on all OneWire devices
  *  @return true for success, false if no presence pulse detected

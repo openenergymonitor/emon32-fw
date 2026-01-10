@@ -430,14 +430,15 @@ static void tempReadEvt(Emon32Dataset_t *pData, const uint32_t numT) {
   static uint32_t tempRdCount;
 
   if (numT > 0) {
-    TempRead_t tempValue = tempReadSample(TEMP_INTF_ONEWIRE, tempRdCount);
+    TempRead_t tempValue  = tempReadSample(TEMP_INTF_ONEWIRE, tempRdCount);
+    size_t     mapLogical = tempMapToLogical(TEMP_INTF_ONEWIRE, tempRdCount);
 
     if (TEMP_OK == tempValue.status) {
-      pData->temp[tempRdCount] = tempValue.temp;
+      pData->temp[mapLogical] = tempValue.temp;
     } else if (TEMP_OUT_OF_RANGE == tempValue.status) {
-      pData->temp[tempRdCount] = 4832; /* 302°C */
+      pData->temp[mapLogical] = 4832; /* 302°C */
     } else {
-      pData->temp[tempRdCount] = 4864; /* 304°C */
+      pData->temp[mapLogical] = 4864; /* 304°C */
     }
 
     tempRdCount++;
@@ -463,14 +464,32 @@ static uint32_t tempSetup(Emon32Dataset_t *pData) {
   dsCfg.grp                     = GRP_OPA;
   dsCfg.t_wait_us               = 5;
 
+  tempInitClear();
+
   for (int32_t i = 0; i < NUM_OPA; i++) {
-    if (('o' == pConfig->opaCfg[i].func) && pConfig->opaCfg[i].opaActive) {
-      dsCfg.opaIdx = i;
-      dsCfg.pin    = opaPins[i];
-      dsCfg.pinPU  = opaPUs[i];
-      numTempSensors += tempInitSensors(TEMP_INTF_ONEWIRE, &dsCfg);
+    if (('o' == pConfig->opaCfg[i].func)) {
+
+      /* If configured as OneWire device always enable the PU even if inactive
+       * as an external device may be handling the port */
+      portPinDrv(GRP_OPA, opaPUs[i], PIN_DRV_SET);
+      portPinDir(GRP_OPA, opaPUs[i], PIN_DIR_OUT);
+      portPinDrv(GRP_OPA, opaPins[i], PIN_DRV_CLR);
+
+      if (pConfig->opaCfg[i].opaActive) {
+        dsCfg.opaIdx = i;
+        dsCfg.pin    = opaPins[i];
+        dsCfg.pinPU  = opaPUs[i];
+        numTempSensors += tempInitSensors(TEMP_INTF_ONEWIRE, &dsCfg);
+      }
     }
   }
+
+  /* 64 bit values must be 8byte aligned, not guaranteed from a packed struct */
+  uint64_t addrAlign8[TEMP_MAX_ONEWIRE];
+  memcpy(addrAlign8, pConfig->oneWireAddr.addr,
+         sizeof(pConfig->oneWireAddr.addr));
+
+  tempMapDevices(TEMP_INTF_ONEWIRE, addrAlign8);
 
   /* Set all unused temperature slots to 300°C (4800 as Q4 fixed point) */
   for (int32_t i = 0; i < TEMP_MAX_ONEWIRE; i++) {
@@ -766,6 +785,11 @@ int main(void) {
       if (evtPending(EVT_PROCESS_CMD)) {
         configProcessCmd();
         emon32EventClr(EVT_PROCESS_CMD);
+      }
+      if (evtPending(EVT_OPA_INIT)) {
+        pulseConfigure();
+        numTempSensors = tempSetup(&dataset);
+        emon32EventClr(EVT_OPA_INIT);
       }
       if (evtPending(EVT_CONFIG_CHANGED)) {
         emon32EventClr(EVT_CONFIG_CHANGED);

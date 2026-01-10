@@ -5,12 +5,14 @@ This document lists all available serial commands for the emon32 firmware (emonP
 ## Serial Connection Settings
 
 ### USB CDC (Virtual Serial Port)
+
 - **Baud rate**: Not applicable (USB CDC automatically negotiates)
 - **Data format**: 8 data bits, no parity, 1 stop bit (8N1)
 - **Line termination**: `\r\n` or `\n`
 - **Flow control**: Not required (optional on Windows for some terminal applications)
 
 ### Hardware UART
+
 - **Baud rate**: 115200
 - **Data format**: 8 data bits, no parity, 1 stop bit (8N1)
 - **Line termination**: `\r\n` or `\n`
@@ -42,7 +44,7 @@ To test if your serial connection is working, try these commands first:
 | **l** | List current settings (displays all configuration) |
 | **m\<v> \<w> \<x> \<y> \<z>** | Configure a OneWire/pulse input<br>Parameters:<br>- `v`: Channel index<br>- `w`: Active status (0 = DISABLED, 1 = ENABLED)<br>- `x`: Function select<br>&nbsp;&nbsp;- `b`: Both edges (pulse)<br>&nbsp;&nbsp;- `f`: Falling edge (pulse)<br>&nbsp;&nbsp;- `r`: Rising edge (pulse)<br>&nbsp;&nbsp;- `o`: OneWire (temperature sensor)<br>- `y`: Pull-up resistor (0 = OFF, 1 = ON)<br>- `z`: Minimum period in ms (debounce)<br>Example: `m1 1 r 1 50` |
 | **n\<n>** | Set node ID [1..60]<br>Example: `n5` sets node ID to 5 |
-| **o** | Reserved for auto calibration (not yet implemented) |
+| **o<x>** | OneWire configuration<br>Options:<br>- `x` = `f`: reset and find OneWire devices<br>- `x` = `l`: list OneWire devices<br>- `x` = `s`: save the existing OneWire positions<br>- `x` = integer, `n`: save an address to position `n` (see Examples) |
 | **p\<n>** | Set the RF power level<br>Example: `p7` |
 | **r** | Restore default settings (WARNING: overwrites configuration) |
 | **s** | Save settings to NVM (non-volatile memory)<br>Must be used after making configuration changes |
@@ -64,6 +66,7 @@ When making configuration changes:
 ## Examples
 
 ### Enable Voltage Channels V2 and V3 (for 3-phase monitoring)
+
 ```
 k2 1 100.0           # Enable V2 with default calibration (100.0)
 k3 1 100.0           # Enable V3 with default calibration (100.0)
@@ -71,6 +74,7 @@ s                    # Save configuration
 ```
 
 **Note:** For voltage channels (1-3), you only need:
+
 - Channel number (2 or 3)
 - Active status (1 = enabled)
 - Calibration value (typically 100.0, range: 25.0-150.0)
@@ -78,24 +82,28 @@ s                    # Save configuration
 The phase and voltage reference parameters (v1, v2) are only required for CT channels.
 
 ### Configure a CT channel
+
 ```
 k4 1 90.0 1.5 1 1    # Enable CT4, cal=90.0, phase=1.5°, refs V1-V1
 s                     # Save configuration
 ```
 
 ### Configure a 3-phase CT on L1-L2
+
 ```
 k4 1 90.0 4.2 1 2    # Enable CT4, references V1 and V2 (L1-L2 load)
 s                     # Save configuration
 ```
 
 ### Configure a pulse input
+
 ```
 m1 1 r 1 50          # Enable OPA1, rising edge, pull-up on, 50ms debounce
 s                     # Save configuration
 ```
 
 ### Enable serial logging with JSON
+
 ```
 c1                    # Enable serial logging
 j1                    # Enable JSON format
@@ -103,23 +111,40 @@ s                     # Save configuration
 ```
 
 ### Set line frequency to 50 Hz
+
 ```
 f50                   # Set to 50 Hz
 s                     # Save (will automatically reset)
 ```
 
+### Save a OneWire temperature sensor to a position
+
+OneWire temperature sensors such as the DS18B20 are found in order. If a temperature sensor is removed, then the index of the remaining sensors will change. To save a sensor to an index so it is always shown there, use the following steps. In this example, the temperature sensor's 64 bit address is `0xea3ce104577b0728` and it is saved to index 3.
+
+```
+ol                         # List the sensor addresses (optional)
+o3 28 7 7b 57 4 e1 3c ea   # Save address to index 3
+s                          # Save (no reset)
+```
+
+> [!NOTE]
+> For DS18B20 temperature sensors, the first byte is always `0x28`.
+
 ### Zero accumulator counters
+
 ```
 z                     # Zero all accumulators (requires 'y' confirmation)
 ze3                   # Zero only E3 accumulator (requires 'y' confirmation)
 zp1                   # Zero only pulse1 accumulator (requires 'y' confirmation)
 ```
 
-**Note:** Individual accumulator reset reads current values from NVM, zeros the specified accumulator, and writes back. The runtime counter continues from zero for that accumulator.
+> [!NOTE]
+> Individual accumulator reset reads current values from NVM, zeros the specified accumulator, and writes back. The runtime counter continues from zero for that accumulator.
 
 ## Troubleshooting
 
 ### No Output on USB CDC
+
 If you're not seeing any output on USB:
 
 1. Check that your serial terminal is connected (COM port open)
@@ -130,6 +155,7 @@ If you're not seeing any output on USB:
 6. Check if serial logging is enabled with `c1` then `s`
 
 ### No Output on Hardware UART
+
 If you're not seeing any output on the hardware UART:
 
 1. Verify the UART configuration: 115200 baud, 8N1

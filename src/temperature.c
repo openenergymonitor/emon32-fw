@@ -11,6 +11,8 @@ static bool    tempSampled               = false;
 static int32_t numSensors                = 0;
 static int32_t millisLastSample[NUM_OPA] = {0};
 
+uint64_t *tempAddress1WGet(void) { return ds18b20AddressGet(); }
+
 float tempAsFloat(const TEMP_INTF_t intf, const int16_t tFixed) {
   float ret = -1000.0;
   if (TEMP_INTF_ONEWIRE == intf) {
@@ -19,6 +21,8 @@ float tempAsFloat(const TEMP_INTF_t intf, const int16_t tFixed) {
   return ret;
 }
 
+void tempInitClear(void) { numSensors = 0; }
+
 uint32_t tempInitSensors(const TEMP_INTF_t intf, const void *pParams) {
   EMON32_ASSERT(pParams);
 
@@ -26,6 +30,20 @@ uint32_t tempInitSensors(const TEMP_INTF_t intf, const void *pParams) {
     int32_t numFound = ds18b20InitSensors((DS18B20_conf_t *)pParams);
     numSensors += numFound;
     return numFound;
+  }
+
+  return 0;
+}
+
+void tempMapDevices(const TEMP_INTF_t intf, const void *pAddr) {
+  if (TEMP_INTF_ONEWIRE == intf) {
+    ds18b20MapSensors((uint64_t *)pAddr);
+  }
+}
+
+unsigned int tempMapToLogical(const TEMP_INTF_t intf, const uint8_t dev) {
+  if (TEMP_INTF_ONEWIRE == intf) {
+    return ds18b20MapToLogical(dev);
   }
 
   return 0;
