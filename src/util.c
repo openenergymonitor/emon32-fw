@@ -35,94 +35,110 @@ uint32_t utilStrlen(const char *pBuf) {
   return charCnt;
 }
 
+/* Fast divide by 10 using shifts/adds only (no hardware divide) */
+static inline uint32_t fastDiv10(uint32_t n) {
+  uint32_t q = (n >> 1) + (n >> 2);
+  q          = q + (q >> 4);
+  q          = q + (q >> 8);
+  q          = q + (q >> 16);
+  q          = q >> 3;
+  uint32_t r = n - q * 10;
+  return q + ((r + 6) >> 4);
+}
+
 uint32_t utilItoa(char *pBuf, int32_t val, ITOA_BASE_t base) {
-  uint32_t    charCnt    = 0;
-  bool        isNegative = false;
-  char *const pBase      = pBuf;
+  char     buf[12]; /* -2147483648 = 11 chars + null */
+  char    *p = &buf[11];
+  uint32_t uval;
+  bool     neg = false;
+
+  *p = '\0';
 
   /* Handle 0 explicitly */
   if (0 == val) {
-    *pBuf++ = '0';
-    *pBuf   = '\0';
+    pBuf[0] = '0';
+    pBuf[1] = '\0';
     return 2u;
   }
 
-  /* Base 10 can be signed, and has a divide in */
   if (ITOA_BASE10 == base) {
     if (val < 0) {
-      isNegative = true;
-      val        = -val;
+      neg  = true;
+      uval = (uint32_t)(-val);
+    } else {
+      uval = (uint32_t)val;
     }
 
-    while (0 != val) {
-      *pBuf++ = (val % 10u) + '0';
-      val     = val / 10u;
-      charCnt++;
+    while (uval != 0) {
+      uint32_t q = fastDiv10(uval);
+      *--p       = (char)('0' + (uval - q * 10));
+      uval       = q;
     }
 
-    if (isNegative) {
-      *pBuf++ = '-';
-      charCnt++;
+    if (neg) {
+      *--p = '-';
     }
   } else {
-    const char itohex[] = "0123456789abcdef";
-    uint32_t   val_u    = (uint32_t)val;
+    static const char itohex[] = "0123456789abcdef";
+    uint32_t          val_u    = (uint32_t)val;
 
     while (0 != val_u) {
-      *pBuf++ = itohex[(val_u & 0xFu)];
+      *--p = itohex[val_u & 0xFu];
       val_u >>= 4;
-      charCnt++;
     }
   }
 
-  /* Terminate and return */
-  *pBuf = '\0';
-  charCnt++;
+  /* Copy to output buffer */
+  char    *dst = pBuf;
+  uint32_t len = 0;
+  while (*p) {
+    *dst++ = *p++;
+    len++;
+  }
+  *dst = '\0';
 
-  utilStrReverse(pBase, charCnt - 1u);
-  return charCnt;
+  return len + 1u;
 }
 
-ConvInt_t utilAtoi(char *pBuf, ITOA_BASE_t base) {
+ConvInt_t utilAtoi(const char *pBuf, ITOA_BASE_t base) {
   bool      isNegative = false;
-  uint32_t  len;
-  uint32_t  mulCnt = 1;
-  ConvInt_t conv   = {false, 0};
+  uint32_t  result     = 0;
+  ConvInt_t conv       = {false, 0};
 
   if ('-' == *pBuf) {
     isNegative = true;
     pBuf++;
   }
 
-  /* Reverse string and convert */
-  len = utilStrlen(pBuf);
-  utilStrReverse(pBuf, len);
-
+  /* Process left-to-right, no string reversal needed */
   if (ITOA_BASE10 == base) {
     while (*pBuf) {
       if (!isnumeric(*pBuf)) {
         return conv;
       }
-      conv.val += ((*pBuf++) - '0') * mulCnt;
-      mulCnt *= 10;
-    }
-    if (isNegative) {
-      conv.val = -conv.val;
+      result = result * 10 + (uint32_t)(*pBuf - '0');
+      pBuf++;
     }
   } else {
     while (*pBuf) {
-      if (('a' <= *pBuf) && ('f' >= *pBuf)) {
-        conv.val += ((*pBuf) - 'a' + 10u) * mulCnt;
-      } else if (isnumeric(*pBuf)) {
-        conv.val += ((*pBuf) - '0') * mulCnt;
+      char     c = *pBuf;
+      uint32_t digit;
+      if (('a' <= c) && ('f' >= c)) {
+        digit = (uint32_t)(c - 'a' + 10);
+      } else if (('A' <= c) && ('F' >= c)) {
+        digit = (uint32_t)(c - 'A' + 10);
+      } else if (isnumeric(c)) {
+        digit = (uint32_t)(c - '0');
       } else {
         return conv;
       }
+      /* result = result * 16 + digit */
+      result = (result << 4) + digit;
       pBuf++;
-      mulCnt *= 16;
     }
   }
 
+  conv.val   = isNegative ? -(int32_t)result : (int32_t)result;
   conv.valid = true;
   return conv;
 }
@@ -133,81 +149,97 @@ bool utilCharPrintable(const char c) {
 }
 
 uint32_t utilFtoa(char *pBuf, float val) {
-  uint32_t    charCnt    = 0;
-  bool        isNegative = false;
-  char *const pBase      = pBuf;
+  char     buf[16]; /* Enough for -2147483648.99 + null */
+  char    *p = &buf[15];
+  uint32_t units;
+  uint32_t decimals;
+  bool     neg = false;
 
-  uint16_t decimals;
-  int32_t  units;
+  *p = '\0';
 
   if (val < 0.0f) {
-    isNegative = true;
-    val        = qfp_fmul(val, -1.0f);
-  }
-  decimals = qfp_float2int_z(qfp_fmul(val, 100.0f)) % 100;
-  units    = qfp_float2int_z(val);
-
-  charCnt += 3u;
-  *pBuf++  = (decimals % 10) + '0';
-  decimals = decimals / 10;
-  *pBuf++  = (decimals % 10) + '0';
-  *pBuf++  = '.';
-
-  if (0 == units) {
-    *pBuf++ = '0';
-    charCnt++;
+    neg = true;
+    val = qfp_fmul(val, -1.0f);
   }
 
-  while (0 != units) {
-    *pBuf++ = (units % 10) + '0';
-    units   = units / 10;
-    charCnt++;
+  /* Extract integer and fractional parts */
+  units           = (uint32_t)qfp_float2int_z(val);
+  /* decimals = (val * 100) - (units * 100), using shifts for *100 */
+  uint32_t val100 = (uint32_t)qfp_float2int_z(qfp_fmul(val, 100.0f));
+  uint32_t units100 =
+      (units << 6) + (units << 5) + (units << 2); /* units * 100 */
+  decimals = val100 - units100;
+
+  /* Write decimals (always 2 digits) using fast division */
+  uint32_t q = fastDiv10(decimals);
+  *--p       = (char)('0' + (decimals - q * 10));
+  *--p       = (char)('0' + q);
+  *--p       = '.';
+
+  /* Write integer part */
+  if (units == 0) {
+    *--p = '0';
+  } else {
+    while (units != 0) {
+      q     = fastDiv10(units);
+      *--p  = (char)('0' + (units - q * 10));
+      units = q;
+    }
   }
 
-  if (isNegative) {
-    *pBuf++ = '-';
-    charCnt++;
+  if (neg) {
+    *--p = '-';
   }
 
-  /* Terminate and return */
-  *pBuf = '\0';
-  charCnt++;
+  /* Copy to output buffer */
+  char    *dst = pBuf;
+  uint32_t len = 0;
+  while (*p) {
+    *dst++ = *p++;
+    len++;
+  }
+  *dst = '\0';
 
-  utilStrReverse(pBase, charCnt - 1u);
-  return charCnt;
+  return len + 1u;
 }
 
-ConvFloat_t utilAtof(char *pBuf) {
+ConvFloat_t utilAtof(const char *pBuf) {
   bool        isNegative = false;
-  uint32_t    len        = 0;
-  uint32_t    mulCnt     = 1u;
-  uint32_t    fraction   = 0u;
+  uint32_t    intPart    = 0;
+  uint32_t    fracPart   = 0;
+  uint32_t    fracDiv    = 1;
+  bool        inFraction = false;
   ConvFloat_t conv       = {false, 0.0f};
 
   if ('-' == *pBuf) {
     isNegative = true;
     pBuf++;
   }
-  len = utilStrlen(pBuf);
-  utilStrReverse(pBuf, len);
 
+  /* Process left-to-right, no string reversal needed */
   while (*pBuf) {
     const char c = *pBuf++;
-    /* Allow period/comma delimit, divide down if found */
     if (('.' == c) || (',' == c)) {
-      fraction = mulCnt;
+      inFraction = true;
     } else if (isnumeric(c)) {
-      const float toAdd = qfp_uint2float((c - '0') * mulCnt);
-      conv.val          = qfp_fadd(conv.val, toAdd);
-      mulCnt *= 10;
+      uint32_t digit = (uint32_t)(c - '0');
+      if (inFraction) {
+        fracPart = fracPart * 10 + digit;
+        fracDiv  = fracDiv * 10;
+      } else {
+        intPart = intPart * 10 + digit;
+      }
     } else {
       /* Invalid character found */
       return conv;
     }
   }
 
-  if (0 != fraction) {
-    conv.val = qfp_fdiv(conv.val, qfp_uint2float(fraction));
+  /* Convert to float only at the end */
+  conv.val = qfp_uint2float(intPart);
+  if (fracDiv > 1u) {
+    conv.val = qfp_fadd(
+        conv.val, qfp_fdiv(qfp_uint2float(fracPart), qfp_uint2float(fracDiv)));
   }
 
   if (isNegative) {

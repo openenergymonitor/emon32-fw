@@ -8,6 +8,7 @@
 *.tgz
 bin/emon32*
 build/
+build_bench/
 cm-test-sine.csv
 compile_commands.json
 emon32_build_info.c

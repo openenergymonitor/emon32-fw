@@ -1,0 +1,114 @@
+##############################################################################
+# Makefile for util benchmark test on ARM Cortex-M0+ target
+#
+# Uses IDENTICAL compiler/linker settings as main Makefile for fair comparison.
+# Only addition: --specs=nosys.specs for syscall stubs (sprintf/strtol need them)
+#
+# Usage: make -f tests/Makefile.bench
+##############################################################################
+BUILD = build_bench
+BIN = util_bench
+OUT = bin
+##############################################################################
+.PHONY: all directory clean size
+
+# Path to toolchain, e.g. /path/to/bin/ Leave empty if already on path.
+TC_PATH =
+CC = $(TC_PATH)arm-none-eabi-gcc
+OBJCOPY = $(TC_PATH)arm-none-eabi-objcopy
+SIZE = $(TC_PATH)arm-none-eabi-size
+
+ifeq ($(OS), Windows_NT)
+  MKDIR = gmkdir
+else
+  MKDIR = mkdir
+endif
+
+# === IDENTICAL CFLAGS as main Makefile ===
+CFLAGS += -W -Wall -Wextra -Wpedantic --std=c17 -Os -g3
+CFLAGS += -fno-diagnostics-show-caret -fno-common
+CFLAGS += -fdata-sections -ffunction-sections
+CFLAGS += -funsigned-char -funsigned-bitfields
+CFLAGS += -Wuninitialized
+CFLAGS += -Wshadow -Wdouble-promotion -Wundef
+CFLAGS += -mcpu=cortex-m0plus -mthumb
+CFLAGS += -MD -MP -MT $(BUILD)/$(*F).o -MF $(BUILD)/$(@F).d
+
+# === IDENTICAL LDFLAGS as main Makefile + nosys.specs for syscall stubs ===
+LDFLAGS += -mcpu=cortex-m0plus -mthumb
+LDFLAGS += -Wl,--gc-sections
+LDFLAGS += -Wl,--print-memory-usage
+LDFLAGS += -Wl,--script=./linker/samd21j17.ld
+LDFLAGS += --specs=nosys.specs
+
+INCLUDES += \
+  -I./include/samd21 \
+  -I./third_party/printf \
+  -I./third_party/qfplib \
+  -I./third_party/tinyusb/src \
+  -I./src/
+
+# Minimal set of source files needed for the benchmark
+SRCS += \
+  ./tests/test_util_bench_target.c \
+  ./src/startup_samd21.c \
+  ./src/board_def.c \
+  ./src/driver_CLK.c \
+  ./src/driver_DMAC.c \
+  ./src/driver_PORT.c \
+  ./src/driver_SAMD.c \
+  ./src/driver_SERCOM.c \
+  ./src/driver_TIME.c \
+  ./src/util.c \
+  ./third_party/printf/printf.c
+
+# === IDENTICAL DEFINES as main Makefile ===
+DEFINES += \
+  -D__SAMD21J17A__ \
+  -DDONT_USE_CMSIS_INIT \
+  -DCFG_TUSB_MCU=OPT_MCU_SAMD21
+
+CFLAGS += $(INCLUDES) $(DEFINES)
+
+OBJS = $(addprefix $(BUILD)/, $(notdir $(subst .c,.o, $(SRCS))))
+OBJS += $(BUILD)/qfplib-m0-full.o
+
+all: directory $(BUILD)/$(BIN).elf $(BUILD)/$(BIN).hex $(BUILD)/$(BIN).bin $(BUILD)/$(BIN).uf2 size
+
+$(BUILD)/$(BIN).elf: $(OBJS)
+	@echo LD $@
+	@$(CC) $(LDFLAGS) $(OBJS) $(LIBS) -o $@
+
+$(BUILD)/$(BIN).hex: $(BUILD)/$(BIN).elf
+	@echo OBJCOPY $@
+	@$(OBJCOPY) -O ihex $^ $@
+
+$(BUILD)/$(BIN).bin: $(BUILD)/$(BIN).elf
+	@echo OBJCOPY $@
+	@$(OBJCOPY) -O binary $^ $@
+
+$(BUILD)/$(BIN).uf2: $(BUILD)/$(BIN).bin
+	@echo BIN_TO_UF2 $@
+	@python3 ./scripts/bin_to_uf2.py $(BUILD)/$(BIN).bin $(BUILD)/$(BIN).uf2
+
+$(BUILD)/qfplib-m0-full.o:
+	@echo AS $@
+	@$(CC) $(CFLAGS) third_party/qfplib/qfplib-m0-full.s -c -o $@
+
+%.o:
+	@echo CC $@
+	@$(CC) $(CFLAGS) $(filter %/$(subst .o,.c,$(notdir $@)), $(SRCS)) -c -o $@
+
+directory:
+	@$(MKDIR) -p $(BUILD)
+	@$(MKDIR) -p $(OUT)
+
+size: $(BUILD)/$(BIN).elf
+	@echo size:
+	@$(SIZE) -t $^
+
+clean:
+	@echo clean
+	@-rm -rf $(BUILD)
+
+-include $(wildcard $(BUILD)/*.d)

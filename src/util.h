@@ -25,14 +25,14 @@ uint32_t utilAbs(const int32_t x);
  *  @param [in] pBuf : pointer to string buffer
  *  @return converted float and status
  */
-ConvFloat_t utilAtof(char *pBuf);
+ConvFloat_t utilAtof(const char *pBuf);
 
 /*! @brief Convert null terminated string to integer, returns the value.
  *  @param [in] pBuf : pointer to string buffer
  *  @param [in] base : select base 10 or base 16 conversion
  *  @return converted integer and status
  */
-ConvInt_t utilAtoi(char *pBuf, ITOA_BASE_t base);
+ConvInt_t utilAtoi(const char *pBuf, ITOA_BASE_t base);
 
 /*! @brief Indicate if a character is printable
  *  @param [in] c : character to check
