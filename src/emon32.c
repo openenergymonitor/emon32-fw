@@ -351,8 +351,9 @@ static void pulseConfigure(void) {
   for (uint32_t i = 0; i < NUM_OPA; i++) {
     PulseCfg_t *pulseCfg = pulseGetCfg(i);
 
-    if ((0 != pulseCfg) && ('o' != pConfig->opaCfg[i].func) &&
-        (pConfig->opaCfg[i].opaActive)) {
+    EMON32_ASSERT(pulseCfg);
+
+    if (('o' != pConfig->opaCfg[i].func) && (pConfig->opaCfg[i].opaActive)) {
       pulseCfg->edge    = (PulseEdge_t)pConfig->opaCfg[i].func;
       pulseCfg->grp     = pinsPulse[i][0];
       pulseCfg->pin     = pinsPulse[i][1];
@@ -482,6 +483,7 @@ static uint32_t tempSetup(Emon32Dataset_t *pData) {
        * as an external device may be handling the port */
       portPinDrv(GRP_OPA, opaPUs[i], PIN_DRV_SET);
       portPinDir(GRP_OPA, opaPUs[i], PIN_DIR_OUT);
+      portPinCfg(GRP_OPA, opaPins[i], PORT_PINCFG_PULLEN, PIN_CFG_CLR);
       portPinDrv(GRP_OPA, opaPins[i], PIN_DRV_CLR);
 
       if (pConfig->opaCfg[i].opaActive) {

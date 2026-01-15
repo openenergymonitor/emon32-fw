@@ -34,7 +34,10 @@ void pulseInit(const uint32_t index) {
   } else {
     portPinDir(GRP_OPA, opaPUs[index], PIN_DIR_IN);
     portPinCfg(GRP_OPA, opaPUs[index], PORT_PINCFG_PULLEN, PIN_CFG_CLR);
-    portPinCfg(GRP_OPA, pin, PORT_PINCFG_PULLEN, PIN_CFG_CLR);
+
+    /* Enable weak pull down */
+    portPinCfg(GRP_OPA, pin, PORT_PINCFG_PULLEN, PIN_CFG_SET);
+    portPinDrv(GRP_OPA, pin, PIN_DRV_CLR);
   }
   pinValue[index] = (uint32_t)portPinValue(GRP_OPA, pin);
 
