@@ -414,6 +414,13 @@ static void ssd1306Setup(void) {
     ssd1306DrawString(vInfo.version);
     ssd1306SetPosition((PosXY_t){.x = (44 + offset), .y = 2});
     ssd1306DrawString(vInfo.revision);
+
+    /* Display I2C test settings */
+    ssd1306SetPosition((PosXY_t){.x = 0, .y = 4});
+    ssd1306DrawString("BL:9 B:9 400k S:3");
+    ssd1306SetPosition((PosXY_t){.x = 0, .y = 5});
+    ssd1306DrawString("MB:N Save:50Wh");
+
     ssd1306DisplayUpdate();
   }
 }
@@ -669,6 +676,12 @@ int main(void) {
         /* Process any timer callbacks that are ready */
         timerProcessPendingCallbacks();
 
+        /* Check for I2C error interrupt and print diagnostics */
+        if (i2cCheckErrorPending()) {
+          printf_("I2C ERR! cnt=%" PRIu32 " status=0x%04X\r\n",
+                  i2cGetErrorCount(), i2cGetLastStatus());
+        }
+
         /* Check for confirmation timeout (30s) */
         configCheckConfirmationTimeout();
 
@@ -775,9 +788,11 @@ int main(void) {
 
         /* If the energy used since the last storage is greater than the
          * configured energy delta then save the accumulated energy to NVM.
+         * TESTING: Using 50 Wh threshold (instead of
+         * pConfig->baseCfg.epDeltaStore) for 4x more frequent saves to gather
+         * I2C reliability data faster.
          */
-        cumulativeProcess(&nvmCumulative, &dataset,
-                          pConfig->baseCfg.epDeltaStore);
+        cumulativeProcess(&nvmCumulative, &dataset, 50);
 
         /* Blink the STATUS LED, and clear the event. */
         uiLedColour(LED_RED);
