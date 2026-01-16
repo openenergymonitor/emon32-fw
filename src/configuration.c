@@ -168,13 +168,14 @@ static void configDefault(void) {
   config.opaCfg[1].period    = 0;
   config.opaCfg[1].puEn      = true;
 
-  /* Initialize reserved OPA slots */
-  for (int32_t idxOPA = NUM_OPA; idxOPA < (NUM_OPA + PULSE_RES); idxOPA++) {
-    config.opaCfg[idxOPA].func      = 0;
-    config.opaCfg[idxOPA].opaActive = false;
-    config.opaCfg[idxOPA].period    = 0;
-    config.opaCfg[idxOPA].puEn      = false;
-  }
+  /* OPA3
+   *   - Pulse input
+   *   - Disabled
+   */
+  config.opaCfg[2].func      = 'r';
+  config.opaCfg[2].opaActive = false;
+  config.opaCfg[2].period    = 100;
+  config.opaCfg[2].puEn      = false;
 
   config.crc16_ccitt = calcCRC16_ccitt(&config, (sizeof(config) - 2u));
 }
@@ -625,11 +626,15 @@ static bool configureOPA(void) {
   /* Check for the function. Must be a valid type and if a pulse must also have
    * a hysteresis period applied. */
   func = inBuffer[posFunc];
-  if (!(('b' == func) || ('f' == func) || ('o' == func) || ('r' == func))) {
+
+  bool isPulse   = ('b' == func) || ('f' == func) || ('r' == func);
+  bool isOneWire = ('o' == func);
+
+  if (!(isPulse || isOneWire)) {
     return false;
   }
 
-  if ('o' != func) {
+  if (isPulse) {
     convI = utilAtoi((inBuffer + posPu), ITOA_BASE10);
     if (!convI.valid) {
       return false;
@@ -643,7 +648,12 @@ static bool configureOPA(void) {
     period = convI.val;
   }
 
-  if ('o' == func) {
+  /* OPA3 can only be a pulse or analog input */
+  if ((2 == ch) && !isPulse) {
+    return false;
+  }
+
+  if (isOneWire) {
     config.opaCfg[ch].func = 'o';
     printSettingOPA(ch);
     return true;

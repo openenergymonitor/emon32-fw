@@ -31,8 +31,7 @@
 #define CAL_CT       3.027f
 
 /* OneWire/Pulse setup */
-#define NUM_OPA   2
-#define PULSE_RES 1 /* Number of Pulse channels reserved */
+#define NUM_OPA 3u
 
 /* Temperature sensors
  * This is the maximum number of OneWire DS18B20 sensors that can be used
@@ -125,6 +124,7 @@
 #define GRP_OPA     GRP_PINA
 #define PIN_OPA1    16
 #define PIN_OPA2    17
+#define PIN_OPA3    9
 #define PIN_OPA1_PU 18
 #define PIN_OPA2_PU 19
 

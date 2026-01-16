@@ -7,9 +7,9 @@
 
 typedef enum PulseLvl_ { PULSE_LVL_LOW, PULSE_LVL_HIGH } PulseLvl_t;
 
+static uint8_t    pinValue[NUM_OPA];
 static uint64_t   pulseCount[NUM_OPA];
 static PulseCfg_t pulseCfg[NUM_OPA];
-static uint32_t   pinValue[NUM_OPA];
 static PulseLvl_t pulseLvlLast[NUM_OPA];
 
 PulseCfg_t *pulseGetCfg(const uint32_t index) {
@@ -39,7 +39,7 @@ void pulseInit(const uint32_t index) {
     portPinCfg(GRP_OPA, pin, PORT_PINCFG_PULLEN, PIN_CFG_SET);
     portPinDrv(GRP_OPA, pin, PIN_DRV_CLR);
   }
-  pinValue[index] = (uint32_t)portPinValue(GRP_OPA, pin);
+  pinValue[index] = (uint8_t)portPinValue(GRP_OPA, pin);
 
   /* Use the first read value as the current state */
   pulseLvlLast[index] = (PulseLvl_t)pinValue[index];
