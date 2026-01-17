@@ -25,27 +25,27 @@ typedef struct RFMRx_ {
 static bool      rfmAckRecv(uint16_t fromId);
 static void      rfmFreqToBand(const RFM_Freq_t freq, uint8_t *band);
 static void      rfmPacketHandler(void); /* LPL: interruptHandler */
-static uint8_t   rfmReadReg(const uint32_t addr);
+static uint8_t   rfmReadReg(const uint8_t addr);
 static int16_t   rfmReadRSSI(void);
 static void      rfmReset(void);
 static void      rfmRxBegin(void); /* LPL: receiveBegin */
 static bool      rfmRxDone(void);  /* LPL: receiveDone */
 static RFMSend_t rfmSendWithRetry(uint8_t n, const uint8_t retries,
-                                  int32_t *pRetryCount);
+                                  uint8_t *pRetryCount);
 static void      rfmSetMode(RFMMode_t mode);
 static bool      rfmTxAvailable(void); /* LPL: canSend */
-static void      rfmWriteReg(const uint32_t addr, const uint8_t data);
+static void      rfmWriteReg(const uint8_t addr, const uint8_t data);
 static uint8_t   spiRx(void);
 static void      spiTx(const uint8_t b);
 
-static uint16_t      address       = 0;
+static uint8_t       address       = 0;
 static uint8_t       rxData[64]    = {0};
 static volatile bool rxRdy         = false;
 static const Pin_t   sel           = {GRP_SERCOM_SPI, PIN_SPI_RFM_SS};
 static const Pin_t   rst           = {GRP_RFM_INTF, PIN_RFM_RST};
 static bool          initDone      = false;
 static uint8_t       rfmBuffer[64] = {0};
-static int_fast8_t   rfmMode       = 0;
+static int8_t        rfmMode       = 0;
 static RFMRx_t       rfmRx         = {0};
 
 static bool rfmAckRecv(uint16_t fromId) {
@@ -117,7 +117,7 @@ static void rfmPacketHandler(void) {
     rfmRx.ackRecv = ctl & RFM69_CTL_SENDACK;
     rfmRx.ackReq  = ctl & RFM69_CTL_REQACK;
 
-    for (int32_t i = 0; i < rfmRx.dataLen; i++) {
+    for (size_t i = 0; i < rfmRx.dataLen; i++) {
       rxData[i] = spiRx();
     }
     spiDeSelect(sel);
@@ -127,10 +127,10 @@ static void rfmPacketHandler(void) {
   rfmRx.rxRSSI = rfmReadRSSI();
 }
 
-static uint8_t rfmReadReg(const uint32_t addr) {
+static uint8_t rfmReadReg(const uint8_t addr) {
   uint8_t rdByte;
   spiSelect(sel);
-  spiTx((uint8_t)addr);
+  spiTx(addr);
   rdByte = spiRx();
   spiDeSelect(sel);
   return rdByte;
@@ -148,10 +148,10 @@ static bool rfmTxAvailable(void) {
   return canSend;
 }
 
-static void rfmWriteReg(const uint32_t addr, const uint8_t data) {
+static void rfmWriteReg(const uint8_t addr, const uint8_t data) {
   spiSelect(sel);
   /* Datasheet 5.2.1, Figure 24: "wnr is 1 for write" */
-  spiTx((uint8_t)addr | 0x80);
+  spiTx(addr | 0x80);
   spiTx(data);
   spiDeSelect(sel);
 }
@@ -244,9 +244,9 @@ static bool rfmRxDone(void) {
  *  @return status of sending the packet
  */
 static RFMSend_t rfmSendWithRetry(uint8_t n, const uint8_t retries,
-                                  int32_t *pRetryCount) {
+                                  uint8_t *pRetryCount) {
 
-  for (int32_t r = 0; r < retries; r++) {
+  for (size_t r = 0; r < retries; r++) {
     uint32_t tNow;
     uint32_t tSent;
 
@@ -373,7 +373,7 @@ bool rfmInit(const RFMOpt_t *pOpt) {
       {REG_TESTDAGC, RFM_DAGC_IMPROVED_LOWBETA0}};
 
   rfmReset();
-  uint_fast8_t tStart = timerMillis();
+  uint32_t tStart = timerMillis();
 
   /* Initialise RFM69 */
   while (0xAA != rfmReadReg(REG_SYNCVALUE1)) {
@@ -412,8 +412,8 @@ bool rfmInit(const RFMOpt_t *pOpt) {
   return true;
 }
 
-RFMSend_t rfmSendBuffer(const int_fast8_t n, const uint8_t retries,
-                        int32_t *pRetryCount) {
+RFMSend_t rfmSendBuffer(const uint8_t n, const uint8_t retries,
+                        uint8_t *pRetryCount) {
   if (n > 61) {
     return RFM_N_TOO_LARGE;
   }
@@ -425,7 +425,7 @@ RFMSend_t rfmSendBuffer(const int_fast8_t n, const uint8_t retries,
   return rfmSendWithRetry(n, retries, pRetryCount);
 }
 
-void rfmSetAddress(const uint16_t addr) {
+void rfmSetAddress(const uint8_t addr) {
   address = addr;
   rfmWriteReg(REG_NODEADRS, addr);
 }

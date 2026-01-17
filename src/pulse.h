@@ -11,8 +11,8 @@ typedef enum PulseEdge_ {
 
 typedef struct PulseCfg_ {
   PulseEdge_t edge;    /* Edge or edges to detect */
-  uint32_t    grp;     /* GPIO group */
-  uint32_t    pin;     /* GPIO pin */
+  uint8_t     grp;     /* GPIO group */
+  uint8_t     pin;     /* GPIO pin */
   uint32_t    periods; /* Blank period */
   bool        active;  /* Channel active  */
   bool        puEn;    /* Pull up enabled */
@@ -22,12 +22,12 @@ typedef struct PulseCfg_ {
  *  @param [in] index : index of the pulse counter to access.
  *  @return pointer to configuration struct. 0 for failure
  */
-PulseCfg_t *pulseGetCfg(const uint32_t index);
+PulseCfg_t *pulseGetCfg(const size_t index);
 
 /*! Initialise a configured pulse counter
  *  @param [in] index : pulse counter index
  */
-void pulseInit(const uint32_t index);
+void pulseInit(const size_t index);
 
 /*! @brief Update the pulse counter(s) */
 void pulseUpdate(void);
@@ -36,9 +36,9 @@ void pulseUpdate(void);
  *  @param [in] index : pulse count index to set
  *  @param [in] pulseCount : the value to set
  */
-void pulseSetCount(const uint32_t index, const uint64_t value);
+void pulseSetCount(const size_t index, const uint32_t value);
 
 /*! @brief Get the current pulse count value
  *  @return current pulse value
  */
-uint64_t pulseGetCount(const uint32_t index);
+uint32_t pulseGetCount(const size_t index);

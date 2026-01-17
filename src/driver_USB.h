@@ -17,9 +17,9 @@ void usbCDCPutsBlocking(const char *s);
 bool usbCDCRxAvailable(void);
 
 /*! @brief Get a character from the CDC buffer
- *  @return the first character in the FIFO
+ *  @return the first character in the FIFO, or 0 if none available
  */
-uint8_t usbCDCRxGetChar(void);
+int32_t usbCDCRxGetChar(void);
 
 /*! @brief Do any required CDC serial tasks */
 void usbCDCTask(void);

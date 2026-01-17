@@ -40,15 +40,17 @@ To test if your serial connection is working, try these commands first:
 | **f\<n>** | Set line frequency in Hz<br>- `f50`: 50 Hz (Europe, UK, etc.)<br>- `f60`: 60 Hz (US, Canada, etc.) |
 | **g\<n>** | Set network group for RF communication (default = 210)<br>Example: `g210` |
 | **j\<n>** | JSON serial format<br>- `j0`: Disable JSON format<br>- `j1`: Enable JSON format |
-| **k\<x> \<a> \<y.y> \<z.z> \<v1> \<v2>** | Configure an analog input (voltage or current)<br>Parameters:<br>- `x`: Channel number (1-3 = Voltage; 4+ = CT)<br>- `a`: Active status (0 = DISABLED, 1 = ENABLED)<br>- `y.y`: V/CT calibration constant<br>- `z.z`: CT phase calibration value (degrees)<br>- `v1`: CT voltage channel 1 (reference)<br>- `v2`: CT voltage channel 2 (for L-L loads)<br>Example: `k4 1 90.0 1.5 1 1` |
+| **k\<x> \<a> \<y.y> \<z.z> [\<v1> \<v2>]** | Configure an analog input (voltage or current)<br>Parameters:<br>- `x`: Channel number (1-3 = Voltage; 4+ = CT)<br>- `a`: Active status (0 = DISABLED, 1 = ENABLED)<br>- `y.y`: V/CT calibration constant (voltage: 25-150)<br>- `z.z`: Phase calibration value (degrees)<br>- `v1`: CT voltage channel 1 (CT only)<br>- `v2`: CT voltage channel 2 (CT only, for L-L loads)<br>Examples:<br>- Voltage: `k1 1 100.0 0.0`<br>- CT: `k4 1 90.0 1.5 1 1` |
 | **l** | List current settings (displays all configuration) |
+| **lh** | List settings and accumulators (human readable format) |
 | **m\<v> \<w> \<x> \<y> \<z>** | Configure a OneWire/pulse input<br>Parameters:<br>- `v`: Channel index<br>- `w`: Active status (0 = DISABLED, 1 = ENABLED)<br>- `x`: Function select<br>&nbsp;&nbsp;- `b`: Both edges (pulse)<br>&nbsp;&nbsp;- `f`: Falling edge (pulse)<br>&nbsp;&nbsp;- `r`: Rising edge (pulse)<br>&nbsp;&nbsp;- `o`: OneWire (temperature sensor)<br>- `y`: Pull-up resistor (0 = OFF, 1 = ON)<br>- `z`: Minimum period in ms (debounce)<br>Example: `m1 1 r 1 50` |
 | **n\<n>** | Set node ID [1..60]<br>Example: `n5` sets node ID to 5 |
 | **o<x>** | OneWire configuration<br>Options:<br>- `x` = `f`: reset and find OneWire devices<br>- `x` = `l`: list OneWire devices<br>- `x` = `s`: save the existing OneWire positions<br>- `x` = integer, `n`: save an address to position `n` (see Examples) |
-| **p\<n>** | Set the RF power level<br>Example: `p7` |
+| **p\<n>** | Set the RF power level (0-31)<br>Example: `p25` sets power to 25 |
 | **r** | Restore default settings (WARNING: overwrites configuration) |
 | **s** | Save settings to NVM (non-volatile memory)<br>Must be used after making configuration changes |
 | **t** | Trigger report on next cycle (force immediate data transmission) |
+| **u** | Store current accumulator values to NVM (non-volatile memory) |
 | **v** | Show firmware and board information |
 | **w\<n>** | RF module active<br>- `w0`: Disable RF<br>- `w1`: Enable RF |
 | **x\<n>** | 433 MHz RF frequency compatibility<br>- `x0`: 433.92 MHz (standard)<br>- `x1`: 433.00 MHz (legacy compatibility) |
@@ -68,18 +70,19 @@ When making configuration changes:
 ### Enable Voltage Channels V2 and V3 (for 3-phase monitoring)
 
 ```
-k2 1 100.0           # Enable V2 with default calibration (100.0)
-k3 1 100.0           # Enable V3 with default calibration (100.0)
+k2 1 100.0 0.0       # Enable V2 with default calibration (100.0) and phase (0.0)
+k3 1 100.0 0.0       # Enable V3 with default calibration (100.0) and phase (0.0)
 s                    # Save configuration
 ```
 
-**Note:** For voltage channels (1-3), you only need:
+**Note:** For voltage channels (1-3), you need:
 
-- Channel number (2 or 3)
-- Active status (1 = enabled)
+- Channel number (1, 2, or 3)
+- Active status (1 = enabled, 0 = disabled)
 - Calibration value (typically 100.0, range: 25.0-150.0)
+- Phase calibration in degrees (typically 0.0)
 
-The phase and voltage reference parameters (v1, v2) are only required for CT channels.
+The voltage reference parameters (v1, v2) are only required for CT channels.
 
 ### Configure a CT channel
 

@@ -42,13 +42,13 @@ void rfmInterrupt(void);
  *  @param [out] pRetryCount : number of retry attempts for logging
  *  @return status of the attempt to send
  */
-RFMSend_t rfmSendBuffer(const int_fast8_t n, const uint8_t retries,
-                        int32_t *pRetryCount);
+RFMSend_t rfmSendBuffer(const uint8_t n, const uint8_t retries,
+                        uint8_t *pRetryCount);
 
 /*! @brief Sets the RFM69's address
  *  @param [in] addr : address to set the RFM69
  */
-void rfmSetAddress(const uint16_t addr);
+void rfmSetAddress(const uint8_t addr);
 
 /*! @brief Set the AES key for encryption
  *  @param [in] aes : 16 character AES key. 0 disables encryption.

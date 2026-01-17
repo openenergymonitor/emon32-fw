@@ -13,7 +13,7 @@ static int16_t correctionOffset;
 static bool    correctionValid;
 
 static void    adcCalibrate(void);
-static int16_t adcCalibrateSmp(int32_t pin);
+static int16_t adcCalibrateSmp(const uint32_t pin);
 static void    adcConfigureDMAC(void);
 static void    adcSync(void);
 
@@ -47,15 +47,15 @@ static void adcCalibrate(void) {
   /* Read 1/4 and 3/4 scale readings. The 1/4 scale is read twice as the first
    * read from the ADC is not defined through reset.
    */
-  ADC->CTRLA.reg |= ADC_CTRLA_ENABLE;
+  ADC->CTRLA.bit.ENABLE = 1;
   adcSync();
 
   expScale14 = adcCalibrateSmp(AIN_VCAL_L);
   expScale14 = adcCalibrateSmp(AIN_VCAL_L);
   expScale34 = adcCalibrateSmp(AIN_VCAL_H);
 
-  ADC->CTRLA.reg &= ~ADC_CTRLA_ENABLE;
-  ADC->AVGCTRL.reg = 0;
+  ADC->CTRLA.bit.ENABLE = 0;
+  ADC->AVGCTRL.reg      = 0;
   adcSync();
 
   /* The corrected value is:
@@ -87,19 +87,19 @@ static void adcCalibrate(void) {
   correctionValid  = true;
 }
 
-static int16_t adcCalibrateSmp(int32_t pin) {
+static int16_t adcCalibrateSmp(const uint32_t pin) {
   ADC->INPUTCTRL.reg = ADC_INPUTCTRL_MUXNEG_PIN0 | pin;
   ADC->INTFLAG.reg   = ADC_INTFLAG_RESRDY;
   ADC->SWTRIG.reg    = ADC_SWTRIG_START;
   while (0 == (ADC->INTFLAG.reg & ADC_INTFLAG_RESRDY))
     ;
-  return ADC->RESULT.reg;
+  return (int16_t)ADC->RESULT.reg;
 }
 
 static void adcConfigureDMAC(void) {
   DMACCfgCh_t              dmacConfig;
   volatile DmacDescriptor *dmacDesc[2];
-  uint32_t                 dmaChan[2] = {DMA_CHAN_ADC0, DMA_CHAN_ADC1};
+  uint8_t                  dmaChan[2] = {DMA_CHAN_ADC0, DMA_CHAN_ADC1};
 
   volatile RawSampleSetPacked_t *adcBuffer[2];
 
@@ -111,7 +111,7 @@ static void adcConfigureDMAC(void) {
                      DMAC_CHCTRLB_TRIGSRC(ADC_DMAC_ID_RESRDY) |
                      DMAC_CHCTRLB_TRIGACT_BEAT;
 
-  for (uint32_t i = 0; i < 2; i++) {
+  for (size_t i = 0; i < 2; i++) {
     dmacDesc[i] = dmacGetDescriptor(dmaChan[i]);
 
     /* DSTADDR is the last address, rather than first! */
@@ -144,7 +144,7 @@ void adcDMACStart(void) {
 
   /* Enable ADC; requires synchronisation (30.6.13) */
   if (!(ADC->CTRLA.reg & ADC_CTRLA_ENABLE)) {
-    ADC->CTRLA.reg |= ADC_CTRLA_ENABLE;
+    ADC->CTRLA.bit.ENABLE = 1;
     adcSync();
   }
 }
@@ -154,7 +154,7 @@ void adcDMACStop(void) { dmacChannelDisable(DMA_CHAN_ADC0); }
 void adcSetup(void) {
   extern uint8_t pinsADC[][2];
 
-  for (uint32_t i = 0; pinsADC[i][0] != 0xFF; i++) {
+  for (size_t i = 0; pinsADC[i][0] != 0xFF; i++) {
     portPinMux(pinsADC[i][0], pinsADC[i][1], PORT_PMUX_PMUXE_B_Val);
   }
 
@@ -166,10 +166,10 @@ void adcSetup(void) {
   ADC->CTRLA.reg = ADC_CTRLA_SWRST;
   while (ADC->CTRLA.reg & ADC_CTRLA_SWRST)
     ;
-  ADC->CTRLA.reg |= ADC_CTRLA_RUNSTDBY;
+  ADC->CTRLA.bit.RUNSTDBY = 1;
 
-  ADC->CALIB.reg = (samdCalibration(CAL_ADC_BIAS) << 8u) |
-                   samdCalibration(CAL_ADC_LINEARITY);
+  ADC->CALIB.reg = (uint16_t)((samdCalibration(CAL_ADC_BIAS) << 8u) |
+                              samdCalibration(CAL_ADC_LINEARITY));
 
   /* Enable reference buffer and set to external VREF */
   ADC->REFCTRL.reg = ADC_REFCTRL_REFCOMP | ADC_REFCTRL_REFSEL_AREFA;

@@ -66,7 +66,7 @@ typedef struct __attribute__((__packed__)) PackedData_ {
 
 typedef struct __attribute__((__packed__)) PackedDataCommon_ {
   uint32_t msg;
-  int16_t  V[NUM_V];
+  uint16_t V[NUM_V];
   int16_t  P[NUM_CT / 2];
   int32_t  E[NUM_CT / 2];
 } PackedDataCommon_t;
