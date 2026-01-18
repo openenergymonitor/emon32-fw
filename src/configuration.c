@@ -251,8 +251,9 @@ static bool configureAnalog(void) {
     return false;
   }
 
+  /* CT requires at least V1 */
   if (ch >= NUM_V) {
-    if ((0 == posV1) || (0 == posV2)) {
+    if (0 == posV1) {
       return false;
     }
   }
@@ -313,11 +314,16 @@ static bool configureAnalog(void) {
   }
   vCh1 = convI.val;
 
-  convI = utilAtoi(inBuffer + posV2, ITOA_BASE10);
-  if (!convI.valid) {
-    return false;
+  /* V2 is optional */
+  if (posV2) {
+    convI = utilAtoi(inBuffer + posV2, ITOA_BASE10);
+    if (!convI.valid) {
+      return false;
+    }
+    vCh2 = convI.val;
+  } else {
+    vCh2 = vCh1;
   }
-  vCh2 = convI.val;
 
   if ((vCh1 < 1) || (vCh1 > NUM_V) || (vCh2 < 1) || (vCh2 > NUM_V)) {
     return false;
@@ -1412,16 +1418,16 @@ void configProcessCmd(void) {
       "   - a:        : channel active. a = 0: DISABLED, a = 1: ENABLED\r\n"
       "   - y.y       : V/CT calibration constant\r\n"
       "   - z.z       : V/CT phase calibration value\r\n"
-      "   - v1        : CT voltage channel 1\r\n"
-      "   - v2        : CT voltage channel 2\r\n"
+      "   - v1        : voltage 1\r\n"
+      "   - v2        : voltage 2 (optional)\r\n"
       " - l           : list settings\r\n"
       " - lh          : list settings and accumulators (human readable)\r\n"
-      " - m<v> <w> <x> <y> <z> : Configure OPA1,2 for OneWire or Pulse\r\n"
-      "   - v : OPA index. [1,2]\r\n"
-      "   - w : OPA active. a = 0: DISABLED, a = 1: ENABLED\r\n"
-      "   - x : function select. w = [b,f,r]: pulse, w = o: OneWire.\r\n"
+      " - m<v> <w> <x> <y> <z> : Configure OPA1-3 for OneWire or Pulse\r\n"
+      "   - v : OPA index. [1-3]\r\n"
+      "   - w : OPA active. w = 0: DISABLED, w = 1: ENABLED\r\n"
+      "   - x : function select. x = [b,f,r]: pulse, x = o: OneWire.\r\n"
       "   - y : pull-up. y = 0: OFF, y = 1: ON\r\n"
-      "   - z : minimum period (ms). Ignored if w = 0\r\n"
+      "   - z : minimum period (ms). Ignored if x = 0\r\n"
       " - n<n>        : set node ID [1..60]\r\n"
       " - o<x>        : configure OneWire addressing\r\n"
       "   - x = f   : reset and find OneWire devices\r\n"
