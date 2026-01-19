@@ -150,7 +150,7 @@ static int32_t strnCat(StrN_t *strD, const StrN_t *strS) {
 }
 
 int32_t dataPackSerial(const Emon32Dataset_t *pData, char *pDst, int32_t m,
-                       bool json) {
+                       bool json, CHActive_t chsActive) {
   EMON32_ASSERT(pData);
   EMON32_ASSERT(pDst);
 
@@ -163,8 +163,10 @@ int32_t dataPackSerial(const Emon32Dataset_t *pData, char *pDst, int32_t m,
   uint32_t numV = (pData->pECM->activeCh & 0x6) ? NUM_V : 1;
 
   for (uint32_t i = 0; i < numV; i++) {
-    catId(&strn, (i + 1), STR_V, json);
-    strn.n += strnCatFloat(&strn, pData->pECM->rmsV[i]);
+    if ((chsActive.V[i] && json) || !json) {
+      catId(&strn, (i + 1), STR_V, json);
+      strn.n += strnCatFloat(&strn, pData->pECM->rmsV[i]);
+    }
   }
 
   /* CT channels (power and energy)
@@ -175,23 +177,32 @@ int32_t dataPackSerial(const Emon32Dataset_t *pData, char *pDst, int32_t m,
                        : (NUM_CT / 2);
 
   for (uint32_t i = 0; i < numCT; i++) {
-    catId(&strn, (i + 1), STR_P, json);
-    strn.n += strnCatInt(&strn, pData->pECM->CT[i].realPower);
+    if ((chsActive.CT[i] && json) || !json) {
+      catId(&strn, (i + 1), STR_P, json);
+      strn.n += strnCatInt(&strn, pData->pECM->CT[i].realPower);
+    }
   }
   for (uint32_t i = 0; i < numCT; i++) {
-    catId(&strn, (i + 1), STR_E, json);
-    strn.n += strnCatInt(&strn, pData->pECM->CT[i].wattHour);
+    if ((chsActive.CT[i] && json) || !json) {
+      catId(&strn, (i + 1), STR_E, json);
+      strn.n += strnCatInt(&strn, pData->pECM->CT[i].wattHour);
+    }
   }
 
   for (uint32_t i = 0; i < NUM_OPA; i++) {
-    catId(&strn, (i + 1), STR_PULSE, json);
-    strn.n += strnCatInt(&strn, pData->pulseCnt[i]);
+    if ((chsActive.pulse[i] && json) || !json) {
+      catId(&strn, (i + 1), STR_PULSE, json);
+      strn.n += strnCatInt(&strn, pData->pulseCnt[i]);
+    }
   }
 
   for (uint32_t i = 0; i < TEMP_MAX_ONEWIRE; i++) {
-    catId(&strn, (i + 1), STR_TEMP, json);
-    strn.n +=
-        strnCatFloat(&strn, tempAsFloat(TEMP_INTF_ONEWIRE, pData->temp[i]));
+    bool isPresent = (pData->temp[i] != 4800);
+    if ((isPresent && json) || !json) {
+      catId(&strn, (i + 1), STR_TEMP, json);
+      strn.n +=
+          strnCatFloat(&strn, tempAsFloat(TEMP_INTF_ONEWIRE, pData->temp[i]));
+    }
   }
 
   /* Terminate with } for JSON and \r\n */

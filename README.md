@@ -102,7 +102,7 @@ The following options are added:
 
 The ADC is triggered by a dedicated timer (`TIMER_ADC`) with no intervention from the processor. Data are accumulated by DMA into a ping-pong buffer - when one sample set is being processed, another is being captured in the background.
 
-Raw data from the ADC are downsampled (if configured) and then injected into the energy and power calculation routines. As there is a single ADC, CT values are interpolated between the appropriate voltage samples.
+Raw data from the ADC are downsampled and then injected into the energy and power calculation routines. As there is a single ADC, CT values are interpolated between the appropriate voltage samples.
 
 ### Data transmission
 

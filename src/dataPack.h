@@ -4,6 +4,12 @@
 
 #include "emon32.h"
 
+typedef struct CHActive_ {
+  bool V[NUM_V];
+  bool CT[NUM_CT];
+  bool pulse[NUM_OPA];
+} CHActive_t;
+
 typedef enum PackedRange_ {
   PACKED_ALL,
   PACKED_UPPER,
@@ -19,10 +25,11 @@ typedef enum PackedRange_ {
  *  @param [out] pDst : pointer to the destination buffer
  *  @param [in] m : width of the destination buffer
  *  @param [in] json : false -> K:V; true -> JSON
+ *  @param [in] chsActive : indicates presence or absence of sensors
  *  @return the number of the characters that would be packed
  */
 int32_t dataPackSerial(const Emon32Dataset_t *pData, char *pDst, int32_t m,
-                       bool json);
+                       bool json, CHActive_t chsActive);
 
 /*! @brief Pack the voltage, power, energy, temperature, and pulse data into a
  *         packed structure for transmission over RFM link.

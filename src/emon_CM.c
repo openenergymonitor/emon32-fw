@@ -113,7 +113,8 @@ static bool         zeroCrossingSW(q15_t smpV, uint32_t timeNow_us) RAMFUNC;
 static void  accumSwapClear(void);
 static int   floorf_(const float f);
 static float calibrationAmplitude(float cal, bool isV);
-static void  calibrationPhase(CTCfg_t *pCfgCT, VCfg_t *pCfgV, size_t idxCT);
+static void  calibrationPhase(CTCfg_t *pCfgCT, VCfg_t *pCfgV, size_t idxCT,
+                              bool vChan2);
 static void  configChannelV(int_fast8_t ch);
 static void  configChannelCT(int_fast8_t ch);
 static void  swapPtr(void **pIn1, void **pIn2);
@@ -225,7 +226,10 @@ void configChannelCT(int_fast8_t ch) {
   ecmCfg.ctCfg[ch].ctCal =
       calibrationAmplitude(ecmCfg.ctCfg[ch].ctCalRaw, false);
 
-  calibrationPhase(&ecmCfg.ctCfg[ch], ecmCfg.vCfg, ecmCfg.mapCTLog[ch]);
+  calibrationPhase(&ecmCfg.ctCfg[ch], ecmCfg.vCfg, ecmCfg.mapCTLog[ch], false);
+  if (ecmCfg.ctCfg[ch].vChan1 != ecmCfg.ctCfg[ch].vChan2) {
+    calibrationPhase(&ecmCfg.ctCfg[ch], ecmCfg.vCfg, ecmCfg.mapCTLog[ch], true);
+  }
 }
 
 void configChannelV(int_fast8_t ch) {
@@ -406,11 +410,16 @@ static float calibrationAmplitude(float cal, bool isV) {
  *  @param [out] pCfgCT : pointer to CT configuration struct
  *  @param [in] pCfgV : to pointer to array of V configuration structs
  *  @param [in] idxCT : physical index (0-based) of the CT
+ *  @param [in] vChan2 : true for the 2nd V channel for L-L loads
  */
-static void calibrationPhase(CTCfg_t *pCfgCT, VCfg_t *pCfgV, size_t idxCT) {
+static void calibrationPhase(CTCfg_t *pCfgCT, VCfg_t *pCfgV, size_t idxCT,
+                             bool vChan2) {
+
+  size_t idxV  = !vChan2 ? pCfgCT->vChan1 : pCfgCT->vChan2;
+  size_t idxPh = !vChan2 ? 0u : 1u;
 
   /* Compensate for V phase */
-  float phiCT_V = qfp_fsub(pCfgCT->phCal, pCfgV[pCfgCT->vChan1].phase);
+  float phiCT_V = qfp_fsub(pCfgCT->phCal, pCfgV[idxV].phase);
 
   /* Calculate phase change over full set */
   float phaseShift_deg =
@@ -421,8 +430,9 @@ static void calibrationPhase(CTCfg_t *pCfgCT, VCfg_t *pCfgV, size_t idxCT) {
   /* After downsampling, the time between samples remains t_s _not_ 2*t_s.
    * Consider samples to be bunched in the first half of the full sample window.
    */
-  float phaseShiftSmpIdx = qfp_fdiv(
-      qfp_int2float(idxCT - pCfgCT->vChan1 + NUM_V), (float)VCT_TOTAL * 2.0f);
+  float phaseShiftSmpIdx =
+      qfp_fdiv(qfp_int2float(idxCT - idxV + NUM_V),
+               (float)VCT_TOTAL * (float)OVERSAMPLING_RATIO);
 
   phaseShiftSets = qfp_fadd(phaseShiftSets, phaseShiftSmpIdx);
 
@@ -437,7 +447,7 @@ static void calibrationPhase(CTCfg_t *pCfgCT, VCfg_t *pCfgV, size_t idxCT) {
   }
 
   phaseShiftSets = qfp_fsub(phaseShiftSets, qfp_int2float(floorPhaseShiftSets));
-  pCfgCT->phaseY = phaseShiftSets;
+  pCfgCT->phaseY[idxPh] = phaseShiftSets;
 
   float sampleRate_rad = qfp_fmul(phaseShift_deg, (TWO_PI / 360.0f));
   float phaseShift_rad = qfp_fmul(phaseShiftSets, phaseShift_deg);
@@ -447,7 +457,8 @@ static void calibrationPhase(CTCfg_t *pCfgCT, VCfg_t *pCfgV, size_t idxCT) {
       qfp_fsub(1.0f, qfp_fdiv(qfp_fmul(phaseShift_rad, phaseShift_rad), 2.0f));
   float rateSqr =
       qfp_fsub(1.0f, qfp_fdiv(qfp_fmul(sampleRate_rad, sampleRate_rad), 2.0f));
-  pCfgCT->phaseX = qfp_fsub(shiftXRate, qfp_fmul(pCfgCT->phaseY, rateSqr));
+  pCfgCT->phaseX[idxPh] =
+      qfp_fsub(shiftXRate, qfp_fmul(pCfgCT->phaseY[idxPh], rateSqr));
 }
 
 void ecmClearEnergy(void) {
@@ -485,111 +496,99 @@ void ecmFlush(void) {
 }
 
 RAMFUNC void ecmFilterSample(SampleSet_t *pDst) {
-  if (!ecmCfg.downsample) {
-    /* No filtering, discard the second sample in the set */
-    for (int_fast8_t idxV = 0; idxV < NUM_V; idxV++) {
-      pDst->smpV[idxV] = applyCorrection(adcProc->samples[0].smp[idxV]);
-    }
+  /* The FIR half band filter is symmetric, so the coefficients are folded.
+   * Alternating coefficients are 0, so are not included in any outputs.
+   * For an ODD number of taps, the centre coefficent is handled
+   * individually, then the other taps in a loop.
+   *
+   * b_0 | b_2 | .. | b_X | .. | b_2 | b_0
+   *
+   * For an EVEN number of taps, loop across all the coefficients:
+   *
+   * b_0 | b_2 | .. | b_2 | b_0
+   */
+  static uint_fast8_t idxInj         = 0;
+  const uint32_t      downsampleTaps = DOWNSAMPLE_TAPS;
 
-    for (int_fast8_t idxCT = 0; idxCT < NUM_CT; idxCT++) {
-      pDst->smpCT[mapLogCT[idxCT - NUM_V]] =
-          applyCorrection(adcProc->samples[0].smp[idxCT + NUM_V]);
-    }
-  } else {
-    /* The FIR half band filter is symmetric, so the coefficients are folded.
-     * Alternating coefficients are 0, so are not included in any outputs.
-     * For an ODD number of taps, the centre coefficent is handled
-     * individually, then the other taps in a loop.
-     *
-     * b_0 | b_2 | .. | b_X | .. | b_2 | b_0
-     *
-     * For an EVEN number of taps, loop across all the coefficients:
-     *
-     * b_0 | b_2 | .. | b_2 | b_0
-     */
-    static uint_fast8_t idxInj         = 0;
-    const uint32_t      downsampleTaps = DOWNSAMPLE_TAPS;
+  const uint_fast8_t idxInjPrev =
+      (0 == idxInj) ? (downsampleTaps - 1u) : (idxInj - 1u);
 
-    const uint_fast8_t idxInjPrev =
-        (0 == idxInj) ? (downsampleTaps - 1u) : (idxInj - 1u);
+  /* Copy the packed raw ADC value into the unpacked buffer; samples[1] is
+   * the most recent sample.
+   */
+  for (int_fast8_t idxSmp = 0; idxSmp < VCT_TOTAL; idxSmp++) {
+    dspBuffer[idxInjPrev].smp[idxSmp] =
+        applyCorrection(adcProc->samples[0].smp[idxSmp]);
+    dspBuffer[idxInj].smp[idxSmp] =
+        applyCorrection(adcProc->samples[1].smp[idxSmp]);
+  }
 
-    /* Copy the packed raw ADC value into the unpacked buffer; samples[1] is
-     * the most recent sample.
-     */
-    for (int_fast8_t idxSmp = 0; idxSmp < VCT_TOTAL; idxSmp++) {
-      dspBuffer[idxInjPrev].smp[idxSmp] =
-          applyCorrection(adcProc->samples[0].smp[idxSmp]);
-      dspBuffer[idxInj].smp[idxSmp] =
-          applyCorrection(adcProc->samples[1].smp[idxSmp]);
-    }
+  /* For an ODD number of taps, take the unique middle value to start. As
+   * the filter is symmetric, this is the final element in the array.
+   */
+  const q15_t  coeffMid = firCoeffs[COEFF_UNIQUE_NUM - 1u];
+  uint_fast8_t idxMid   = idxInj + (downsampleTaps / 2) + 1u;
+  if (idxMid >= downsampleTaps)
+    idxMid -= downsampleTaps;
 
-    /* For an ODD number of taps, take the unique middle value to start. As
-     * the filter is symmetric, this is the final element in the array.
-     */
-    const q15_t  coeffMid = firCoeffs[COEFF_UNIQUE_NUM - 1u];
-    uint_fast8_t idxMid   = idxInj + (downsampleTaps / 2) + 1u;
-    if (idxMid >= downsampleTaps)
-      idxMid -= downsampleTaps;
+  /* Loop over the FIR coefficients, sub loop through channels. The filter
+   * is folded so the symmetric FIR coefficients are used for both samples.
+   */
+  uint_fast8_t idxSmp[COEFF_UNIQUE_NUM - 1][2];
+  uint_fast8_t idxSmpStart = idxInj;
+  uint_fast8_t idxSmpEnd =
+      ((downsampleTaps - 1u) == idxInj) ? 0 : (idxInj + 1u);
+  if (idxSmpEnd >= downsampleTaps)
+    idxSmpEnd -= downsampleTaps;
 
-    /* Loop over the FIR coefficients, sub loop through channels. The filter
-     * is folded so the symmetric FIR coefficients are used for both samples.
-     */
-    uint_fast8_t idxSmp[COEFF_UNIQUE_NUM - 1][2];
-    uint_fast8_t idxSmpStart = idxInj;
-    uint_fast8_t idxSmpEnd =
-        ((downsampleTaps - 1u) == idxInj) ? 0 : (idxInj + 1u);
+  idxSmp[0][0] = idxSmpStart;
+  idxSmp[0][1] = idxSmpEnd;
+
+  /* Build a table of indices for the samples and coefficients. Converge
+   * toward the middle, checking for over/underflow */
+  for (size_t i = 1; i < (COEFF_UNIQUE_NUM - 1); i++) {
+    idxSmpStart -= 2u;
+    if (idxSmpStart > downsampleTaps)
+      idxSmpStart += downsampleTaps;
+
+    idxSmpEnd += 2u;
     if (idxSmpEnd >= downsampleTaps)
       idxSmpEnd -= downsampleTaps;
 
-    idxSmp[0][0] = idxSmpStart;
-    idxSmp[0][1] = idxSmpEnd;
+    idxSmp[i][0] = idxSmpStart;
+    idxSmp[i][1] = idxSmpEnd;
+  }
 
-    /* Build a table of indices for the samples and coefficients. Converge
-     * toward the middle, checking for over/underflow */
-    for (size_t i = 1; i < (COEFF_UNIQUE_NUM - 1); i++) {
-      idxSmpStart -= 2u;
-      if (idxSmpStart > downsampleTaps)
-        idxSmpStart += downsampleTaps;
+  for (int_fast8_t ch = 0; ch < VCT_TOTAL; ch++) {
+    q15_t result;
+    bool  active = (ch < NUM_V) ? channelActive[ch]
+                                : channelActive[mapLogCT[ch - NUM_V] + NUM_V];
 
-      idxSmpEnd += 2u;
-      if (idxSmpEnd >= downsampleTaps)
-        idxSmpEnd -= downsampleTaps;
+    if (active) {
+      int32_t intRes = coeffMid * dspBuffer[idxMid].smp[ch];
 
-      idxSmp[i][0] = idxSmpStart;
-      idxSmp[i][1] = idxSmpEnd;
-    }
-
-    for (int_fast8_t ch = 0; ch < VCT_TOTAL; ch++) {
-      q15_t result;
-      bool  active = (ch < NUM_V) ? channelActive[ch]
-                                  : channelActive[mapLogCT[ch - NUM_V] + NUM_V];
-
-      if (active) {
-        int32_t intRes = coeffMid * dspBuffer[idxMid].smp[ch];
-
-        for (size_t fir = 0; fir < (COEFF_UNIQUE_NUM - 1); fir++) {
-          const q15_t coeff = firCoeffs[fir];
-          intRes += coeff * (dspBuffer[idxSmp[fir][0]].smp[ch] +
-                             dspBuffer[idxSmp[fir][1]].smp[ch]);
-        }
-        result = __STRUNCATE(intRes);
-
-      } else {
-        result = 0;
+      for (size_t fir = 0; fir < (COEFF_UNIQUE_NUM - 1); fir++) {
+        const q15_t coeff = firCoeffs[fir];
+        intRes += coeff * (dspBuffer[idxSmp[fir][0]].smp[ch] +
+                           dspBuffer[idxSmp[fir][1]].smp[ch]);
       }
-      if (ch < NUM_V) {
-        pDst->smpV[ch] = result;
-      } else {
-        /* Map the logical input to the CT channel */
-        pDst->smpCT[mapLogCT[ch - NUM_V]] = result;
-      }
-    }
+      result = __STRUNCATE(intRes);
 
-    /* Each injection is 2 samples */
-    idxInj += 2u;
-    if (idxInj > (downsampleTaps - 1)) {
-      idxInj -= (downsampleTaps);
+    } else {
+      result = 0;
     }
+    if (ch < NUM_V) {
+      pDst->smpV[ch] = result;
+    } else {
+      /* Map the logical input to the CT channel */
+      pDst->smpCT[mapLogCT[ch - NUM_V]] = result;
+    }
+  }
+
+  /* Each injection is 2 samples */
+  idxInj += 2u;
+  if (idxInj > (downsampleTaps - 1)) {
+    idxInj -= (downsampleTaps);
   }
 }
 
@@ -819,9 +818,9 @@ RAMFUNC ECMDataset_t *ecmProcessSet(void) {
       // Power and energy
       float sumEnergy = qfp_fadd(
           (qfp_fmul(qfp_int642float(accumProcessing->processCT[idxCT].sumPA[0]),
-                    ecmCfg.ctCfg[idxCT].phaseX)),
+                    ecmCfg.ctCfg[idxCT].phaseX[0])),
           (qfp_fmul(qfp_int642float(accumProcessing->processCT[idxCT].sumPB[0]),
-                    ecmCfg.ctCfg[idxCT].phaseY)));
+                    ecmCfg.ctCfg[idxCT].phaseY[0])));
 
       int32_t vi_offset =
           rms.sDelta * accumProcessing->processV[idxV1].sumV_deltas;
@@ -841,10 +840,10 @@ RAMFUNC ECMDataset_t *ecmProcessSet(void) {
         sumEnergy = qfp_fadd(
             (qfp_fmul(
                 qfp_int642float(accumProcessing->processCT[idxCT].sumPA[1]),
-                ecmCfg.ctCfg[idxCT].phaseX)),
+                ecmCfg.ctCfg[idxCT].phaseX[1])),
             (qfp_fmul(
                 qfp_int642float(accumProcessing->processCT[idxCT].sumPB[1]),
-                ecmCfg.ctCfg[idxCT].phaseY)));
+                ecmCfg.ctCfg[idxCT].phaseY[1])));
 
         vi_offset = rms.sDelta * accumProcessing->processV[idxV2].sumV_deltas;
         float powerNow2 = qfp_fdiv(sumEnergy, qfp_int2float(numSamples));

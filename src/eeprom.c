@@ -434,19 +434,16 @@ eepromWLStatus_t eepromReadWL(void *pPktRd, int32_t *pIdx) {
 }
 
 void eepromWLClear(void) {
-  WLHeader_t wlHeader;
-
+  /* Zero the entire WL area */
   eepromInitBlock(EEPROM_WL_OFFSET, 0, (EEPROM_SIZE - EEPROM_WL_OFFSET));
 
-  memset(wlData, 0, WL_PKT_SIZE);
-  wlHeader.valid       = 0;
-  wlHeader.res0        = 0;
-  wlHeader.crc16_ccitt = calcCRC16_ccitt(wlData, wlData_n);
+  /* Reset state to force re-initialization on next access */
+  wlIdxNxtWr     = 0;
+  wlCurrentValid = 1;
 
-  for (int32_t i = 0; i < wlBlkCnt; i++) {
-    int32_t addr = EEPROM_WL_OFFSET + (i * wlBlkSize);
-    eepromWrite(addr, &wlHeader, sizeof(wlHeader));
-  }
+  /* Write one valid record with zeroed data using existing write logic */
+  memset(wlData, 0, WL_PKT_SIZE);
+  eepromWriteWL(wlData, 0);
 }
 
 void eepromWLReset(int32_t len) {

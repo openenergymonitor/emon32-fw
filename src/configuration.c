@@ -1127,8 +1127,7 @@ static void handleConfirmation(char c) {
 
   case CONFIRM_ZERO_ACCUM:
     if ('y' == c) {
-      eepromInitBlock(EEPROM_WL_OFFSET, 0, (1024 - EEPROM_WL_OFFSET));
-      serialPuts("    - Accumulators cleared.\r\n");
+      serialPuts("    - Clearing accumulators...\r\n");
       emon32EventSet(EVT_CLEAR_ACCUM);
     } else {
       serialPuts("    - Cancelled.\r\n");
