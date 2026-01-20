@@ -824,11 +824,6 @@ int main(void) {
       if (evtPending(EVT_CONFIG_SAVED)) {
         emon32EventClr(EVT_CONFIG_SAVED);
       }
-
-      if (evtPending(EVT_SAFE_RESET_REQ)) {
-        cumulativeNVMStore(&nvmCumulative, &dataset, true);
-        NVIC_SystemReset();
-      }
     }
 
     samdSleepIdle();

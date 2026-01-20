@@ -45,28 +45,6 @@ static bool useAssumedV              = false;
  * Local typedefs
  *************************************/
 
-/* @typedef
- * @brief This struct contains V and CT phase information
- */
-typedef struct PhaseCal_ {
-  int32_t low;       /* RESERVED */
-  float   phaseLow;  /* Phase error at and below low limit */
-  int32_t high;      /* RESERVED */
-  float   phaseHigh; /* RESERVED */
-} PhaseCal_t;
-
-typedef struct PhaseData_ {
-  int32_t positionOfV;         /* Voltage index */
-  float   phaseErrorV;         /* Voltage phase error (degrees) */
-  int32_t positionOfC;         /* CT index */
-  float   phaseErrorC;         /* CT phase error (degrees) */
-  int32_t relativeCSample;     /* Position of current relative to this */
-  int32_t relativeLastVSample; /* Position of previous V */
-  int32_t relativeThisVSample; /* Position of next V */
-  float   x;                   /* Coefficient for interpolation */
-  float   y;                   /* Coefficient for interpolation */
-} PhaseData_t;
-
 typedef enum Polarity_ { POL_POS, POL_NEG } Polarity_t;
 
 typedef struct VAccumulator_ {
@@ -195,9 +173,6 @@ static bool        processTrigger   = false;
 static int_fast8_t mapLogCT[NUM_CT] = {0};
 static int_fast8_t discardCycles    = EQUIL_CYCLES;
 static bool        initDone         = false;
-static bool        inAutoPhase      = false;
-static int32_t     samplePeriodus;
-static float       sampleIntervalRad;
 
 ECMCfg_t *ecmConfigGet(void) { return &ecmCfg; }
 
@@ -246,18 +221,6 @@ void configChannelV(int_fast8_t ch) {
 }
 
 void ecmConfigInit(void) {
-
-  /* Calculate the angular sampling rate in radians.
-   *  - Sample rate, f_smp, in Hz: 1E6 / (t_s * OS_R * VCT)
-   *  - Sample rate in °: 360 * f_mains / f_smp
-   *  - Sample rate in rad: 2π / 360 * °
-   *  => 2π / 1E6 * f_mains * t_s * OS_R * VCT (360s cancel)
-   */
-  samplePeriodus       = ecmCfg.samplePeriod * OVERSAMPLING_RATIO;
-  uint32_t setPeriodus = samplePeriodus * VCT_TOTAL;
-
-  sampleIntervalRad =
-      qfp_fmul((TWO_PI / 1E6f), qfp_int2float(ecmCfg.mainsFreq * setPeriodus));
 
   /* Map the logical channel back to the CT to unwind the data */
   for (int_fast8_t i = 0; i < NUM_CT; i++) {
@@ -421,7 +384,14 @@ static void calibrationPhase(CTCfg_t *pCfgCT, VCfg_t *pCfgV, size_t idxCT,
   /* Compensate for V phase */
   float phiCT_V = qfp_fsub(pCfgCT->phCal, pCfgV[idxV].phase);
 
-  /* Calculate phase change over full set */
+  /* Calculate phase change over full set
+   *  - Sample rate, f_smp, in Hz: 1E6 / (t_s * OS_R * VCT)
+   *  - Sample rate in °: 360 * f_mains / f_smp
+   *  - Sample rate in rad: 2π / 360 * °
+   *  => 2π / 1E6 * f_mains * t_s * OS_R * VCT (360s cancel)
+   */
+  int32_t samplePeriodus = ecmCfg.samplePeriod * OVERSAMPLING_RATIO;
+
   float phaseShift_deg =
       qfp_fmul((360.0f / 1E6f),
                qfp_int2float(samplePeriodus * VCT_TOTAL * ecmCfg.mainsFreq));
@@ -473,17 +443,6 @@ void ecmClearEnergyChannel(int32_t idx) {
     datasetProc.CT[idx].wattHour = 0;
     residualEnergy[idx]          = 0.0f;
   }
-}
-
-void ecmPhaseCalibrate(AutoPhaseRes_t *pDst) {
-  pDst->success = false;
-  if (!(channelActive[pDst->idxCt + NUM_V])) {
-    return;
-  }
-  inAutoPhase = true;
-
-  pDst->success = true;
-  inAutoPhase   = false;
 }
 
 void ecmFlush(void) {

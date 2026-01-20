@@ -109,7 +109,6 @@ static volatile uint32_t       confirmStartTime_ms = 0;
 static int8_t  clearAccumIdx = -1; /* -1=all, 0-11=E1-E12, 12-13=P1-P2 */
 static int32_t inBufferIdx   = 0;
 static bool    cmdPending    = false;
-static bool    resetReq      = false;
 static bool    unsavedChange = false;
 
 /*! @brief Set all configuration values to defaults */
@@ -482,8 +481,17 @@ static bool configureLineFrequency(void) {
     return false;
   }
 
-  printf_("> Mains frequency set to: %d\r\n", config.baseCfg.mainsFreq);
   config.baseCfg.mainsFreq = convI.val;
+
+  /* Recalculate all CT interpolation values */
+  ECMCfg_t *ecmCfg  = ecmConfigGet();
+  ecmCfg->mainsFreq = convI.val;
+  for (size_t i = 0; i < NUM_CT; i++) {
+    ecmConfigChannel(i + NUM_V);
+  }
+  ecmFlush();
+
+  printf_("> Mains frequency set to: %d\r\n", config.baseCfg.mainsFreq);
   return true;
 }
 
@@ -1275,7 +1283,7 @@ static void zeroAccumulatorIndividual(int8_t idx) {
   __enable_irq();
 }
 
-/*! @brief Parse z command and zero accumulators (z, ze1-12, zp1-2) */
+/*! @brief Parse z command and zero accumulators (z, ze1-12, zp1-3) */
 static void parseAndZeroAccumulator(void) {
   /* z - zero all */
   if (inBuffer[1] == '\0') {
@@ -1298,7 +1306,7 @@ static void parseAndZeroAccumulator(void) {
     return;
   }
 
-  /* zp1-2 - zero pulse accumulator */
+  /* zp1-3 - zero pulse accumulator */
   if (inBuffer[1] == 'p' && inBuffer[2] >= '1' &&
       inBuffer[2] <= '0' + NUM_OPA) {
     int32_t num = inBuffer[2] - '0';
@@ -1312,7 +1320,7 @@ static void parseAndZeroAccumulator(void) {
   }
 
   /* Invalid format */
-  serialPuts("Invalid command. Use z, ze1-12, or zp1-2.\r\n");
+  serialPuts("Invalid command. Use z, ze1-12, or zp1-3.\r\n");
 }
 
 void configCmdChar(const uint8_t c) {
@@ -1442,9 +1450,9 @@ void configProcessCmd(void) {
       " - w<n>        : RF active. n = 0: OFF, n = 1: ON\r\n"
       " - x<n>        : 433 MHz compatibility. n = 0: 433.92 MHz, n = 1: "
       "433.00 MHz\r\n"
-      " - z           : zero all accumulators (E1-E12, pulse1-2)\r\n"
+      " - z           : zero all accumulators (E1-E12, pulse1-3)\r\n"
       " - ze<n>       : zero individual energy accumulator (n=1-12)\r\n"
-      " - zp<n>       : zero individual pulse accumulator (n=1-2)\r\n\r\n";
+      " - zp<n>       : zero individual pulse accumulator (n=1-3)\r\n\r\n";
 
   /* Convert \r or \n to 0, and get the length until then. */
   while (!termFound && (arglen < IN_BUFFER_W)) {
@@ -1496,7 +1504,6 @@ void configProcessCmd(void) {
      */
     if (configureLineFrequency()) {
       unsavedChange = true;
-      resetReq      = true;
       emon32EventSet(EVT_CONFIG_CHANGED);
     }
     break;
@@ -1557,7 +1564,6 @@ void configProcessCmd(void) {
     serialPuts("> Restored default values.\r\n");
 
     unsavedChange = true;
-    resetReq      = true;
     emon32EventSet(EVT_CONFIG_CHANGED);
     break;
   case 's':
@@ -1571,11 +1577,7 @@ void configProcessCmd(void) {
     serialPuts("Done!\r\n");
 
     unsavedChange = false;
-    if (!resetReq) {
-      emon32EventSet(EVT_CONFIG_SAVED);
-    } else {
-      emon32EventSet(EVT_SAFE_RESET_REQ);
-    }
+    emon32EventSet(EVT_CONFIG_SAVED);
     break;
   case 't':
     emon32EventSet(EVT_ECM_TRIG);
