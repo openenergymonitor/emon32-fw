@@ -24,6 +24,7 @@ CFLAGS += -funsigned-char -funsigned-bitfields
 CFLAGS += -Wuninitialized
 CFLAGS += -Wshadow -Wdouble-promotion -Wundef
 CFLAGS += -mcpu=cortex-m0plus -mthumb
+CFLAGS += -Wconversion -Wsign-conversion
 CFLAGS += -MD -MP -MT $(BUILD)/$(*F).o -MF $(BUILD)/$(@F).d
 
 LDFLAGS += -mcpu=cortex-m0plus -mthumb
@@ -32,12 +33,12 @@ LDFLAGS += -Wl,--print-memory-usage
 LDFLAGS += -Wl,--script=./linker/samd21j17.ld
 
 INCLUDES += \
-  -I./include/samd21 \
-  -I./third_party/printf \
-  -I./third_party/qfplib \
-  -I./third_party/RFM69 \
-  -I./third_party/tinyusb/src \
-  -I./third_party/tinyusb/src/device \
+  -isystem ./include/samd21 \
+  -isystem ./third_party/printf \
+  -isystem ./third_party/qfplib \
+  -isystem ./third_party/RFM69 \
+  -isystem ./third_party/tinyusb/src \
+  -isystem ./third_party/tinyusb/src/device \
   -I./src/
 
 SRCS += $(wildcard ./src/*.c) \
@@ -93,6 +94,9 @@ $(BUILD)/$(BIN).uf2: $(BUILD)/$(BIN).bin
 $(BUILD)/qfplib-m0-full.o:
 	@echo AS $@
 	@$(CC) $(CFLAGS) third_party/qfplib/qfplib-m0-full.s -c -o $@
+
+# Suppress warnings for third-party TinyUSB
+$(BUILD)/dcd_samd.o: CFLAGS += -w
 
 $(BUILD)/asm_math.o:
 	@echo AS $@

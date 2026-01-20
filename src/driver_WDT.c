@@ -12,7 +12,7 @@ void wdtSetup(WDT_PER_t per) {
   WDT->CONFIG.reg |= per;
 
   /* Enable and synchronise (18.6.5) */
-  WDT->CTRL.reg |= WDT_CTRL_ENABLE;
+  WDT->CTRL.bit.ENABLE = 1;
   while (WDT->STATUS.reg & WDT_STATUS_SYNCBUSY)
     ;
 }

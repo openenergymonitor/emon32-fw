@@ -36,10 +36,36 @@
 /* Stub for event system (used by timer interrupt) */
 void emon32EventSet(uint32_t evt) { (void)evt; }
 
-/* Stub for sbrk (heap allocation) - we don't use malloc */
+/* Stubs for newlib syscalls - we don't use file I/O */
 void *_sbrk(int incr) {
   (void)incr;
   return (void *)-1;
+}
+
+int _close(int fd) {
+  (void)fd;
+  return -1;
+}
+
+int _lseek(int fd, int offset, int whence) {
+  (void)fd;
+  (void)offset;
+  (void)whence;
+  return -1;
+}
+
+int _read(int fd, char *buf, int count) {
+  (void)fd;
+  (void)buf;
+  (void)count;
+  return -1;
+}
+
+int _write(int fd, char *buf, int count) {
+  (void)fd;
+  (void)buf;
+  (void)count;
+  return -1;
 }
 
 /*************************************
@@ -60,6 +86,29 @@ static const int32_t test_signed[] = {
     0,     1,      -1,    2,      -2,         127,         -128,
     32767, -32768, 65535, -65536, 0x7FFFFFFF, -2147483647, (int32_t)0x80000000,
     12345, -12345, 54321, -54321, 1000000,    -1000000};
+
+/* Test pairs for multiplication (a, b) */
+static const int32_t test_mul_pairs[][2] = {
+    {0, 0},
+    {1, 1},
+    {-1, 1},
+    {1, -1},
+    {-1, -1},
+    {100, 200},
+    {-100, 200},
+    {100, -200},
+    {-100, -200},
+    {32767, 32767},
+    {-32768, 32768},
+    {65535, 65536},
+    {0x7FFF, 0x7FFF},
+    {0x7FFFFFFF, 2},
+    {(int32_t)0x80000000, 1},
+    {12345, 67890},
+    {-12345, 67890},
+    {0x1234, 0x5678},
+    {-0x1234, -0x5678},
+};
 
 #define ARRAY_SIZE(x) (sizeof(x) / sizeof((x)[0]))
 
@@ -117,6 +166,48 @@ static bool test_ssqr64_validation(void) {
   return pass;
 }
 
+static bool test_smul64_validation(void) {
+  printf_("Testing smul64 validation...\r\n");
+  bool pass = true;
+
+  /* Test with predefined pairs */
+  for (size_t i = 0; i < ARRAY_SIZE(test_mul_pairs); i++) {
+    int32_t a        = test_mul_pairs[i][0];
+    int32_t b        = test_mul_pairs[i][1];
+    int64_t result   = smul64(a, b);
+    int64_t expected = (int64_t)a * b;
+
+    if (result != expected) {
+      printf_(
+          "  FAIL: smul64(%ld, %ld) = 0x%08lX%08lX, expected 0x%08lX%08lX\r\n",
+          (long)a, (long)b, (unsigned long)(result >> 32),
+          (unsigned long)(result & 0xFFFFFFFF), (unsigned long)(expected >> 32),
+          (unsigned long)(expected & 0xFFFFFFFF));
+      pass = false;
+    }
+  }
+
+  /* Test all combinations of test_signed values */
+  for (size_t i = 0; i < ARRAY_SIZE(test_signed); i++) {
+    for (size_t j = 0; j < ARRAY_SIZE(test_signed); j++) {
+      int32_t a        = test_signed[i];
+      int32_t b        = test_signed[j];
+      int64_t result   = smul64(a, b);
+      int64_t expected = (int64_t)a * b;
+
+      if (result != expected) {
+        printf_("  FAIL: smul64(%ld, %ld)\r\n", (long)a, (long)b);
+        pass = false;
+      }
+    }
+  }
+
+  if (pass) {
+    printf_("  PASS: All smul64 tests passed\r\n");
+  }
+  return pass;
+}
+
 /*************************************
  * Performance benchmarks
  *************************************/
@@ -161,6 +252,24 @@ static void test_performance(void) {
   elapsed = timerMicrosDelta(start);
   printf_("  (i64)x * x:     %" PRIu32 " us total\r\n", elapsed);
 
+  /* Test smul64 (ASM) */
+  start = timerMicros();
+  for (int i = 0; i < PERF_ITERATIONS; i++) {
+    sink += (uint64_t)smul64((int32_t)i, (int32_t)(PERF_ITERATIONS - i));
+  }
+  elapsed = timerMicrosDelta(start);
+  printf_("  smul64 (ASM):   %" PRIu32 " us total\r\n", elapsed);
+
+  /* Test standard signed 64-bit multiply a*b */
+  start = timerMicros();
+  for (int i = 0; i < PERF_ITERATIONS; i++) {
+    int32_t a = (int32_t)i;
+    int32_t b = (int32_t)(PERF_ITERATIONS - i);
+    sink += (uint64_t)((int64_t)a * b);
+  }
+  elapsed = timerMicrosDelta(start);
+  printf_("  (i64)a * b:     %" PRIu32 " us total\r\n", elapsed);
+
   (void)sink; /* Prevent optimization */
 }
 
@@ -189,6 +298,7 @@ int main(void) {
 
   all_pass &= test_usqr64_validation();
   all_pass &= test_ssqr64_validation();
+  all_pass &= test_smul64_validation();
 
   test_performance();
 

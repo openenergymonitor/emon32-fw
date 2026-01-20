@@ -269,7 +269,7 @@ SSD1306_Status_t ssd1306DisplayUpdate(void) {
   if (I2CM_SUCCESS != i2cDataWrite(pSercom, SSD1306_DATA_STREAM)) {
     return SSD1306_FAIL;
   }
-  for (uint32_t i = 0; i < LINE_MEM_SIZE; i++) {
+  for (size_t i = 0; i < LINE_MEM_SIZE; i++) {
     if (I2CM_SUCCESS != i2cDataWrite(pSercom, lineBuffer[i])) {
       return SSD1306_FAIL;
     }
@@ -333,7 +333,7 @@ SSD1306_Status_t ssd1306Init(Sercom *pSercomI2C) {
     return SSD1306_FAIL;
   }
 
-  for (uint32_t i = 0; i < SSD1306_NUM_INIT_CMDS; i++) {
+  for (size_t i = 0; i < SSD1306_NUM_INIT_CMDS; i++) {
     if (I2CM_SUCCESS != i2cDataWrite(pSercom, SSD1306_COMMAND)) {
       return SSD1306_FAIL;
     }

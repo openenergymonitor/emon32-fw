@@ -1,6 +1,7 @@
 #pragma once
 
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 
 #include "board_def.h"
@@ -70,30 +71,31 @@ typedef struct VCfg_ {
 } VCfg_t;
 
 typedef struct CTCfgUnpacked_ {
-  float   phaseX[2];
-  float   phaseY[2];
-  float   phCal;
-  float   ctCal;
-  float   ctCalRaw;
-  bool    active;
-  int32_t vChan1;
-  int32_t vChan2;
-  int32_t wattHourInit;
-  int32_t idxInterpolateCT;
-  int32_t idxInterpolateV;
+  float    phaseX;
+  float    phaseY;
+  float    phCal;
+  float    ctCal;
+  float    ctCalRaw;
+  bool     active;
+  uint8_t  vChan1;
+  uint8_t  vChan2;
+  int32_t  wattHourInit;
+  uint32_t idxInterpolateCT;
+  uint32_t idxInterpolateV;
 } CTCfg_t;
 
 typedef struct ECMCfg_ {
   uint32_t (*timeMicros)(void);          /* Time in microseconds now */
   uint32_t (*timeMicrosDelta)(uint32_t); /* Time delta in microseconds */
 
-  int32_t  reportCycles;  /* Number of cycles before reporting */
-  int32_t  mainsFreq;     /* Mains frequency */
-  int32_t  samplePeriod;  /* Sampling period for each sample */
+  bool     downsample;    /* DSP enabled */
+  uint32_t reportCycles;  /* Number of cycles before reporting */
+  uint32_t mainsFreq;     /* Mains frequency */
+  uint32_t samplePeriod;  /* Sampling period for each sample */
   uint32_t reportTime_us; /* Report time in microseconds */
   float    assumedVrms;   /* Assume RMS voltage if not found */
 
-  int_fast8_t mapCTLog[NUM_CT]; /* Map of CT to microcontroller pins */
+  uint8_t mapCTLog[NUM_CT]; /* Map of CT to microcontroller pins */
 
   GainOffset_t correction; /* Gain and offset correction */
 
@@ -117,18 +119,18 @@ typedef struct ECMDataset_ {
 } ECMDataset_t;
 
 typedef struct ECMPerformance_ {
-  int32_t numSlices;
-  int32_t microsSlices;
-  int32_t numCycles;
-  int32_t microsCycles;
-  int32_t numDatasets;
-  int32_t microsDatasets;
+  uint32_t numSlices;
+  uint32_t microsSlices;
+  uint32_t numCycles;
+  uint32_t microsCycles;
+  uint32_t numDatasets;
+  uint32_t microsDatasets;
 } ECMPerformance_t;
 
 typedef struct AutoPhaseRes_ {
-  int32_t idxCt;
-  float   phase;
-  bool    success;
+  uint32_t idxCt;
+  float    phase;
+  bool     success;
 } AutoPhaseRes_t;
 
 /******************************************************************************
@@ -141,7 +143,7 @@ void ecmClearEnergy(void);
 /*! @brief Clear accumulated energy for a single channel
  *  @param [in] idx : channel index (0 to NUM_CT-1)
  */
-void ecmClearEnergyChannel(int32_t idx);
+void ecmClearEnergyChannel(const size_t idx);
 
 /*! @brief Get the pointer to the configuration struct
  *  @return pointer to Emon CM configuration struct
@@ -151,7 +153,7 @@ ECMCfg_t *ecmConfigGet(void);
 /*! @brief Configure a channel.
  *  @param [in] ch : channel, logical index.
  */
-void ecmConfigChannel(int_fast8_t ch);
+void ecmConfigChannel(const size_t ch);
 
 /*! @brief Having set all configuration values, calculate all required constant
  *         values
@@ -161,7 +163,7 @@ void ecmConfigInit(void);
 /*! @brief Set cycles between reports
  *  @param [in] reportCycles : cycles between reports
  */
-void ecmConfigReportCycles(int32_t reportCycles);
+void ecmConfigReportCycles(uint32_t reportCycles);
 
 /*! @brief Returns a pointer to the ADC data buffer
  *  @return pointer to the active ADC data buffer.

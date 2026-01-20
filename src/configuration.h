@@ -1,6 +1,7 @@
 #pragma once
 
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 
 #include "board_def.h"
@@ -62,7 +63,7 @@ typedef struct __attribute__((__packed__)) Emon32Config_ {
   DataTxCfg_t        dataTxCfg;
   VoltageCfgPacked_t voltageCfg[NUM_V];
   CTCfgPacked_t      ctCfg[NUM_CT + CT_RES];
-  OpaCfgPacked_t     opaCfg[NUM_OPA];
+  OpaCfgPacked_t     opaCfg[NUM_OPA + PULSE_RES];
   OneWireAddr_t      oneWireAddr;
   uint8_t            res0[16];
   uint16_t           crc16_ccitt;
@@ -132,4 +133,4 @@ VersionInfo_t configVersion(void);
  *  @param[in] idx : index of the word to fetch
  *  @return word idx from the unique ID
  */
-uint32_t getUniqueID(int32_t idx);
+uint32_t getUniqueID(const size_t idx);

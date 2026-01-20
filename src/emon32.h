@@ -11,6 +11,7 @@ _Static_assert((sizeof(bool) == 1), "bool must be 1 byte");
  * Common configurable options
  *********************************/
 
+#define DOWNSAMPLE_DSP     1u     /* 0: no downsampling; 1: half band LPF */
 #define NUM_CT_ACTIVE_DEF  6      /* Onboard CTs only */
 #define DELTA_EP_STORE_DEF 200u   /* Threshold, in Wh, to store to NVM */
 #define NODE_ID_DEF        17u    /* Node ID for reports */
@@ -54,17 +55,25 @@ typedef struct __attribute__((__packed__)) Emon32Cumulative_ {
 /* This struct must match the OEM definitions found at:
  * https://docs.openenergymonitor.org/electricity-monitoring/networking/sending-data-between-nodes-rfm.html
  */
+typedef struct __attribute__((__packed__)) PackedData_ {
+  uint32_t msg;
+  int16_t  V[NUM_V];
+  int16_t  P[NUM_CT];
+  int32_t  E[NUM_CT];
+  int16_t  T[TEMP_MAX_ONEWIRE];
+  uint32_t pulse[NUM_OPA];
+} PackedData_t;
 
 typedef struct __attribute__((__packed__)) PackedDataCommon_ {
   uint32_t msg;
-  int16_t  V[NUM_V];
+  uint16_t V[NUM_V];
   int16_t  P[NUM_CT / 2];
   int32_t  E[NUM_CT / 2];
 } PackedDataCommon_t;
 
 typedef struct __attribute__((__packed__)) PackedDataLower6_ {
   PackedDataCommon_t common;
-  uint32_t           pulse[2];
+  uint32_t           pulse[NUM_OPA];
 } PackedDataLower6_t;
 
 typedef struct __attribute__((__packed__)) PackedDataUpper6_ {
@@ -91,6 +100,7 @@ typedef enum EVTSRC_ {
   EVT_TEMP_READ       = 15u,
   EVT_CONFIG_CHANGED  = 16u,
   EVT_CONFIG_SAVED    = 17u,
+  EVT_SAFE_RESET_REQ  = 18u,
   EVT_PROCESS_CMD     = 19u,
   EVT_PROCESS_DATASET = 20u,
   EVT_STORE_ACCUM     = 21u,

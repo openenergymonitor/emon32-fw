@@ -14,27 +14,6 @@ static bool isnumeric(const char c) {
   return false;
 }
 
-uint32_t utilAbs(const int32_t x) { return (x < 0) ? -x : x; }
-
-void utilStrReverse(char *pBuf, uint32_t len) {
-  char     tmp;
-  uint32_t idxEnd = len - 1u;
-  for (uint32_t idx = 0; idx < (len / 2); idx++) {
-    tmp          = pBuf[idx];
-    pBuf[idx]    = pBuf[idxEnd];
-    pBuf[idxEnd] = tmp;
-    idxEnd--;
-  }
-}
-
-uint32_t utilStrlen(const char *pBuf) {
-  uint32_t charCnt = 0;
-  while (*pBuf++) {
-    charCnt++;
-  }
-  return charCnt;
-}
-
 /* Fast divide by 10 using shifts/adds only (no hardware divide) */
 static inline uint32_t fastDiv10(uint32_t n) {
   uint32_t q = (n >> 1) + (n >> 2);
@@ -46,11 +25,9 @@ static inline uint32_t fastDiv10(uint32_t n) {
   return q + ((r + 6) >> 4);
 }
 
-uint32_t utilItoa(char *pBuf, int32_t val, ITOA_BASE_t base) {
-  char     buf[12]; /* -2147483648 = 11 chars + null */
-  char    *p = &buf[11];
-  uint32_t uval;
-  bool     neg = false;
+size_t utilUtoa(char *pBuf, uint32_t val, const ITOA_BASE_t base) {
+  char  buf[11]; /* 4294967295 = 10 chars + null */
+  char *p = &buf[10];
 
   *p = '\0';
 
@@ -62,35 +39,23 @@ uint32_t utilItoa(char *pBuf, int32_t val, ITOA_BASE_t base) {
   }
 
   if (ITOA_BASE10 == base) {
-    if (val < 0) {
-      neg  = true;
-      uval = (uint32_t)(-val);
-    } else {
-      uval = (uint32_t)val;
-    }
-
-    while (uval != 0) {
-      uint32_t q = fastDiv10(uval);
-      *--p       = (char)('0' + (uval - q * 10));
-      uval       = q;
-    }
-
-    if (neg) {
-      *--p = '-';
+    while (val != 0) {
+      uint32_t q = fastDiv10(val);
+      *--p       = (char)('0' + (val - q * 10));
+      val        = q;
     }
   } else {
     static const char itohex[] = "0123456789abcdef";
-    uint32_t          val_u    = (uint32_t)val;
 
-    while (0 != val_u) {
-      *--p = itohex[val_u & 0xFu];
-      val_u >>= 4;
+    while (0 != val) {
+      *--p = itohex[val & 0xFu];
+      val >>= 4;
     }
   }
 
   /* Copy to output buffer */
-  char    *dst = pBuf;
-  uint32_t len = 0;
+  char  *dst = pBuf;
+  size_t len = 0;
   while (*p) {
     *dst++ = *p++;
     len++;
@@ -100,15 +65,17 @@ uint32_t utilItoa(char *pBuf, int32_t val, ITOA_BASE_t base) {
   return len + 1u;
 }
 
-ConvInt_t utilAtoi(const char *pBuf, ITOA_BASE_t base) {
-  bool      isNegative = false;
-  uint32_t  result     = 0;
-  ConvInt_t conv       = {false, 0};
-
-  if ('-' == *pBuf) {
-    isNegative = true;
-    pBuf++;
+size_t utilItoa(char *pBuf, int32_t val, const ITOA_BASE_t base) {
+  if ((ITOA_BASE10 == base) && (val < 0)) {
+    *pBuf = '-';
+    return 1u + utilUtoa(pBuf + 1, (uint32_t)(-val), base);
   }
+  return utilUtoa(pBuf, (uint32_t)val, base);
+}
+
+ConvUint_t utilAtoui(const char *pBuf, ITOA_BASE_t base) {
+  uint32_t   result = 0;
+  ConvUint_t conv   = {false, {0}};
 
   /* Process left-to-right, no string reversal needed */
   if (ITOA_BASE10 == base) {
@@ -138,8 +105,20 @@ ConvInt_t utilAtoi(const char *pBuf, ITOA_BASE_t base) {
     }
   }
 
-  conv.val   = isNegative ? -(int32_t)result : (int32_t)result;
-  conv.valid = true;
+  conv.val.u32 = result;
+  conv.valid   = true;
+  return conv;
+}
+
+ConvInt_t utilAtoi(const char *pBuf, ITOA_BASE_t base) {
+  bool isNegative = ('-' == *pBuf);
+  if (isNegative) {
+    pBuf++;
+  }
+
+  ConvUint_t u    = utilAtoui(pBuf, base);
+  ConvInt_t  conv = {u.valid,
+                     {isNegative ? -(int32_t)u.val.u32 : (int32_t)u.val.u32}};
   return conv;
 }
 
@@ -148,7 +127,7 @@ bool utilCharPrintable(const char c) {
   return (((c >= 32) && (c <= 126)) || ('\r' == c) || ('\n' == c));
 }
 
-uint32_t utilFtoa(char *pBuf, float val) {
+size_t utilFtoa(char *pBuf, float val) {
   char     buf[16]; /* Enough for -2147483648.99 + null */
   char    *p = &buf[15];
   uint32_t units;

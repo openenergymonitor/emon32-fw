@@ -24,36 +24,36 @@ void dmacSetup(void) {
   NVIC_EnableIRQ(DMAC_IRQn);
 }
 
-volatile DmacDescriptor *dmacGetDescriptor(uint32_t ch) { return &dmacs[ch]; }
+volatile DmacDescriptor *dmacGetDescriptor(uint8_t ch) { return &dmacs[ch]; }
 
 void dmacCallbackBufferFill(void (*cb)(void)) { cbBufferFill = cb; }
 
-void dmacChannelDisable(uint32_t ch) {
-  DMAC->CHID.reg = ch;
-  DMAC->CHCTRLA.reg &= ~DMAC_CHCTRLA_ENABLE;
+void dmacChannelDisable(uint8_t ch) {
+  DMAC->CHID.reg           = ch;
+  DMAC->CHCTRLA.bit.ENABLE = 0;
 }
 
-void dmacChannelEnable(uint32_t ch) {
-  DMAC->CHID.reg = ch;
-  DMAC->CHCTRLA.reg |= DMAC_CHCTRLA_ENABLE;
+void dmacChannelEnable(uint8_t ch) {
+  DMAC->CHID.reg           = ch;
+  DMAC->CHCTRLA.bit.ENABLE = 1;
 }
 
-void dmacEnableChannelInterrupt(uint32_t ch) {
+void dmacEnableChannelInterrupt(uint8_t ch) {
   DMAC->CHID.reg       = ch;
   DMAC->CHINTENSET.reg = DMAC_CHINTENSET_TCMPL;
 }
 
-void dmacDisableChannelInterrupt(uint32_t ch) {
+void dmacDisableChannelInterrupt(uint8_t ch) {
   DMAC->CHID.reg       = ch;
   DMAC->CHINTENCLR.reg = DMAC_CHINTENCLR_TCMPL;
 }
 
-void dmacClearChannelInterrupt(uint32_t ch) {
+void dmacClearChannelInterrupt(uint8_t ch) {
   DMAC->CHID.reg      = ch;
   DMAC->CHINTFLAG.reg = DMAC_CHINTFLAG_TCMPL;
 }
 
-void dmacChannelConfigure(uint32_t ch, const DMACCfgCh_t *pCfg) {
+void dmacChannelConfigure(uint8_t ch, const DMACCfgCh_t *pCfg) {
   DMAC->CHID.reg    = ch;
   DMAC->CHCTRLB.reg = pCfg->ctrlb;
 }
@@ -70,12 +70,12 @@ void irq_handler_dmac(void) {
   }
 }
 
-uint16_t calcCRC16_ccitt(const void *pSrc, uint32_t n) {
+uint16_t calcCRC16_ccitt(const void *pSrc, size_t n) {
   const uint8_t *pData = (uint8_t *)pSrc;
 
   /* CCITT is 0xFFFF initial value */
-  DMAC->CRCCHKSUM.reg = 0xFFFF;
-  DMAC->CTRL.reg |= DMAC_CTRL_CRCENABLE;
+  DMAC->CRCCHKSUM.reg      = 0xFFFF;
+  DMAC->CTRL.bit.CRCENABLE = 1;
 
   /* Input into CRC data byte wise. Byte beats convert in a single cycle, so
    * using a DSB to ensure the previous store is complete is sufficient.
@@ -86,8 +86,8 @@ uint16_t calcCRC16_ccitt(const void *pSrc, uint32_t n) {
   }
 
   /* Clear status and disable CRC module before returning CRC */
-  DMAC->CRCSTATUS.reg = DMAC_CRCSTATUS_CRCBUSY;
-  DMAC->CTRL.reg &= ~DMAC_CTRL_CRCENABLE;
+  DMAC->CRCSTATUS.reg      = DMAC_CRCSTATUS_CRCBUSY;
+  DMAC->CTRL.bit.CRCENABLE = 0;
 
-  return DMAC->CRCCHKSUM.reg;
+  return (uint16_t)DMAC->CRCCHKSUM.reg;
 }

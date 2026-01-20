@@ -7,9 +7,9 @@
 #include "periph_DS18B20.h"
 #include "temperature.h"
 
-static bool    tempSampled               = false;
-static int32_t numSensors                = 0;
-static int32_t millisLastSample[NUM_OPA] = {0};
+static bool     tempSampled               = false;
+static uint32_t numSensors                = 0;
+static uint32_t millisLastSample[NUM_OPA] = {0};
 
 uint64_t *tempAddress1WGet(void) { return ds18b20AddressGet(); }
 
@@ -27,7 +27,7 @@ uint32_t tempInitSensors(const TEMP_INTF_t intf, const void *pParams) {
   EMON32_ASSERT(pParams);
 
   if (TEMP_INTF_ONEWIRE == intf) {
-    int32_t numFound = ds18b20InitSensors((DS18B20_conf_t *)pParams);
+    uint32_t numFound = ds18b20InitSensors((DS18B20_conf_t *)pParams);
     numSensors += numFound;
     return numFound;
   }
@@ -41,7 +41,7 @@ void tempMapDevices(const TEMP_INTF_t intf, const void *pAddr) {
   }
 }
 
-unsigned int tempMapToLogical(const TEMP_INTF_t intf, const uint8_t dev) {
+unsigned int tempMapToLogical(const TEMP_INTF_t intf, const size_t dev) {
   if (TEMP_INTF_ONEWIRE == intf) {
     return ds18b20MapToLogical(dev);
   }
@@ -49,7 +49,7 @@ unsigned int tempMapToLogical(const TEMP_INTF_t intf, const uint8_t dev) {
   return 0;
 }
 
-TempRead_t tempReadSample(const TEMP_INTF_t intf, const uint8_t dev) {
+TempRead_t tempReadSample(const TEMP_INTF_t intf, const size_t dev) {
   TempRead_t res = {TEMP_FAILED, INT16_MIN};
 
   if (!tempSampled) {
@@ -75,7 +75,7 @@ TempDev_t tempReadSerial(const TEMP_INTF_t intf, const uint8_t dev) {
   return (TempDev_t){.id = 0, .intf = TEMP_INTF_NONE};
 }
 
-TempStatus_t tempStartSample(const TEMP_INTF_t intf, const uint32_t dev) {
+TempStatus_t tempStartSample(const TEMP_INTF_t intf, const size_t dev) {
 
   if (0 == numSensors) {
     return TEMP_NO_SENSORS;

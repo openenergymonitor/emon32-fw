@@ -25,17 +25,18 @@
 
 /* "Fat" string with current length and buffer size. */
 typedef struct StrN {
-  char   *str; /* Pointer to the string */
-  int32_t n;   /* Length of the string  */
-  int32_t m;   /* Buffer length */
+  char  *str; /* Pointer to the string */
+  size_t n;   /* Length of the string  */
+  size_t m;   /* Buffer length */
 } StrN_t;
 
-static void    catId(StrN_t *strD, int32_t id, int32_t field, bool json);
-static void    catMsg(StrN_t *strD, int32_t msg, bool json);
-static void    initFields(StrN_t *pD, char *pS, const int32_t m);
-static int32_t strnCat(StrN_t *strD, const StrN_t *strS);
-static int32_t strnCatFloat(StrN_t *strD, float v);
-static int32_t strnCatInt(StrN_t *strD, int32_t v);
+static void   catId(StrN_t *strD, uint32_t id, int32_t field, bool json);
+static void   catMsg(StrN_t *strD, uint32_t msg, bool json);
+static void   initFields(StrN_t *pD, char *pS, const size_t m);
+static size_t strnCat(StrN_t *strD, const StrN_t *strS);
+static size_t strnCatFloat(StrN_t *strD, float v);
+static size_t strnCatInt(StrN_t *strD, int32_t v);
+static size_t strnCatUint(StrN_t *strD, uint32_t v);
 
 static char tmpStr[CONV_STR_W] = {0};
 
@@ -54,13 +55,14 @@ const StrN_t baseStr[12] = {
  *  @param [in] field : field name index, e.g. "STR_V"
  *  @param [in] json : select format
  */
-static void catId(StrN_t *strD, int32_t id, int32_t field, bool json) {
+static void catId(StrN_t *strD, const uint32_t id, const int32_t field,
+                  const bool json) {
   strD->n += strnCat(strD, &baseStr[STR_COMMA]);
   if (json) {
     strD->n += strnCat(strD, &baseStr[STR_DQUOTE]);
   }
   strD->n += strnCat(strD, &baseStr[field]);
-  strD->n += strnCatInt(strD, id);
+  strD->n += strnCatUint(strD, id);
   if (json) {
     strD->n += strnCat(strD, &baseStr[STR_DQUOTE]);
   }
@@ -72,7 +74,7 @@ static void catId(StrN_t *strD, int32_t id, int32_t field, bool json) {
  *  @param [in] msg : message number
  *  @param [in] json : select format
  */
-static void catMsg(StrN_t *strD, int32_t msg, bool json) {
+static void catMsg(StrN_t *strD, const uint32_t msg, const bool json) {
   /* <{">MSG<">:<"><#><"> */
 
   if (json) {
@@ -84,7 +86,7 @@ static void catMsg(StrN_t *strD, int32_t msg, bool json) {
     strD->n += strnCat(strD, &baseStr[STR_DQUOTE]);
   }
   strD->n += strnCat(strD, &baseStr[STR_COLON]);
-  strD->n += strnCatInt(strD, msg);
+  strD->n += strnCatUint(strD, msg);
 }
 
 /*! @brief Initialise a fat string
@@ -92,7 +94,7 @@ static void catMsg(StrN_t *strD, int32_t msg, bool json) {
  *  @param [in] pS : pointer to string buffer
  *  @param [in] m : maximum width of the string
  */
-static void initFields(StrN_t *pD, char *pS, const int32_t m) {
+static void initFields(StrN_t *pD, char *pS, const size_t m) {
   pD->str = pS;
   pD->n   = 0;
   pD->m   = m;
@@ -104,10 +106,10 @@ static void initFields(StrN_t *pD, char *pS, const int32_t m) {
  *  @param [in] v : value to convert and append
  *  @return number of characters appended
  */
-static int32_t strnCatFloat(StrN_t *strD, float v) {
-  int32_t len    = utilFtoa(tmpStr, v) - 1; /* exclude null terminator */
-  int32_t space  = strD->m - strD->n;
-  int32_t toCopy = (len < space) ? len : space;
+static size_t strnCatFloat(StrN_t *strD, float v) {
+  size_t len    = utilFtoa(tmpStr, v) - 1u; /* exclude null terminator */
+  size_t space  = strD->m - strD->n;
+  size_t toCopy = (len < space) ? len : space;
 
   memcpy(strD->str + strD->n, tmpStr, toCopy);
   return toCopy;
@@ -118,10 +120,24 @@ static int32_t strnCatFloat(StrN_t *strD, float v) {
  *  @param [in] v : value to convert and append
  *  @return number of characters appended
  */
-static int32_t strnCatInt(StrN_t *strD, int32_t v) {
-  int32_t len    = utilItoa(tmpStr, v, ITOA_BASE10) - 1; /* exclude null */
-  int32_t space  = strD->m - strD->n;
-  int32_t toCopy = (len < space) ? len : space;
+static size_t strnCatInt(StrN_t *strD, int32_t v) {
+  size_t len    = utilItoa(tmpStr, v, ITOA_BASE10) - 1u; /* exclude null */
+  size_t space  = strD->m - strD->n;
+  size_t toCopy = (len < space) ? len : space;
+
+  memcpy(strD->str + strD->n, tmpStr, toCopy);
+  return toCopy;
+}
+
+/*! @brief Convert unsigned integer and append to fat string
+ *  @param [out] strD : pointer to destination fat string
+ *  @param [in] v : value to convert and append
+ *  @return number of characters appended
+ */
+static size_t strnCatUint(StrN_t *strD, uint32_t v) {
+  size_t len    = utilUtoa(tmpStr, v, ITOA_BASE10) - 1u; /* exclude null */
+  size_t space  = strD->m - strD->n;
+  size_t toCopy = (len < space) ? len : space;
 
   memcpy(strD->str + strD->n, tmpStr, toCopy);
   return toCopy;
@@ -132,12 +148,12 @@ static int32_t strnCatInt(StrN_t *strD, int32_t v) {
  *  @param [in] strS : pointer to string to concatenate onto strD
  *  @return number of characters concatenated
  */
-static int32_t strnCat(StrN_t *strD, const StrN_t *strS) {
+static size_t strnCat(StrN_t *strD, const StrN_t *strS) {
   /* Check bounds to make sure it won't go over the end. If so, return the
    * actual number of bytes that are copied.
    */
-  int32_t newLen;
-  int32_t bytesToCopy;
+  size_t newLen;
+  size_t bytesToCopy;
 
   bytesToCopy = strS->n;
   newLen      = strS->n + strD->n;
@@ -149,8 +165,8 @@ static int32_t strnCat(StrN_t *strD, const StrN_t *strS) {
   return bytesToCopy;
 }
 
-int32_t dataPackSerial(const Emon32Dataset_t *pData, char *pDst, int32_t m,
-                       bool json, CHActive_t chsActive) {
+size_t dataPackSerial(const Emon32Dataset_t *pData, char *pDst, const size_t m,
+                      const bool json) {
   EMON32_ASSERT(pData);
   EMON32_ASSERT(pDst);
 
@@ -162,11 +178,9 @@ int32_t dataPackSerial(const Emon32Dataset_t *pData, char *pDst, int32_t m,
   /* V channels; only print V2/V3 if either active */
   uint32_t numV = (pData->pECM->activeCh & 0x6) ? NUM_V : 1;
 
-  for (uint32_t i = 0; i < numV; i++) {
-    if ((chsActive.V[i] && json) || !json) {
-      catId(&strn, (i + 1), STR_V, json);
-      strn.n += strnCatFloat(&strn, pData->pECM->rmsV[i]);
-    }
+  for (size_t i = 0; i < numV; i++) {
+    catId(&strn, (i + 1), STR_V, json);
+    strn.n += strnCatFloat(&strn, pData->pECM->rmsV[i]);
   }
 
   /* CT channels (power and energy)
@@ -176,33 +190,24 @@ int32_t dataPackSerial(const Emon32Dataset_t *pData, char *pDst, int32_t m,
                        ? NUM_CT
                        : (NUM_CT / 2);
 
-  for (uint32_t i = 0; i < numCT; i++) {
-    if ((chsActive.CT[i] && json) || !json) {
-      catId(&strn, (i + 1), STR_P, json);
-      strn.n += strnCatInt(&strn, pData->pECM->CT[i].realPower);
-    }
+  for (size_t i = 0; i < numCT; i++) {
+    catId(&strn, (i + 1), STR_P, json);
+    strn.n += strnCatInt(&strn, pData->pECM->CT[i].realPower);
   }
-  for (uint32_t i = 0; i < numCT; i++) {
-    if ((chsActive.CT[i] && json) || !json) {
-      catId(&strn, (i + 1), STR_E, json);
-      strn.n += strnCatInt(&strn, pData->pECM->CT[i].wattHour);
-    }
+  for (size_t i = 0; i < numCT; i++) {
+    catId(&strn, (i + 1), STR_E, json);
+    strn.n += strnCatInt(&strn, pData->pECM->CT[i].wattHour);
   }
 
-  for (uint32_t i = 0; i < NUM_OPA; i++) {
-    if ((chsActive.pulse[i] && json) || !json) {
-      catId(&strn, (i + 1), STR_PULSE, json);
-      strn.n += strnCatInt(&strn, pData->pulseCnt[i]);
-    }
+  for (size_t i = 0; i < NUM_OPA; i++) {
+    catId(&strn, (i + 1), STR_PULSE, json);
+    strn.n += strnCatUint(&strn, pData->pulseCnt[i]);
   }
 
-  for (uint32_t i = 0; i < TEMP_MAX_ONEWIRE; i++) {
-    bool isPresent = (pData->temp[i] != 4800);
-    if ((isPresent && json) || !json) {
-      catId(&strn, (i + 1), STR_TEMP, json);
-      strn.n +=
-          strnCatFloat(&strn, tempAsFloat(TEMP_INTF_ONEWIRE, pData->temp[i]));
-    }
+  for (size_t i = 0; i < TEMP_MAX_ONEWIRE; i++) {
+    catId(&strn, (i + 1), STR_TEMP, json);
+    strn.n +=
+        strnCatFloat(&strn, tempAsFloat(TEMP_INTF_ONEWIRE, pData->temp[i]));
   }
 
   /* Terminate with } for JSON and \r\n */
@@ -213,8 +218,8 @@ int32_t dataPackSerial(const Emon32Dataset_t *pData, char *pDst, int32_t m,
   return strn.n;
 }
 
-int_fast8_t dataPackPacked(const Emon32Dataset_t *pData, void *pPacked,
-                           PackedRange_t range) {
+uint8_t dataPackPacked(const Emon32Dataset_t *pData, void *pPacked,
+                       const PackedRange_t range) {
 
   /* Both upper and lower packets share the same initial data structure.
    * Differentiate for pulse or temperature readings. */
@@ -224,29 +229,31 @@ int_fast8_t dataPackPacked(const Emon32Dataset_t *pData, void *pPacked,
   PackedDataCommon_t *pCommon = pPacked;
   pCommon->msg                = pData->msgNum;
 
-  for (uint32_t v = 0; v < NUM_V; v++) {
-    pCommon->V[v] = qfp_float2int_z(qfp_fmul(pData->pECM->rmsV[v], 100.0f));
+  for (size_t v = 0; v < NUM_V; v++) {
+    pCommon->V[v] =
+        (uint16_t)qfp_float2int_z(qfp_fmul(pData->pECM->rmsV[v], 100.0f));
   }
 
-  for (uint32_t i = 0; i < (NUM_CT / 2); i++) {
-    pCommon->P[i] = pData->pECM->CT[i + ((NUM_CT / 2) * isUpper)].realPower;
+  for (size_t i = 0; i < (NUM_CT / 2); i++) {
+    pCommon->P[i] =
+        (int16_t)pData->pECM->CT[i + ((NUM_CT / 2) * isUpper)].realPower;
     pCommon->E[i] = pData->pECM->CT[i + ((NUM_CT / 2) * isUpper)].wattHour;
   }
 
   if (PACKED_LOWER == range) {
     PackedDataLower6_t *pLower = pPacked;
-    for (uint32_t p = 0; p < 2u; p++) {
+    for (size_t p = 0; p < NUM_OPA; p++) {
       pLower->pulse[p] = pData->pulseCnt[p];
     }
     return sizeof(*pLower);
   } else if (PACKED_UPPER == range) {
     PackedDataUpper6_t *pUpper = pPacked;
-    for (uint32_t t = 0; t < (TEMP_MAX_ONEWIRE / 2); t++) {
+    for (size_t t = 0; t < (TEMP_MAX_ONEWIRE / 2); t++) {
       /* Sent as 100x the temperature value. */
-      pUpper->temp[t] = (pData->temp[t] * 6) + (pData->temp[t] >> 2);
+      pUpper->temp[t] = (int16_t)((pData->temp[t] * 6) + (pData->temp[t] >> 2));
     }
     return sizeof(*pUpper);
   }
 
-  return 0;
+  return 0u;
 }

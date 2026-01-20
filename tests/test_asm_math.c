@@ -41,6 +41,26 @@ int64_t ssqr64(int32_t x) {
   return result;
 }
 
+int64_t smul64(int32_t a, int32_t b) {
+  /* Reference implementation matching the assembly algorithm */
+  uint32_t a_lo = (uint32_t)a & 0xFFFF;
+  int32_t  a_hi = a >> 16;
+  uint32_t b_lo = (uint32_t)b & 0xFFFF;
+  int32_t  b_hi = b >> 16;
+
+  uint32_t lo_lo = a_lo * b_lo;
+  int32_t  lo_hi = (int32_t)(b_lo * (uint32_t)a_hi);
+  int32_t  hi_hi = a_hi * b_hi;
+  int32_t  hi_lo = (int32_t)((uint32_t)b_hi * a_lo);
+
+  int64_t result = (int64_t)hi_hi << 32;
+  result += lo_lo;
+  result += (int64_t)lo_hi << 16;
+  result += (int64_t)hi_lo << 16;
+
+  return result;
+}
+
 #else
 /* On target, use the actual assembly implementations */
 #include "asm_math.h"
@@ -57,6 +77,15 @@ static const int32_t test_signed[] = {
     0,     1,      -1,    2,      -2,         127,         -128,
     32767, -32768, 65535, -65536, 0x7FFFFFFF, -2147483647, -2147483648,
     12345, -12345, 54321, -54321, 1000000,    -1000000};
+
+/* Test pairs for multiplication (a, b) */
+static const int32_t test_mul_pairs[][2] = {
+    {0, 0},           {1, 1},          {-1, 1},          {1, -1},
+    {-1, -1},         {100, 200},      {-100, 200},      {100, -200},
+    {-100, -200},     {32767, 32767},  {-32768, 32768},  {65535, 65536},
+    {0x7FFF, 0x7FFF}, {0x7FFFFFFF, 2}, {-2147483648, 1}, {-2147483648, -1},
+    {12345, 67890},   {-12345, 67890}, {0x1234, 0x5678}, {-0x1234, -0x5678},
+};
 
 #define ARRAY_SIZE(x) (sizeof(x) / sizeof((x)[0]))
 
@@ -133,6 +162,61 @@ static bool test_ssqr64_validation(void) {
   return pass;
 }
 
+static bool test_smul64_validation(void) {
+  printf("Testing smul64 validation...\n");
+  bool pass = true;
+
+  /* Test with predefined pairs */
+  for (size_t i = 0; i < ARRAY_SIZE(test_mul_pairs); i++) {
+    int32_t a        = test_mul_pairs[i][0];
+    int32_t b        = test_mul_pairs[i][1];
+    int64_t result   = smul64(a, b);
+    int64_t expected = (int64_t)a * b;
+
+    if (result != expected) {
+      printf("  FAIL: smul64(%d, %d) = %lld, expected %lld\n", a, b,
+             (long long)result, (long long)expected);
+      pass = false;
+    }
+  }
+
+  /* Test all combinations of test_signed values */
+  for (size_t i = 0; i < ARRAY_SIZE(test_signed); i++) {
+    for (size_t j = 0; j < ARRAY_SIZE(test_signed); j++) {
+      int32_t a        = test_signed[i];
+      int32_t b        = test_signed[j];
+      int64_t result   = smul64(a, b);
+      int64_t expected = (int64_t)a * b;
+
+      if (result != expected) {
+        printf("  FAIL: smul64(%d, %d) = %lld, expected %lld\n", a, b,
+               (long long)result, (long long)expected);
+        pass = false;
+      }
+    }
+  }
+
+  /* Random tests */
+  srand(42);
+  for (int i = 0; i < 10000; i++) {
+    int32_t a        = (int32_t)(((uint32_t)rand() << 16) | (uint32_t)rand());
+    int32_t b        = (int32_t)(((uint32_t)rand() << 16) | (uint32_t)rand());
+    int64_t result   = smul64(a, b);
+    int64_t expected = (int64_t)a * b;
+
+    if (result != expected) {
+      printf("  FAIL: smul64(%d, %d) = %lld, expected %lld\n", a, b,
+             (long long)result, (long long)expected);
+      pass = false;
+    }
+  }
+
+  if (pass) {
+    printf("  PASS: All smul64 tests passed\n");
+  }
+  return pass;
+}
+
 /* Performance tests */
 #define PERF_ITERATIONS 100000
 
@@ -174,6 +258,28 @@ static void test_performance_host(void) {
   end     = clock();
   elapsed = (double)(end - start) / CLOCKS_PER_SEC * 1000000.0;
   printf("  ssqr64: %.2f us total, %.3f us/call\n", elapsed,
+         elapsed / PERF_ITERATIONS);
+
+  /* Test smul64 */
+  start = clock();
+  for (int i = 0; i < PERF_ITERATIONS; i++) {
+    sink += smul64((int32_t)i, (int32_t)(PERF_ITERATIONS - i));
+  }
+  end     = clock();
+  elapsed = (double)(end - start) / CLOCKS_PER_SEC * 1000000.0;
+  printf("  smul64: %.2f us total, %.3f us/call\n", elapsed,
+         elapsed / PERF_ITERATIONS);
+
+  /* Test standard signed multiply for comparison */
+  start = clock();
+  for (int i = 0; i < PERF_ITERATIONS; i++) {
+    int32_t a = (int32_t)i;
+    int32_t b = (int32_t)(PERF_ITERATIONS - i);
+    sink += (int64_t)a * b;
+  }
+  end     = clock();
+  elapsed = (double)(end - start) / CLOCKS_PER_SEC * 1000000.0;
+  printf("  a * b:  %.2f us total, %.3f us/call\n", elapsed,
          elapsed / PERF_ITERATIONS);
 
   (void)sink; /* Prevent optimization */
@@ -219,6 +325,28 @@ static void test_performance_target(void) {
   printf("  ssqr64: %lu us total, %.3f us/call\n", elapsed,
          (float)elapsed / PERF_ITERATIONS);
 
+  /* Test smul64 */
+  start = timerMicros();
+  for (int i = 0; i < PERF_ITERATIONS; i++) {
+    sink += smul64((int32_t)i, (int32_t)(PERF_ITERATIONS - i));
+  }
+  end     = timerMicros();
+  elapsed = end - start;
+  printf("  smul64: %lu us total, %.3f us/call\n", elapsed,
+         (float)elapsed / PERF_ITERATIONS);
+
+  /* Test standard signed multiply for comparison */
+  start = timerMicros();
+  for (int i = 0; i < PERF_ITERATIONS; i++) {
+    int32_t a = (int32_t)i;
+    int32_t b = (int32_t)(PERF_ITERATIONS - i);
+    sink += (int64_t)a * b;
+  }
+  end     = timerMicros();
+  elapsed = end - start;
+  printf("  a * b:  %lu us total, %.3f us/call\n", elapsed,
+         (float)elapsed / PERF_ITERATIONS);
+
   (void)sink; /* Prevent optimization */
 }
 #endif
@@ -230,6 +358,7 @@ int main(void) {
 
   all_pass &= test_usqr64_validation();
   all_pass &= test_ssqr64_validation();
+  all_pass &= test_smul64_validation();
 
 #ifdef HOSTED
   test_performance_host();

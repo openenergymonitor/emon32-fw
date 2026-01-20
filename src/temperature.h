@@ -65,14 +65,14 @@ void tempMapDevices(const TEMP_INTF_t intf, const void *pAddr);
  *  @param [in] dev : physical device index
  *  @return logical device index
  */
-unsigned int tempMapToLogical(const TEMP_INTF_t intf, const uint8_t dev);
+unsigned int tempMapToLogical(const TEMP_INTF_t intf, const size_t dev);
 
 /*! @brief Read an existing temperature sample
  *  @param [in] intf : interface type
  *  @param [in] dev : device index
  *  @return TempRead struct
  */
-TempRead_t tempReadSample(const TEMP_INTF_t intf, const uint8_t dev);
+TempRead_t tempReadSample(const TEMP_INTF_t intf, const size_t dev);
 
 /*! @brief Read the temperature sensor's serial number
  *  @param [in] intf : interface type
@@ -86,4 +86,4 @@ TempDev_t tempReadSerial(const TEMP_INTF_t intf, const uint8_t dev);
  *  @param [in] dev : device index
  *  @return status of the sample start
  */
-TempStatus_t tempStartSample(const TEMP_INTF_t intf, const uint32_t dev);
+TempStatus_t tempStartSample(const TEMP_INTF_t intf, const size_t dev);

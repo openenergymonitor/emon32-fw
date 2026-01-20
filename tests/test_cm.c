@@ -217,6 +217,7 @@ int main(int argc, char *argv[]) {
   smpRaw[1] = ecmDataBuffer();
   ecmDataBufferSwap();
 
+  pEcmCfg->downsample   = 1u;
   pEcmCfg->reportCycles = (unsigned int)(REPORT_TIME * MAINS_FREQ);
   pEcmCfg->mainsFreq    = 50;
   pEcmCfg->reportTime_us =
@@ -277,6 +278,7 @@ int main(int argc, char *argv[]) {
   printf("    - Number of V     : %d\n", NUM_V);
   printf("    - Number of CT    : %d\n", NUM_CT);
   printf("    - Mains frequency : %.0f Hz\n", MAINS_FREQ);
+  printf("    - DSP enabled     : %s\n", pEcmCfg->downsample ? "Yes" : "No");
   printf("    - Report time     : %.2f s\n", REPORT_TIME);
   printf("    - Sample tick     : %d us\n", SMP_TICK);
   printf("    - Assumed voltage : %.2f V\n", pEcmCfg->assumedVrms);
@@ -295,39 +297,42 @@ int main(int argc, char *argv[]) {
    * Inject an implulse, should get all the coefficients (except middle) out
    * TODO parameterise this for any size of filter
    */
-  printf("  Half band filter tests:\n");
-  printf("    - Impulse ... ");
+  if (pEcmCfg->downsample) {
+    printf("  Half band filter tests:\n");
+    printf("    - Impulse ... ");
 
-  for (unsigned int i = 0; i < VCT_TOTAL; i++) {
-    smpRaw[smpIdx]->samples[0].smp[i] = 0;
-    smpRaw[smpIdx]->samples[1].smp[i] = INT16_MAX;
-  }
+    for (unsigned int i = 0; i < VCT_TOTAL; i++) {
+      smpRaw[smpIdx]->samples[0].smp[i] = 0;
+      smpRaw[smpIdx]->samples[1].smp[i] = INT16_MAX;
+    }
 
-  ecmDataBufferSwap();
-  ecmFilterSample(&smpProc);
-  if (coeffLut[0] != smpProc.smpV[0]) {
-    printf("\nsmpRaw[smpIdx]->samples[0]: %d\n",
-           smpRaw[smpIdx]->samples[0].smp[0]);
-    printf("smpRaw[smpIdx]->samples[1]: %d\n",
-           smpRaw[smpIdx]->samples[1].smp[0]);
-    printf("smpProc.smpV[0]: %d\n", smpProc.smpV[0]);
-
-    printf("Gold: %d Test: %d\n", coeffLut[0], smpProc.smpV[0]);
-    return 1;
-  }
-
-  for (unsigned int i = 0; i < VCT_TOTAL; i++) {
-    smpRaw[smpIdx]->samples[0].smp[0] = 0;
-    smpRaw[smpIdx]->samples[1].smp[0] = 0;
-  }
-  for (unsigned int idxCoeff = 0; idxCoeff < 9u; idxCoeff++) {
+    ecmDataBufferSwap();
     ecmFilterSample(&smpProc);
-    if (!(coeffLut[idxCoeff + 1u] == smpProc.smpV[0])) {
-      printf("\nGold: %d Test: %d\n", coeffLut[idxCoeff + 1u], smpProc.smpV[0]);
+    if (coeffLut[0] != smpProc.smpV[0]) {
+      printf("\nsmpRaw[smpIdx]->samples[0]: %d\n",
+             smpRaw[smpIdx]->samples[0].smp[0]);
+      printf("smpRaw[smpIdx]->samples[1]: %d\n",
+             smpRaw[smpIdx]->samples[1].smp[0]);
+      printf("smpProc.smpV[0]: %d\n", smpProc.smpV[0]);
+
+      printf("Gold: %d Test: %d\n", coeffLut[0], smpProc.smpV[0]);
       return 1;
     }
+
+    for (unsigned int i = 0; i < VCT_TOTAL; i++) {
+      smpRaw[smpIdx]->samples[0].smp[0] = 0;
+      smpRaw[smpIdx]->samples[1].smp[0] = 0;
+    }
+    for (unsigned int idxCoeff = 0; idxCoeff < 9u; idxCoeff++) {
+      ecmFilterSample(&smpProc);
+      if (!(coeffLut[idxCoeff + 1u] == smpProc.smpV[0])) {
+        printf("\nGold: %d Test: %d\n", coeffLut[idxCoeff + 1u],
+               smpProc.smpV[0]);
+        return 1;
+      }
+    }
+    printf("Done!\n\n");
   }
-  printf("Done!\n\n");
 
   /* Increment through the sample channels (2x for oversampling)
    * and generate the wave for each channel at each point.

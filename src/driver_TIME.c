@@ -9,7 +9,7 @@
 /*! @brief Common setup for 1 us resolution timer
  *  @param [in] delay : delay in us
  */
-static void commonSetup(uint32_t delay);
+static void commonSetup(const uint32_t delay);
 static void timerSync(Tc *tc);
 
 static volatile uint32_t timeMillisCounter  = 0;
@@ -22,7 +22,7 @@ static bool TIMER_DELAYInUse = false;
  * retries)
  * - Additional spare for concurrent operations
  */
-#define TIMER_CALLBACK_QUEUE_SIZE 8
+#define TIMER_CALLBACK_QUEUE_SIZE 8u
 
 typedef struct {
   TimerCallback_t callback;
@@ -35,14 +35,14 @@ static volatile TimerCallbackEntry_t callbackQueue[TIMER_CALLBACK_QUEUE_SIZE] =
     {0};
 static volatile uint32_t nextScheduledEvent_us = UINT32_MAX;
 
-static void commonSetup(uint32_t delay) {
+static void commonSetup(const uint32_t delay) {
   /* Unmask match interrrupt, zero counter, set compare value */
   TIMER_DELAY->COUNT32.INTENSET.reg = TC_INTENSET_MC0;
   TIMER_DELAY->COUNT32.COUNT.reg    = 0u;
   timerSync(TIMER_DELAY);
   TIMER_DELAY->COUNT32.CC[0].reg = delay;
   timerSync(TIMER_DELAY);
-  TIMER_DELAY->COUNT32.CTRLA.reg |= TC_CTRLA_ENABLE;
+  TIMER_DELAY->COUNT32.CTRLA.bit.ENABLE = 1;
   timerSync(TIMER_DELAY);
 }
 
@@ -70,16 +70,16 @@ bool timerDelay_us(uint32_t delay) {
   /* Wait for timer to complete, then disable */
   while (0 == (TIMER_DELAY->COUNT32.INTFLAG.reg & TC_INTFLAG_MC0))
     ;
-  TIMER_DELAY->COUNT32.INTENCLR.reg = TC_INTENCLR_MC0;
-  TIMER_DELAY->COUNT32.INTFLAG.reg  = TC_INTFLAG_MC0;
-  TIMER_DELAY->COUNT32.CTRLA.reg &= ~TC_CTRLA_ENABLE;
+  TIMER_DELAY->COUNT32.INTENCLR.reg     = TC_INTENCLR_MC0;
+  TIMER_DELAY->COUNT32.INTFLAG.reg      = TC_INTFLAG_MC0;
+  TIMER_DELAY->COUNT32.CTRLA.bit.ENABLE = 0;
 
   TIMER_DELAYInUse = 0;
   return true;
 }
 
 void timerDisable(void) {
-  TIMER_DELAY->COUNT32.CTRLA.reg &= ~TC_CTRLA_ENABLE;
+  TIMER_DELAY->COUNT32.CTRLA.bit.ENABLE = 0;
   NVIC_DisableIRQ(TIMER_DELAY_IRQn);
 }
 
@@ -95,7 +95,7 @@ bool timerElapsedStart(void) {
   TIMER_DELAY->COUNT32.INTENCLR.reg = TC_INTENCLR_MC0;
   TIMER_DELAY->COUNT32.COUNT.reg    = 0u;
   timerSync(TIMER_DELAY);
-  TIMER_DELAY->COUNT32.CTRLA.reg |= TC_CTRLA_ENABLE;
+  TIMER_DELAY->COUNT32.CTRLA.bit.ENABLE = 1;
   timerSync(TIMER_DELAY);
 
   TIMER_DELAYInUse = false;
@@ -107,7 +107,7 @@ uint32_t timerElapsedStop(void) {
   __disable_irq();
   const uint32_t elapsed = TIMER_DELAY->COUNT32.COUNT.reg;
   __enable_irq();
-  TIMER_DELAY->COUNT32.CTRLA.reg &= ~TC_CTRLA_ENABLE;
+  TIMER_DELAY->COUNT32.CTRLA.bit.ENABLE = 0;
   timerSync(TIMER_DELAY);
   return elapsed;
 }
@@ -164,17 +164,17 @@ void timerSetup(void) {
       TC_CTRLA_RUNSTDBY | TC_CTRLA_PRESCSYNC_RESYNC;
 
   /* TIMER_ADC MC0 match event to trigger ADC */
-  TIMER_ADC->COUNT16.EVCTRL.reg |= TC_EVCTRL_MCEO0;
+  TIMER_ADC->COUNT16.EVCTRL.bit.MCEO0 = 1;
 
   /* TIMER_ADC is running at 1 MHz, each tick is 1 us
    * PER, COUNT, and Enable require synchronisation (30.6.6)
    * COUNT is -1 to account for the wrap around
    */
-  TIMER_ADC->COUNT16.CC[0].reg = timerADCPeriod() - 1u;
+  TIMER_ADC->COUNT16.CC[0].reg = (uint16_t)(timerADCPeriod() - 1u);
   timerSync(TIMER_ADC);
   TIMER_ADC->COUNT16.COUNT.reg = 0u;
   timerSync(TIMER_ADC);
-  TIMER_ADC->COUNT16.CTRLA.reg |= TC_CTRLA_ENABLE;
+  TIMER_ADC->COUNT16.CTRLA.bit.ENABLE = 1;
   timerSync(TIMER_ADC);
 
   /* TIMER_DELAY is used as the delay and elapsed time counter
@@ -206,7 +206,7 @@ void timerSetup(void) {
 
   /* MC1 will be enabled dynamically when callbacks are scheduled */
   NVIC_EnableIRQ(TIMER_TICK_IRQn);
-  TIMER_TICK->COUNT32.CTRLA.reg |= TC_CTRLA_ENABLE;
+  TIMER_TICK->COUNT32.CTRLA.bit.ENABLE = 1;
   timerSync(TIMER_TICK);
 
   /* Setup SysTick for 1 ms periodic tick
@@ -238,8 +238,8 @@ bool timerScheduleCallback(TimerCallback_t callback, uint32_t delay_us) {
   __disable_irq();
 
   /* Find an empty slot in the queue */
-  int32_t slot = -1;
-  for (int32_t i = 0; i < TIMER_CALLBACK_QUEUE_SIZE; i++) {
+  size_t slot = SIZE_MAX;
+  for (size_t i = 0; i < TIMER_CALLBACK_QUEUE_SIZE; i++) {
     if (!callbackQueue[i].active) {
       slot                          = i;
       callbackQueue[i].callback     = callback;
@@ -253,7 +253,7 @@ bool timerScheduleCallback(TimerCallback_t callback, uint32_t delay_us) {
   /* Check if this is the next event (memory read only) */
   uint32_t time_until_new  = target_us - current_us;
   uint32_t time_until_next = nextScheduledEvent_us - current_us;
-  bool     need_update     = (slot >= 0) && (time_until_new < time_until_next);
+  bool need_update = (slot != SIZE_MAX) && (time_until_new < time_until_next);
 
   if (need_update) {
     nextScheduledEvent_us = target_us;
@@ -268,7 +268,7 @@ bool timerScheduleCallback(TimerCallback_t callback, uint32_t delay_us) {
     timerSync(TIMER_TICK); /* Sync outside critical section */
   }
 
-  return (slot >= 0);
+  return (slot != SIZE_MAX);
 }
 
 bool timerCancelCallback(TimerCallback_t callback) {
@@ -278,7 +278,7 @@ bool timerCancelCallback(TimerCallback_t callback) {
 
   __disable_irq();
 
-  for (int32_t i = 0; i < TIMER_CALLBACK_QUEUE_SIZE; i++) {
+  for (size_t i = 0; i < TIMER_CALLBACK_QUEUE_SIZE; i++) {
     if (callbackQueue[i].active && callbackQueue[i].callback == callback) {
       callbackQueue[i].active = false;
       __enable_irq();
@@ -297,7 +297,7 @@ bool timerCallbackPending(TimerCallback_t callback) {
 
   __disable_irq();
 
-  for (int32_t i = 0; i < TIMER_CALLBACK_QUEUE_SIZE; i++) {
+  for (size_t i = 0; i < TIMER_CALLBACK_QUEUE_SIZE; i++) {
     if (callbackQueue[i].active && callbackQueue[i].callback == callback) {
       __enable_irq();
       return true;
@@ -316,7 +316,7 @@ static void processCallbackQueue(uint32_t current_us) {
   uint32_t next_event = UINT32_MAX;
   bool     found_next = false;
 
-  for (int32_t i = 0; i < TIMER_CALLBACK_QUEUE_SIZE; i++) {
+  for (size_t i = 0; i < TIMER_CALLBACK_QUEUE_SIZE; i++) {
     if (callbackQueue[i].active) {
       /* Check if this callback is due (accounting for wrap) */
       uint32_t time_until = callbackQueue[i].target_us - current_us;
@@ -363,7 +363,7 @@ static void processCallbackQueue(uint32_t current_us) {
 void timerProcessPendingCallbacks(void) {
   uint32_t current_us = timerMicros();
 
-  for (int32_t i = 0; i < TIMER_CALLBACK_QUEUE_SIZE; i++) {
+  for (size_t i = 0; i < TIMER_CALLBACK_QUEUE_SIZE; i++) {
     TimerCallback_t cb          = NULL;
     bool            should_exec = false;
 
