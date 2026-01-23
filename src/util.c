@@ -3,7 +3,11 @@
 
 #include "util.h"
 
+#ifndef HOSTED
 #include "qfplib-m0-full.h"
+#else
+#include "qfplib_host.h"
+#endif
 
 static bool isnumeric(const char c);
 
