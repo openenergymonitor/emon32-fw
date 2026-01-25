@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-# Copyright (c) 2021 Alethea Katherine Flowers.
+# Copyright (c) 2021, 2026 Alethea Katherine Flowers, Angus Logan
 # Published under the standard MIT License.
 # Full text available at: https://opensource.org/licenses/MIT
 
@@ -10,7 +10,6 @@ import os.path
 import platform
 import pwd
 import subprocess
-import tempfile
 import textwrap
 
 from datetime import datetime, timezone
@@ -20,27 +19,10 @@ def username():
     return pwd.getpwuid(os.getuid())[0]
 
 
-def extract_compiled_build_info(o_path):
-    with tempfile.TemporaryDirectory() as dstdir:
-        dst = os.path.join(dstdir, "output.txt")
-        subprocess.run(
-            [
-                "arm-none-eabi-objcopy",
-                "-O",
-                "binary",
-                "--only-section=.rodata.build_info",
-                o_path,
-                dst,
-            ],
-            check=True,
-        )
-        with open(dst, "r", encoding="utf-8") as fh:
-            return fh.read().strip("\x00")
-
-
-def generate_build_info_c(configuration):
+def generate_build_info_c(configuration, cc=""):
+    gcc_path = f"{cc}arm-none-eabi-gcc"
     gcc_version = subprocess.run(
-        ["arm-none-eabi-gcc", "-dumpversion"],
+        [gcc_path, "-dumpversion"],
         capture_output=True,
         check=True,
         text=True,
@@ -74,6 +56,7 @@ def generate_build_info_c(configuration):
 
     machine = f"{username()}@{platform.node()}"
 
+    maj, min, rev = 0, 0, 0
     with open("./src/emon32.h", "r") as f:
         for ln in f:
             if "VERSION_FW" in ln:
@@ -125,11 +108,12 @@ def generate_build_info_c(configuration):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", "--configuration", default="Default")
+    parser.add_argument("--cc", "--compiler_path", default="")
     parser.add_argument("output", type=argparse.FileType("w", encoding="utf-8"))
 
     args = parser.parse_args()
 
-    info, output = generate_build_info_c(args.config)
+    info, output = generate_build_info_c(args.config, args.cc)
 
     args.output.write(output)
 

@@ -5,8 +5,8 @@ OUT = bin
 ##############################################################################
 .PHONY: all directory clean size
 
-# Path to toolchain, e.g. /path/to/bin/ Leave empty if already on path.
-TC_PATH =
+# Path to toolchain, e.g. /path/to/bin/
+TC_PATH ?=
 CC = $(TC_PATH)arm-none-eabi-gcc
 OBJCOPY = $(TC_PATH)arm-none-eabi-objcopy
 SIZE = $(TC_PATH)arm-none-eabi-size
@@ -61,7 +61,7 @@ OBJS += $(BUILD)/asm_math.o
 
 # Always update the build information. This forces this to run every time. Exit
 # if this fails - likely to be a path of Python version issue.
-BUILD_INFO := $(shell python3 ./scripts/build_info.py ./src/emon32_build_info.c)
+BUILD_INFO := $(shell python3 ./scripts/build_info.py $(if $(TC_PATH),--cc $(TC_PATH)) ./src/emon32_build_info.c)
 ifeq ($(strip $(BUILD_INFO)), )
 $(error 1)
 endif

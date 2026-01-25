@@ -111,6 +111,14 @@ make -j
 
 Images in `.bin`, `.hex`, `.elf`, and `.uf2` formats will be in the `bin/` folder. The image names include the version and the git commit hash for traceability.
 
+To update from the repository, in the `emon32-fw` folder, run:
+
+```{bash}
+git pull
+make clean
+make -j
+```
+
 ### Flash and debug
 
 The emonPi3/Tx6 exposes a standard Arm Cortex-M 10-pin SWD connector. You can flash and debug the microcontroller using a CMSIS-DAP compatible debugger using `openocd` and `arm-none-eabi-gdb`. There is no requirement to use the vendor IDE and tools.
