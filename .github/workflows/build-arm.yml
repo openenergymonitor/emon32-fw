@@ -31,3 +31,8 @@ jobs:
               with:
                 name: firmware-${{ github.ref_name }}
                 path: bin/emon32*.*
+
+            - name: Upload to Release
+              uses: softprops/action-gh-release@v2
+              with:
+                files: bin/emon32*.*
