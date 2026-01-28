@@ -1528,6 +1528,7 @@ void configProcessCmd(void) {
       "   - x = s   : save current addresses\r\n"
       "   - x = <n> : save address to index n\r\n"
       " - p<n>        : set the RF power level\r\n"
+      " - q           : reload saved config (undo unsaved changes)\r\n"
       " - r           : restore defaults\r\n"
       " - s           : save settings to NVM\r\n"
       " - t           : trigger report on next cycle\r\n"
@@ -1643,6 +1644,13 @@ void configProcessCmd(void) {
       unsavedChange = true;
       emon32EventSet(EVT_CONFIG_CHANGED);
     }
+    break;
+  case 'q':
+    /* Reload saved configuration from NVM (undo unsaved changes) */
+    eepromRead(0, &config, sizeof(config));
+    serialPuts("> Reloaded saved configuration.\r\n");
+    unsavedChange = false;
+    emon32EventSet(EVT_CONFIG_CHANGED);
     break;
   case 'r':
     configDefault();
