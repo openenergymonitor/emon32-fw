@@ -261,7 +261,7 @@ static RFMSend_t rfmSendWithRetry(uint8_t n, const uint8_t retries,
     uint32_t tStart = timerMillis();
     (void)rfmSetMode(RFM69_MODE_STANDBY); // Turn off Rx while filling FIFO
     while (0 == (rfmReadReg(REG_IRQFLAGS1) & RFM_IRQFLAGS1_MODEREADY)) {
-      if (timerMillisDelta(tStart) > 25u) {
+      if (timerMillisDelta(tStart) > 100u) {
         return RFM_FUNCTIONAL_FAILURE;
       }
     }
@@ -279,7 +279,7 @@ static RFMSend_t rfmSendWithRetry(uint8_t n, const uint8_t retries,
     tStart = timerMillis();
     (void)rfmSetMode(RFM69_MODE_TX);
     while (0 == (rfmReadReg(REG_IRQFLAGS2) & RFM_IRQFLAGS2_PACKETSENT)) {
-      if (timerMillisDelta(tStart > 25u)) {
+      if (timerMillisDelta(tStart) > 100u) {
         return RFM_FUNCTIONAL_FAILURE;
       }
     }
