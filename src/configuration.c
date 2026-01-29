@@ -1058,7 +1058,7 @@ static void printSettingsHR(void) {
   if (config.dataTxCfg.useRFM) {
     serialPuts("RFM69, ");
     printSettingRFFreq();
-    printf_(" MHz @ %ddb\r\n", (-18 + config.dataTxCfg.rfmPwr));
+    printf_(" MHz @ %ddBm\r\n", (-18 + config.dataTxCfg.rfmPwr));
     printf_("  - Data group:            %d\r\n", config.baseCfg.dataGrp);
     printf_("  - Node ID:               %d\r\n", config.baseCfg.nodeID);
   } else {
