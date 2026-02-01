@@ -37,13 +37,6 @@ typedef struct EPAccum_ {
   uint32_t P; /* Pulse */
 } EPAccum_t;
 
-typedef struct TransmitOpt_ {
-  bool    json;      /* Use JSON format */
-  bool    useRFM;    /* Use wireless */
-  bool    logSerial; /* Log to serial */
-  uint8_t node;      /*  Node ID */
-} TransmitOpt_t;
-
 typedef struct TxBlink_ {
   bool     txIndicate; /* Tx in progress */
   uint32_t timeBlink;  /* Time to blink LED for */
@@ -81,10 +74,9 @@ static void ssd1306Setup(void);
 static void tempReadEvt(Emon32Dataset_t *pData, const uint32_t numT);
 static uint32_t tempSetup(Emon32Dataset_t *pData);
 static void     totalEnergy(const Emon32Dataset_t *pData, EPAccum_t *pAcc);
-static void transmitData(const Emon32Dataset_t *pSrc, const TransmitOpt_t *pOpt,
-                         char *txBuffer);
-static void ucSetup(void);
-static void waitWithUSB(uint32_t t_ms);
+static void     transmitData(const Emon32Dataset_t *pSrc);
+static void     ucSetup(void);
+static void     waitWithUSB(uint32_t t_ms);
 
 /*************************************
  * Functions
@@ -531,10 +523,11 @@ static void totalEnergy(const Emon32Dataset_t *pData, EPAccum_t *pAcc) {
   }
 }
 
-static void transmitData(const Emon32Dataset_t *pSrc, const TransmitOpt_t *pOpt,
-                         char *txBuffer) {
+static void transmitData(const Emon32Dataset_t *pSrc) {
 
-  CHActive_t chsActive;
+  char          txBuffer[TX_BUFFER_W] = {0};
+  CHActive_t    chsActive             = {false};
+  const uint8_t nodeID                = pConfig->baseCfg.nodeID;
 
   for (size_t i = 0; i < NUM_V; i++) {
     chsActive.V[i] = pConfig->voltageCfg[i].vActive;
@@ -550,11 +543,12 @@ static void transmitData(const Emon32Dataset_t *pSrc, const TransmitOpt_t *pOpt,
     chsActive.pulse[i] = pConfig->opaCfg[i].opaActive && isPulse;
   }
 
-  (void)dataPackSerial(pSrc, txBuffer, TX_BUFFER_W, pOpt->json, &chsActive);
+  (void)dataPackSerial(pSrc, txBuffer, TX_BUFFER_W, pConfig->baseCfg.useJson,
+                       &chsActive);
 
-  if (pOpt->useRFM) {
+  if (pConfig->dataTxCfg.useRFM) {
 
-    if (pOpt->logSerial) {
+    if (pConfig->baseCfg.logToSerial) {
       serialPuts(txBuffer);
     }
 
@@ -588,13 +582,13 @@ static void transmitData(const Emon32Dataset_t *pSrc, const TransmitOpt_t *pOpt,
         }
       }
 
-      rfmSetAddress(pOpt->node);
+      rfmSetAddress(nodeID);
 
       uint8_t nPacked = dataPackPacked(pSrc, rfmGetBuffer(), PACKED_CT1_6);
       rfmResult       = rfmSendBuffer(nPacked, RFM_RETRIES, &retryCount);
 
       if ((RFM_SUCCESS == rfmResult) && sendTempPulse) {
-        rfmSetAddress(pOpt->node + 1u);
+        rfmSetAddress(nodeID + 1u);
 
         retryCount = 0;
         nPacked    = dataPackPacked(pSrc, rfmGetBuffer(), PACKED_TEMP_PULSE);
@@ -602,7 +596,7 @@ static void transmitData(const Emon32Dataset_t *pSrc, const TransmitOpt_t *pOpt,
       }
 
       if ((RFM_SUCCESS == rfmResult) && sendCT7_12) {
-        rfmSetAddress(pOpt->node + 2u);
+        rfmSetAddress(nodeID + 2u);
 
         retryCount = 0;
         nPacked    = dataPackPacked(pSrc, rfmGetBuffer(), PACKED_CT7_12);
@@ -652,10 +646,9 @@ static void waitWithUSB(uint32_t t_ms) {
 
 int main(void) {
 
-  Emon32Dataset_t    dataset               = {0};
-  uint32_t           numTempSensors        = 0;
-  Emon32Cumulative_t nvmCumulative         = {0};
-  char               txBuffer[TX_BUFFER_W] = {0};
+  Emon32Dataset_t    dataset        = {0};
+  uint32_t           numTempSensors = 0;
+  Emon32Cumulative_t nvmCumulative  = {0};
 
   ucSetup();
   uiLedColour(LED_RED);
@@ -827,16 +820,11 @@ int main(void) {
        * configured channels.
        */
       if (evtPending(EVT_PROCESS_DATASET)) {
-        TransmitOpt_t opt;
-        opt.useRFM    = pConfig->dataTxCfg.useRFM;
-        opt.logSerial = pConfig->baseCfg.logToSerial;
-        opt.node      = pConfig->baseCfg.nodeID;
-        opt.json      = pConfig->baseCfg.useJson;
 
         dataset.msgNum++;
         dataset.pECM = ecmProcessSet();
         datasetAddPulse(&dataset);
-        transmitData(&dataset, &opt, txBuffer);
+        transmitData(&dataset);
 
         /* If the energy used since the last storage is greater than the
          * configured energy delta then save the accumulated energy to NVM.
