@@ -576,7 +576,7 @@ static void configure1WList(void) {
       printf_("%d [->%d] ", (i + 1),
               (tempMapToLogical(TEMP_INTF_ONEWIRE, i) + 1));
       for (size_t j = 0; j < 8; j++) {
-        printf_("%x%s", (uint8_t)((pAddr[i] >> (8 * j)) & 0xFF),
+        printf_("%02x%s", (uint8_t)((pAddr[i] >> (8 * j)) & 0xFF),
                 ((j == 7) ? "\r\n" : " "));
       }
     }
