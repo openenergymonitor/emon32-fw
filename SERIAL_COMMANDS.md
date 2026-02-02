@@ -96,6 +96,8 @@ s                    # Save configuration
 
 ### Configure a pulse input
 
+These settings are suitable for the OpenEnergyMonitor pulse counter.
+
 ```
 m1 1 r 0 50          # Enable OPA1, rising edge, pull-up off, 50ms debounce
 s                    # Save configuration

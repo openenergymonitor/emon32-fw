@@ -21,7 +21,17 @@ typedef struct RFMRx_ {
   bool     ackReq;
 } RFMRx_t;
 
+typedef struct RFMTx_ {
+  uint32_t tSPI_us;     /* Time of last SPI access (us) */
+  uint32_t tTimeout_ms; /* Time of operation start (ms) */
+  uint8_t  retryNum;    /* Which retry are we on */
+  uint8_t  retryNumMax; /* Maximum number of attempts */
+  uint8_t  n;           /* Number of bytes in Tx buffer */
+} RFMTx_t;
+
 static bool      rfmAckRecv(uint16_t fromId);
+static bool      rfmCheckCSMA(void);
+static bool      rfmCheckSendComplete(void);
 static void      rfmFreqToBand(const RFM_Freq_t freq, uint8_t *band);
 static void      rfmPacketHandler(void); /* LPL: interruptHandler */
 static uint8_t   rfmReadReg(const uint8_t addr);
@@ -29,10 +39,11 @@ static int16_t   rfmReadRSSI(void);
 static void      rfmReset(void);
 static void      rfmRxBegin(void); /* LPL: receiveBegin */
 static bool      rfmRxDone(void);  /* LPL: receiveDone */
-static RFMSend_t rfmSendWithRetry(uint8_t n, const uint8_t retries,
-                                  uint8_t *pRetryCount);
+static void      rfmRxRestart(void);
+static RFMSend_t rfmSendPacket(void);
 static bool      rfmSetMode(RFMMode_t mode);
 static bool      rfmTxAvailable(void); /* LPL: canSend */
+static bool      rfmTxIsIdle(void);
 static void      rfmWriteReg(const uint8_t addr, const uint8_t data);
 static uint8_t   spiRx(void);
 static void      spiTx(const uint8_t b);
@@ -42,14 +53,44 @@ static bool          initDone      = false;
 static uint8_t       rfmBuffer[64] = {0};
 static int8_t        rfmMode       = 0;
 static RFMRx_t       rfmRx         = {0};
+static RFMTx_t       rfmTx         = {0};
+static RFMTxState_t  rfmTxState    = RFM_TX_IDLE;
 static uint8_t       rxData[64]    = {0};
 static volatile bool rxRdy         = false;
 static const Pin_t   rst           = {GRP_RFM_INTF, PIN_RFM_RST};
 static const Pin_t   sel           = {GRP_SERCOM_SPI, PIN_SPI_RFM_SS};
 
 static bool rfmAckRecv(uint16_t fromId) {
-  if (rfmRxDone()) {
-    return (fromId == rfmRx.senderID) && rfmRx.ackRecv;
+  if (timerMicrosDelta(rfmTx.tSPI_us > 1000u)) {
+    rfmTx.tSPI_us = timerMicros();
+    if (rfmRxDone()) {
+      return (fromId == rfmRx.senderID) && rfmRx.ackRecv;
+    }
+  }
+  return false;
+}
+
+static bool rfmCheckCSMA(void) {
+
+  /* LPL send */
+  if (timerMicrosDelta(rfmTx.tSPI_us) > 1000u) {
+    rfmTx.tSPI_us = timerMicros();
+
+    if (!rfmTxAvailable()) {
+      (void)rfmRxDone();
+      return false;
+    } else {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+static bool rfmCheckSendComplete(void) {
+  if (timerMicrosDelta(rfmTx.tSPI_us) > 1000) {
+    rfmTx.tSPI_us = timerMicros();
+    return (rfmReadReg(REG_IRQFLAGS2) & RFM_IRQFLAGS2_PACKETSENT);
   }
   return false;
 }
@@ -236,64 +277,35 @@ static bool rfmRxDone(void) {
   return false;
 }
 
-/*! @brief Send packet with optional retrys
- *  @param [in] n : number of bytes to send
- *  @param [in] retries : number of retries to attempt
- *  @param [out] pRetryCount : pointer to store number of retries for logging
- *  @return status of sending the packet
- */
-static RFMSend_t rfmSendWithRetry(uint8_t n, const uint8_t retries,
-                                  uint8_t *pRetryCount) {
+static void rfmRxRestart(void) {
+  rfmWriteReg(REG_PACKETCONFIG2,
+              ((rfmReadReg(REG_PACKETCONFIG2) & 0xFB) | RFM_PACKET2_RXRESTART));
 
-  for (size_t r = 0; r < retries; r++) {
-    *pRetryCount = *pRetryCount + 1;
+  rfmTx.tSPI_us = timerMicros();
+}
 
-    /* LPL send */
-    rfmWriteReg(REG_PACKETCONFIG2, ((rfmReadReg(REG_PACKETCONFIG2) & 0xFB) |
-                                    RFM_PACKET2_RXRESTART));
-    const uint32_t tNow = timerMillis();
-    while (!rfmTxAvailable() &&
-           (timerMillisDelta(tNow) < RFM69_CSMA_LIMIT_MS)) {
-      (void)rfmRxDone();
-    }
-
-    /* LPL sendFrame */
-    uint32_t tStart = timerMillis();
-    (void)rfmSetMode(RFM69_MODE_STANDBY); // Turn off Rx while filling FIFO
-    while (0 == (rfmReadReg(REG_IRQFLAGS1) & RFM_IRQFLAGS1_MODEREADY)) {
-      if (timerMillisDelta(tStart) > 100u) {
-        return RFM_FUNCTIONAL_FAILURE;
-      }
-    }
-    spiSelect(sel);
-    spiTx(REG_FIFO | 0x80);
-    spiTx(n + 3);
-    spiTx(5u); // from OEM Tx
-    spiTx((uint8_t)address);
-    spiTx(RFM69_CTL_REQACK); // CTL byte
-    spiSendBuffer(SERCOM_SPI, rfmBuffer, n);
-    spiDeSelect(sel);
-
-    /* Enter Tx mode, no need to wait for the mode to be ready as the Tx will
-     * empty the FIFO when ready. */
-    tStart = timerMillis();
-    (void)rfmSetMode(RFM69_MODE_TX);
-    while (0 == (rfmReadReg(REG_IRQFLAGS2) & RFM_IRQFLAGS2_PACKETSENT)) {
-      if (timerMillisDelta(tStart) > 100u) {
-        return RFM_FUNCTIONAL_FAILURE;
-      }
-    }
-    (void)rfmSetMode(RFM69_MODE_STANDBY);
-
-    /* Listen for the acknowledgement */
-    const uint32_t tSent = timerMillis();
-    while (timerMillisDelta(tSent) < RFM_TIMEOUT) {
-      if (rfmAckRecv(5)) {
-        return RFM_SUCCESS;
-      }
+static RFMSend_t rfmSendPacket(void) {
+  uint32_t tStart = timerMillis();
+  (void)rfmSetMode(RFM69_MODE_STANDBY); // Turn off Rx while filling FIFO
+  while (0 == (rfmReadReg(REG_IRQFLAGS1) & RFM_IRQFLAGS1_MODEREADY)) {
+    if (timerMillisDelta(tStart) > 100u) {
+      return RFM_FUNCTIONAL_FAILURE;
     }
   }
-  return RFM_TIMED_OUT;
+  spiSelect(sel);
+  spiTx(REG_FIFO | 0x80);
+  spiTx(rfmTx.n + 3);
+  spiTx(5u); // from OEM Tx
+  spiTx((uint8_t)address);
+  spiTx(RFM69_CTL_REQACK); // CTL byte, request acknowledgement.
+  spiSendBuffer(SERCOM_SPI, rfmBuffer, rfmTx.n);
+  spiDeSelect(sel);
+
+  /* Enter Tx mode, no need to wait for the mode to be ready as the Tx will
+   * empty the FIFO when ready. */
+  (void)rfmSetMode(RFM69_MODE_TX);
+
+  return RFM_SUCCESS;
 }
 
 static bool rfmSetMode(RFMMode_t mode) {
@@ -339,8 +351,6 @@ static bool rfmSetMode(RFMMode_t mode) {
 
 uint8_t *rfmGetBuffer(void) { return rfmBuffer; }
 
-void rfmInterrupt(void) { rxRdy = true; }
-
 bool rfmInit(const RFMOpt_t *pOpt) {
 
   /* Immediately return if the interfaces are being externally controlled. */
@@ -348,7 +358,8 @@ bool rfmInit(const RFMOpt_t *pOpt) {
     return false;
   }
 
-  initDone = false;
+  initDone   = false;
+  rfmTxState = RFM_TX_IDLE;
 
   uint8_t band[3];
   rfmFreqToBand(pOpt->freq, band);
@@ -390,7 +401,7 @@ bool rfmInit(const RFMOpt_t *pOpt) {
   /* Initialise RFM69 */
   while (0xAA != rfmReadReg(REG_SYNCVALUE1)) {
     rfmWriteReg(REG_SYNCVALUE1, 0xAAu);
-    if (timerMillisDelta(tStart) > 25) {
+    if (timerMillisDelta(tStart) > 25u) {
       return false;
     }
   }
@@ -398,7 +409,7 @@ bool rfmInit(const RFMOpt_t *pOpt) {
   tStart = timerMillis();
   while (0x55u != rfmReadReg(REG_SYNCVALUE1)) {
     rfmWriteReg(REG_SYNCVALUE1, 0x55u);
-    if (timerMillisDelta(tStart) > 25) {
+    if (timerMillisDelta(tStart) > 25u) {
       return false;
     }
   }
@@ -419,19 +430,11 @@ bool rfmInit(const RFMOpt_t *pOpt) {
     return false;
   }
 
-  tStart = timerMillis();
-  while (0 == (rfmReadReg(REG_IRQFLAGS1) & RFM_IRQFLAGS1_MODEREADY)) {
-    if (timerMillisDelta(tStart) > 25) {
-      return false;
-    }
-  }
-
   initDone = true;
   return true;
 }
 
-RFMSend_t rfmSendBuffer(const uint8_t n, const uint8_t retries,
-                        uint8_t *pRetryCount) {
+RFMSend_t rfmSendBuffer(const uint8_t n, const uint8_t retries) {
   if (n > 61) {
     return RFM_N_TOO_LARGE;
   }
@@ -440,10 +443,75 @@ RFMSend_t rfmSendBuffer(const uint8_t n, const uint8_t retries,
     return RFM_NO_INIT;
   }
 
-  return rfmSendWithRetry(n, retries, pRetryCount);
+  if (!rfmTxIsIdle()) {
+    return RFM_NOT_IDLE;
+  }
+
+  /* RFM Tx SETUP */
+  rfmTx.n           = n;
+  rfmTx.retryNum    = 1u;
+  rfmTx.retryNumMax = retries;
+  rfmTx.tTimeout_ms = timerMillis();
+  rfmTxState        = RFM_TX_AWAIT_CMSA;
+
+  /* Start state machine running */
+  rfmRxRestart();
+  (void)rfmTxAdvance();
+
+  return RFM_SUCCESS;
 }
 
 void rfmSetAddress(const uint8_t addr) {
   address = addr;
   rfmWriteReg(REG_NODEADRS, addr);
 }
+
+RFMTxState_t rfmTxAdvance(void) {
+  switch (rfmTxState) {
+  case RFM_TX_AWAIT_CMSA:
+    /* Wait for clear air. If there is none in the time limit, proceed anyway */
+    if (rfmCheckCSMA() ||
+        (timerMillisDelta(rfmTx.tTimeout_ms) > RFM69_CSMA_LIMIT_MS)) {
+      if (RFM_FUNCTIONAL_FAILURE == rfmSendPacket()) {
+        rfmTxState = RFM_TX_ABORT;
+      } else {
+        rfmTx.tTimeout_ms = timerMillis();
+        rfmTxState        = RFM_TX_AWAIT_TX;
+      }
+    }
+    break;
+  case RFM_TX_AWAIT_TX:
+    if (timerMillisDelta(rfmTx.tTimeout_ms) > 100u) {
+      rfmTxState = RFM_TX_ABORT;
+    } else if (rfmCheckSendComplete()) {
+      (void)rfmSetMode(RFM69_MODE_STANDBY);
+      rfmTx.tTimeout_ms = timerMillis();
+      rfmTxState        = RFM_TX_AWAIT_ACK;
+    }
+    break;
+  case RFM_TX_AWAIT_ACK:
+    /* Wait for acknowledgement up to limit */
+    if (timerMillisDelta(rfmTx.tTimeout_ms) > RFM_TIMEOUT_ACK) {
+      rfmTx.retryNum++;
+      if (rfmTx.retryNum > rfmTx.retryNumMax) {
+        rfmTxState = RFM_TX_IDLE;
+      } else {
+        rfmTx.tTimeout_ms = timerMillis();
+        rfmTxState        = RFM_TX_AWAIT_CMSA;
+        rfmRxRestart();
+      }
+    } else {
+      if (rfmAckRecv(5u)) {
+        rfmTxState = RFM_TX_IDLE;
+      }
+    }
+    break;
+  case RFM_TX_IDLE:
+  case RFM_TX_ABORT:
+    break;
+  }
+
+  return rfmTxState;
+}
+
+static bool rfmTxIsIdle(void) { return (RFM_TX_IDLE == rfmTxState); }

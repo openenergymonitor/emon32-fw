@@ -16,12 +16,21 @@ typedef struct RFMOpt_ {
 
 typedef enum RFMSend_ {
   RFM_NO_INIT,            /* RFM not initialised */
+  RFM_NOT_IDLE,           /* Attempted to start when Tx ongoing */
   RFM_TIMED_OUT,          /* An RF feature timed out */
   RFM_FUNCTIONAL_FAILURE, /* An RFM function timed out, requires reset */
   RFM_FAILED,             /* Generic failure */
   RFM_SUCCESS,            /* Successful operation */
   RFM_N_TOO_LARGE         /* Packet too large */
 } RFMSend_t;
+
+typedef enum RFMTxState_ {
+  RFM_TX_IDLE,
+  RFM_TX_AWAIT_CMSA,
+  RFM_TX_AWAIT_TX,
+  RFM_TX_AWAIT_ACK,
+  RFM_TX_ABORT
+} RFMTxState_t;
 
 /*! @brief Get a pointer to the RFM69's data buffer
  *  @return pointer to RFM69 buffer
@@ -34,17 +43,17 @@ uint8_t *rfmGetBuffer(void);
  */
 bool rfmInit(const RFMOpt_t *pOpt);
 
-/*! @brief The interrupt handler for RFM69 receive */
-void rfmInterrupt(void);
+/*! @brief Advance the RFM Tx state machine
+ *  @return the state which the state machine is in
+ */
+RFMTxState_t rfmTxAdvance(void);
 
 /*! @brief Send data through the RFM69
  *  @param [in] n : number of bytes to be sent
  *  @param [in] retries : number of retry attempts
- *  @param [out] pRetryCount : number of retry attempts for logging
  *  @return status of the attempt to send
  */
-RFMSend_t rfmSendBuffer(const uint8_t n, const uint8_t retries,
-                        uint8_t *pRetryCount);
+RFMSend_t rfmSendBuffer(const uint8_t n, const uint8_t retries);
 
 /*! @brief Sets the RFM69's address
  *  @param [in] addr : address to set the RFM69

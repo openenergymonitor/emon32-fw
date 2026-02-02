@@ -74,7 +74,7 @@ static void ssd1306Setup(void);
 static void tempReadEvt(Emon32Dataset_t *pData, const uint32_t numT);
 static uint32_t tempSetup(Emon32Dataset_t *pData);
 static void     totalEnergy(const Emon32Dataset_t *pData, EPAccum_t *pAcc);
-static void     transmitData(const Emon32Dataset_t *pSrc);
+static void     transmitData(const Emon32Dataset_t *pSrc, uint32_t *pPkt);
 static void     ucSetup(void);
 static void     waitWithUSB(uint32_t t_ms);
 
@@ -523,11 +523,10 @@ static void totalEnergy(const Emon32Dataset_t *pData, EPAccum_t *pAcc) {
   }
 }
 
-static void transmitData(const Emon32Dataset_t *pSrc) {
+static void transmitData(const Emon32Dataset_t *pSrc, uint32_t *pPkt) {
 
-  char          txBuffer[TX_BUFFER_W] = {0};
-  CHActive_t    chsActive             = {false};
-  const uint8_t nodeID                = pConfig->baseCfg.nodeID;
+  char       txBuffer[TX_BUFFER_W] = {0};
+  CHActive_t chsActive             = {false};
 
   for (size_t i = 0; i < NUM_V; i++) {
     chsActive.V[i] = pConfig->voltageCfg[i].vActive;
@@ -553,15 +552,14 @@ static void transmitData(const Emon32Dataset_t *pSrc) {
     }
 
     if (sercomExtIntfEnabled()) {
-      uint8_t   retryCount    = 0;
-      RFMSend_t rfmResult     = RFM_FAILED;
-      bool      sendTempPulse = false;
-      bool      sendCT7_12    = false;
+
+      /* Always send CT1-6 */
+      *pPkt = 0x1u;
 
       /* Only send temperature + pulse if found or active */
       for (size_t t = 0; t < TEMP_MAX_ONEWIRE; t++) {
         if (4800 != pSrc->temp[t]) {
-          sendTempPulse = true;
+          *pPkt |= (1u << 1);
           break;
         }
       }
@@ -569,7 +567,7 @@ static void transmitData(const Emon32Dataset_t *pSrc) {
         const uint8_t func    = pConfig->opaCfg[p].func;
         const bool    isPulse = ('r' == func) || ('f' == func) || ('b' == func);
         if (isPulse && pConfig->opaCfg[p].opaActive) {
-          sendTempPulse = true;
+          *pPkt |= (1u << 1);
           break;
         }
       }
@@ -577,39 +575,13 @@ static void transmitData(const Emon32Dataset_t *pSrc) {
       /* Only send CT7-12 if any are active */
       for (size_t i = (NUM_CT / 2); i < (NUM_CT / 2); i++) {
         if (pConfig->ctCfg[i].ctActive) {
-          sendCT7_12 = true;
+          *pPkt |= (1u << 2);
           break;
         }
       }
 
-      rfmSetAddress(nodeID);
-
-      uint8_t nPacked = dataPackPacked(pSrc, rfmGetBuffer(), PACKED_CT1_6);
-      rfmResult       = rfmSendBuffer(nPacked, RFM_RETRIES, &retryCount);
-
-      if ((RFM_SUCCESS == rfmResult) && sendTempPulse) {
-        rfmSetAddress(nodeID + 1u);
-
-        retryCount = 0;
-        nPacked    = dataPackPacked(pSrc, rfmGetBuffer(), PACKED_TEMP_PULSE);
-        rfmResult  = rfmSendBuffer(nPacked, RFM_RETRIES, &retryCount);
-      }
-
-      if ((RFM_SUCCESS == rfmResult) && sendCT7_12) {
-        rfmSetAddress(nodeID + 2u);
-
-        retryCount = 0;
-        nPacked    = dataPackPacked(pSrc, rfmGetBuffer(), PACKED_CT7_12);
-        rfmResult  = rfmSendBuffer(nPacked, RFM_RETRIES, &retryCount);
-      }
-
-      /* If the RFM has _functionally_ failed, rather than just congestion on
-       * the RF link, reset and reconfigure. */
-      if (RFM_FUNCTIONAL_FAILURE == rfmResult) {
-        rfmConfigure();
-      }
+      emon32EventSet(EVT_TX_RFM);
     }
-
   } else {
     serialPuts(txBuffer);
   }
@@ -649,6 +621,7 @@ int main(void) {
   Emon32Dataset_t    dataset        = {0};
   uint32_t           numTempSensors = 0;
   Emon32Cumulative_t nvmCumulative  = {0};
+  uint32_t           rfmPkts        = 0;
 
   ucSetup();
   uiLedColour(LED_RED);
@@ -824,7 +797,7 @@ int main(void) {
         dataset.msgNum++;
         dataset.pECM = ecmProcessSet();
         datasetAddPulse(&dataset);
-        transmitData(&dataset);
+        transmitData(&dataset, &rfmPkts);
 
         /* If the energy used since the last storage is greater than the
          * configured energy delta then save the accumulated energy to NVM.
@@ -837,6 +810,47 @@ int main(void) {
         txBlink.timeBlink  = timerMillis();
         txBlink.txIndicate = true;
         emon32EventClr(EVT_PROCESS_DATASET);
+      }
+
+      if (EVT_TX_RFM) {
+        /* Progress Tx state machine */
+        RFMTxState_t txState = rfmTxAdvance();
+
+        if (RFM_TX_IDLE == txState) {
+          bool          sendPkt = false;
+          uint8_t       nodeID  = pConfig->baseCfg.nodeID;
+          PackedRange_t range   = PACKED_CT1_6;
+          uint32_t      mask    = 0x1u;
+
+          if (0 == rfmPkts) {
+            /* All packets sent */
+            emon32EventClr(EVT_TX_RFM);
+          } else if (rfmPkts & 0x1u) {
+            sendPkt = true;
+          } else if (rfmPkts & (1u << 1)) {
+            sendPkt = true;
+            nodeID += 1u;
+            range = PACKED_TEMP_PULSE;
+            mask  = (1u << 1);
+          } else if (rfmPkts & (1u << 2)) {
+            sendPkt = true;
+            nodeID += 2u;
+            range = PACKED_CT7_12;
+            mask  = (1u << 2);
+          }
+
+          if (sendPkt) {
+            rfmSetAddress(nodeID);
+            (void)rfmSendBuffer(dataPackPacked(&dataset, rfmGetBuffer(), range),
+                                RFM_RETRIES);
+            rfmPkts &= ~mask;
+          }
+
+        } else if (RFM_TX_ABORT == txState) {
+          /* RFM module blocked, reset and reconfigure */
+          rfmConfigure();
+          emon32EventClr(EVT_TX_RFM);
+        }
       }
 
       /* Configuration:

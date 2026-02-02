@@ -49,7 +49,7 @@ The following default values are set out of the box.
 | REPORT_TIME_DEF     | 9.8       | Time between reports in seconds           |
 | NUM_CT_ACTIVE_DEF   | 6         | Only onboard CT sensors in use            |
 
-OPA1 is configured as a pulse input and OPA2 is configured as a OneWire input.
+By default, OPA1 and OPA2 are enabled and configured as OneWire interfaces. OPA3 is disabled and configured as a pulse input.
 
 ### Version information
 
