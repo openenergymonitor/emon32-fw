@@ -1,4 +1,5 @@
 #include <stddef.h>
+#include <string.h>
 
 #include "emon32_samd.h"
 
@@ -281,6 +282,8 @@ static void oneWireWriteBytes(const void *pSrc, const uint8_t n,
     }
   }
 }
+
+void ds18b20AddressClr(void) { memset(devTableAddr, 0, sizeof(devTableAddr)); }
 
 uint64_t *ds18b20AddressGet(void) { return devTableAddr; }
 

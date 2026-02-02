@@ -93,8 +93,6 @@ typedef enum EVTSRC_ {
   EVT_TX_RFM          = 9u,
   EVT_OPA_INIT        = 14u,
   EVT_TEMP_READ       = 15u,
-  EVT_CONFIG_CHANGED  = 16u,
-  EVT_CONFIG_SAVED    = 17u,
   EVT_PROCESS_CMD     = 19u,
   EVT_PROCESS_DATASET = 20u,
   EVT_STORE_ACCUM     = 21u,
@@ -108,6 +106,9 @@ typedef enum EVTSRC_ {
  *  @param [in] s: pointer to null terminated string
  */
 void debugPuts(const char *s);
+
+/*! @brief Configure the continuous energy monitoring system */
+void ecmConfigure(void);
 
 /*! @brief Clear a pending event/interrupt flag after the task has been handled
  *  @param [in] Event source in enum

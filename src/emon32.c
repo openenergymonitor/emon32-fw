@@ -63,7 +63,6 @@ static void cumulativeProcess(Emon32Cumulative_t    *pPkt,
                               const Emon32Dataset_t *pData,
                               const uint32_t         epDeltaStore);
 static void datasetAddPulse(Emon32Dataset_t *pDst);
-static void ecmConfigure(void);
 static void ecmDmaCallback(void);
 static void evtKiloHertz(void);
 static bool evtPending(EVTSRC_t evt);
@@ -211,13 +210,8 @@ void debugPuts(const char *s) {
   }
 }
 
-/*! @brief Configure the continuous energy monitoring system
- *  @param [in] pCfg : pointer to the configuration struct
- */
+/*! @brief Configure the continuous energy monitoring system */
 void ecmConfigure(void) {
-  /* Makes the continuous monitoring setup agnostic to the data strcuture
-   * used for storage, and avoids any awkward alignment from packing.
-   */
 
   extern const uint8_t ainRemap[NUM_CT];
 
@@ -866,12 +860,6 @@ int main(void) {
         pulseConfigure();
         numTempSensors = tempSetup(&dataset);
         emon32EventClr(EVT_OPA_INIT);
-      }
-      if (evtPending(EVT_CONFIG_CHANGED)) {
-        emon32EventClr(EVT_CONFIG_CHANGED);
-      }
-      if (evtPending(EVT_CONFIG_SAVED)) {
-        emon32EventClr(EVT_CONFIG_SAVED);
       }
     }
 

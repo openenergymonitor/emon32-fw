@@ -14,6 +14,9 @@ typedef struct DS18B20_conf_ {
   uint8_t opaIdx;
 } DS18B20_conf_t;
 
+/*! @brief Clear the address table */
+void ds18b20AddressClr(void);
+
 /*! @brief Get the table of found device addresses
  *  @return : pointer to address table
  */

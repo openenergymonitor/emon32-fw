@@ -21,7 +21,10 @@ float tempAsFloat(const TEMP_INTF_t intf, const int16_t tFixed) {
   return ret;
 }
 
-void tempInitClear(void) { numSensors = 0; }
+void tempInitClear(void) {
+  numSensors = 0;
+  ds18b20AddressClr();
+}
 
 uint32_t tempInitSensors(const TEMP_INTF_t intf, const void *pParams) {
   EMON32_ASSERT(pParams);

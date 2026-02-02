@@ -66,6 +66,7 @@ static void     configure1WList(void);
 static bool     configure1WSave(void);
 static bool     configureOPA(void);
 static bool     configureNodeID(void);
+static void     configureReconfigureAll(void);
 static bool     configureRFEnable(void);
 static bool     configureRF433(void);
 static bool     configureRFPower(void);
@@ -772,6 +773,18 @@ static bool configureNodeID(void) {
   return true;
 }
 
+static void configureReconfigureAll(void) {
+  rfmSetFrequency(config.dataTxCfg.rfmFreq);
+  rfmSetPowerLevel(config.dataTxCfg.rfmPwr);
+
+  config.baseCfg.reportCycles =
+      configTimeToCycles(config.baseCfg.reportTime, config.baseCfg.mainsFreq);
+  ecmConfigure();
+  ecmFlush();
+
+  emon32EventSet(EVT_OPA_INIT);
+}
+
 static bool configureRFEnable(void) {
   int32_t val = inBuffer[1] - '0';
 
@@ -1281,7 +1294,7 @@ static void handleConfirmation(char c) {
      *     serialPuts("    - Restored default values.\r\n");
      *     unsavedChange = true;
      *     resetReq      = true;
-     *     emon32EventSet(EVT_CONFIG_CHANGED);
+     *
      *   } else {
      *     serialPuts("    - Cancelled.\r\n");
      *   }
@@ -1528,6 +1541,7 @@ void configProcessCmd(void) {
       "   - x = s   : save current addresses\r\n"
       "   - x = <n> : save address to index n\r\n"
       " - p<n>        : set the RF power level\r\n"
+      " - q           : restore saved settings\r\n"
       " - r           : restore defaults\r\n"
       " - s           : save settings to NVM\r\n"
       " - t           : trigger report on next cycle\r\n"
@@ -1562,7 +1576,6 @@ void configProcessCmd(void) {
   case 'a':
     if (configureAssumed()) {
       unsavedChange = true;
-      emon32EventSet(EVT_CONFIG_CHANGED);
     }
     break;
   case 'b':
@@ -1571,13 +1584,11 @@ void configProcessCmd(void) {
   case 'c':
     if (configureSerialLog()) {
       unsavedChange = true;
-      emon32EventSet(EVT_CONFIG_CHANGED);
     }
     break;
   case 'd':
     if (configureDatalog()) {
       unsavedChange = true;
-      emon32EventSet(EVT_CONFIG_CHANGED);
     }
     break;
   case 'e':
@@ -1590,26 +1601,22 @@ void configProcessCmd(void) {
      */
     if (configureLineFrequency()) {
       unsavedChange = true;
-      emon32EventSet(EVT_CONFIG_CHANGED);
     }
     break;
   case 'g':
     if (configureGroupID()) {
       rfmSetGroupID(config.baseCfg.dataGrp);
       unsavedChange = true;
-      emon32EventSet(EVT_CONFIG_CHANGED);
     }
     break;
   case 'j':
     if (configureJSON()) {
       unsavedChange = true;
-      emon32EventSet(EVT_CONFIG_CHANGED);
     }
     break;
   case 'k':
     if (configureAnalog()) {
       unsavedChange = true;
-      emon32EventSet(EVT_CONFIG_CHANGED);
     }
     break;
   case 'l':
@@ -1619,21 +1626,18 @@ void configProcessCmd(void) {
     if (configureOPA()) {
       unsavedChange = true;
       emon32EventSet(EVT_OPA_INIT);
-      emon32EventSet(EVT_CONFIG_CHANGED);
     }
     break;
   case 'o':
     if (configure1WAddr()) {
       unsavedChange = true;
       emon32EventSet(EVT_OPA_INIT);
-      emon32EventSet(EVT_CONFIG_CHANGED);
     }
     break;
   case 'n':
     /* Set the node ID */
     if (configureNodeID()) {
       unsavedChange = true;
-      emon32EventSet(EVT_CONFIG_CHANGED);
     }
     break;
   case 'p':
@@ -1641,16 +1645,21 @@ void configProcessCmd(void) {
     if (configureRFPower()) {
       rfmSetPowerLevel(config.dataTxCfg.rfmPwr);
       unsavedChange = true;
-      emon32EventSet(EVT_CONFIG_CHANGED);
     }
+    break;
+  case 'q':
+    (void)configLoadFromNVM();
+    configureReconfigureAll();
+
+    serialPuts("> Restored values from NVM.\r\n");
+    unsavedChange = false;
     break;
   case 'r':
     configDefault();
+    configureReconfigureAll();
 
     serialPuts("> Restored default values.\r\n");
-
     unsavedChange = true;
-    emon32EventSet(EVT_CONFIG_CHANGED);
     break;
   case 's':
     /* Save to EEPROM config space after recalculating CRC and indicate if a
@@ -1663,7 +1672,6 @@ void configProcessCmd(void) {
     serialPuts("Done!\r\n");
 
     unsavedChange = false;
-    emon32EventSet(EVT_CONFIG_SAVED);
     break;
   case 't':
     emon32EventSet(EVT_ECM_TRIG);
@@ -1677,7 +1685,6 @@ void configProcessCmd(void) {
   case 'w':
     if (configureRFEnable()) {
       unsavedChange = true;
-      emon32EventSet(EVT_CONFIG_CHANGED);
     }
     break;
 
@@ -1685,7 +1692,6 @@ void configProcessCmd(void) {
     if (configureRF433()) {
       rfmSetFrequency(config.dataTxCfg.rfmFreq);
       unsavedChange = true;
-      emon32EventSet(EVT_CONFIG_CHANGED);
     }
     break;
   case 'z':
