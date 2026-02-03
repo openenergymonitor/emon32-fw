@@ -579,7 +579,7 @@ static bool configure1WAddrClear(void) {
     return true;
   }
 
-  ConvUint_t convU = utilAtoui(inBuffer + 1, ITOA_BASE10);
+  ConvUint_t convU = utilAtoui(inBuffer + 2, ITOA_BASE10);
   if (!convU.valid) {
     serialPutsError("Invalid 1-Wire channel value.");
     return false;
