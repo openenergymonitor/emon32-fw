@@ -129,26 +129,25 @@ static void oneWireReadBytes(void *pDst, const uint8_t n, const size_t opaIdx) {
 }
 
 static bool oneWireReset(const size_t opaIdx) {
-  /* t_RSTL (min) = 480 us
-   * t_RSTH (min) = 480 us
+  /* t_RSTL (min) >= 480 us
+   * t_RSTH (min) >= 480 us
    * t_PDHIGH (max) = 60 us
    * t_PDLOW (max) = 240 us
    */
 
   bool     presence  = 0;
-  uint32_t timeStart = 0;
+  uint32_t timeStart = timerMicros();
 
   portPinDir(cfg[opaIdx].grp, cfg[opaIdx].pin, PIN_DIR_OUT);
 
-  timerDelay_us(500u);
-  portPinDir(cfg[opaIdx].grp, cfg[opaIdx].pin, PIN_DIR_IN);
-  /* Wait 75 us to ensure t_PDHIGH has elapsed, then wait the full t_RSTH
-   * time +25 us slack to complete the reset sequence.
-   */
-  timerDelay_us(75u);
+  /* t_RSTL */
+  while (timerMicrosDelta(timeStart) < 500u)
+    ;
 
+  /* t_RSTH */
   timeStart = timerMicros();
-  while (timerMicrosDelta(timeStart) < 425u) {
+  portPinDir(cfg[opaIdx].grp, cfg[opaIdx].pin, PIN_DIR_IN);
+  while (timerMicrosDelta(timeStart) < 500u) {
     /* Latch presence if found */
     if (0 == presence) {
       presence = !portPinValue(cfg[opaIdx].grp, cfg[opaIdx].pin);
