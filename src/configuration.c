@@ -29,7 +29,8 @@ typedef enum {
   CONFIRM_BOOTLOADER,
   CONFIRM_ZERO_ACCUM,
   CONFIRM_ZERO_ACCUM_INDIVIDUAL,
-  CONFIRM_NVM_OVERWRITE
+  CONFIRM_NVM_OVERWRITE,
+  CONFIRM_RESET
   /* CONFIRM_RESTORE_DEFAULTS - Removed pending OEM decision on restore defaults
      confirmation */
 } ConfirmState_t;
@@ -67,6 +68,7 @@ static bool     configure1WSave(void);
 static bool     configureOPA(void);
 static bool     configureNodeID(void);
 static void     configureReconfigureAll(void);
+static void     configureRestore(void);
 static bool     configureRFEnable(void);
 static bool     configureRF433(void);
 static bool     configureRFPower(void);
@@ -89,9 +91,7 @@ static void     printSettingsHR(void);
 static void     printSettingsKV(void);
 static void     printUptime(void);
 static void     putFloat(float val, const size_t flt_len);
-/* static char     waitForChar(void); - Removed, NVM corruption now auto-loads
- * defaults */
-/* static bool     restoreDefaults(void); - Removed pending OEM decision */
+static void     resetRequest(void);
 static void     zeroAccumulators(void);
 
 /*************************************
@@ -785,6 +785,22 @@ static void configureReconfigureAll(void) {
   emon32EventSet(EVT_OPA_INIT);
 }
 
+static void configureRestore(void) {
+  if ('\0' == inBuffer[1]) {
+    configDefault();
+    configureReconfigureAll();
+
+    serialPuts("> Restored default values.\r\n");
+    unsavedChange = true;
+  } else if ('s' == inBuffer[1]) {
+    (void)configLoadFromNVM();
+    configureReconfigureAll();
+
+    serialPuts("> Restored values from NVM.\r\n");
+    unsavedChange = false;
+  }
+}
+
 static bool configureRFEnable(void) {
   int32_t val = inBuffer[1] - '0';
 
@@ -1182,6 +1198,15 @@ static void printUptime(void) {
   printf_("%lud %luh %lum %lus\r\n", tDays, tHours, tMinutes, tSeconds);
 }
 
+static void resetRequest(void) {
+  serialPuts(
+      "> Reset system? All unsaved changes will be lost. 'y' to proceed.\r\n");
+  __disable_irq();
+  confirmStartTime_ms = timerMillis();
+  confirmState        = CONFIRM_RESET;
+  __enable_irq();
+}
+
 /*! @brief Check if waiting for confirmation and handle if yes
  *  @param [in] c : character received
  *  @return true if character was handled as confirmation, false otherwise
@@ -1213,6 +1238,18 @@ static void handleConfirmation(char c) {
     if ('y' == c) {
       p_blsm  = (volatile uint32_t *)(HMCRAMC0_ADDR + HMCRAMC0_SIZE - 4);
       *p_blsm = blsm_key;
+      NVIC_SystemReset();
+    } else {
+      serialPuts("    - Cancelled.\r\n");
+    }
+    __disable_irq();
+    confirmState        = CONFIRM_IDLE;
+    confirmStartTime_ms = 0;
+    __enable_irq();
+    break;
+
+  case CONFIRM_RESET:
+    if ('y' == c) {
       NVIC_SystemReset();
     } else {
       serialPuts("    - Cancelled.\r\n");
@@ -1648,18 +1685,10 @@ void configProcessCmd(void) {
     }
     break;
   case 'q':
-    (void)configLoadFromNVM();
-    configureReconfigureAll();
-
-    serialPuts("> Restored values from NVM.\r\n");
-    unsavedChange = false;
+    resetRequest();
     break;
   case 'r':
-    configDefault();
-    configureReconfigureAll();
-
-    serialPuts("> Restored default values.\r\n");
-    unsavedChange = true;
+    configureRestore();
     break;
   case 's':
     /* Save to EEPROM config space after recalculating CRC and indicate if a

@@ -46,8 +46,9 @@ To test if your serial connection is working, try these commands first:
 | **n\<n>** | Set node ID [1..60]<br>Example: `n5` sets node ID to 5 |
 | **o<x>** | OneWire configuration<br>Options:<br>- `x` = `f`: reset and find OneWire devices<br>- `x` = `l`: list OneWire devices<br>- `x` = `s`: save the existing OneWire positions<br>- `x` = integer, `n`: save an address to position `n` (see Examples) |
 | **p\<n>** | Set the RF power level<br>Example: `p7` |
-| **q** | Restore saved settings (unsaved changes will be lost) |
+| **q** | Reset the system (confirmation required) |
 | **r** | Restore default settings (unsaved changes will be lost) |
+| **rs** | Restore saved settings (unsaved changes will be lost) |
 | **s** | Save settings to NVM (non-volatile memory)<br>Must be used after making configuration changes |
 | **t** | Trigger report on next cycle (force immediate data transmission) |
 | **v** | Show firmware and board information |
