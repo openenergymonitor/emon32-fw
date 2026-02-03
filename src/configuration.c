@@ -29,7 +29,8 @@ typedef enum {
   CONFIRM_BOOTLOADER,
   CONFIRM_ZERO_ACCUM,
   CONFIRM_ZERO_ACCUM_INDIVIDUAL,
-  CONFIRM_NVM_OVERWRITE
+  CONFIRM_NVM_OVERWRITE,
+  CONFIRM_RESET
   /* CONFIRM_RESTORE_DEFAULTS - Removed pending OEM decision on restore defaults
      confirmation */
 } ConfirmState_t;
@@ -60,13 +61,16 @@ static bool     configureGroupID(void);
 static bool     configureJSON(void);
 static bool     configureLineFrequency(void);
 static bool     configure1WAddr(void);
+static bool     configure1WAddrClear(void);
 static void     configure1WFind(void);
 static bool     configure1WFreeze(void);
 static void     configure1WList(void);
+static void     configure1WListSaved(void);
 static bool     configure1WSave(void);
 static bool     configureOPA(void);
 static bool     configureNodeID(void);
 static void     configureReconfigureAll(void);
+static void     configureRestore(void);
 static bool     configureRFEnable(void);
 static bool     configureRF433(void);
 static bool     configureRFPower(void);
@@ -89,9 +93,7 @@ static void     printSettingsHR(void);
 static void     printSettingsKV(void);
 static void     printUptime(void);
 static void     putFloat(float val, const size_t flt_len);
-/* static char     waitForChar(void); - Removed, NVM corruption now auto-loads
- * defaults */
-/* static bool     restoreDefaults(void); - Removed pending OEM decision */
+static void     resetRequest(void);
 static void     zeroAccumulators(void);
 
 /*************************************
@@ -544,18 +546,56 @@ static bool configureLineFrequency(void) {
 
 static bool configure1WAddr(void) {
   char c1 = *(inBuffer + 1);
-  if ('f' == c1) {
+  switch (c1) {
+  case 'c':
+    return configure1WAddrClear();
+    break;
+  case 'f':
     configure1WFind();
     return false;
-  } else if ('l' == c1) {
+  case 'l':
     configure1WList();
     return false;
-  } else if ('s' == c1) {
+  case 'n':
+    configure1WListSaved();
+    return false;
+  case 's':
     configure1WFreeze();
     return true;
-  } else {
+  default:
     return configure1WSave();
   }
+
+  return false;
+}
+
+static bool configure1WAddrClear(void) {
+
+  /* Clear _all_ saved addresses */
+  if ('a' == inBuffer[2]) {
+    memset(&config.oneWireAddr.addr, 0, sizeof(config.oneWireAddr.addr));
+    serialPuts("> Cleared all saved 1-Wire addresses.\r\n");
+    emon32EventSet(EVT_OPA_INIT);
+    return true;
+  }
+
+  ConvUint_t convU = utilAtoui(inBuffer + 2, ITOA_BASE10);
+  if (!convU.valid) {
+    serialPutsError("Invalid 1-Wire channel value.");
+    return false;
+  }
+
+  if ((convU.val.u32 < 1) || (convU.val.u32 > (TEMP_MAX_ONEWIRE))) {
+    printfError("1-Wire channel out of range (valid: 1-%d).", TEMP_MAX_ONEWIRE);
+    return false;
+  }
+
+  size_t ch = convU.val.u32 - 1u;
+  memset(&config.oneWireAddr.addr[ch], 0, sizeof(*config.oneWireAddr.addr));
+  printf_("> Cleared saved 1-Wire address for channel %u\r\n", (ch + 1u));
+
+  emon32EventSet(EVT_OPA_INIT);
+  return true;
 }
 
 static void configure1WFind(void) { emon32EventSet(EVT_OPA_INIT); }
@@ -580,6 +620,18 @@ static void configure1WList(void) {
         printf_("%02x%s", (uint8_t)((pAddr[i] >> (8 * j)) & 0xFF),
                 ((j == 7) ? "\r\n" : " "));
       }
+    }
+  }
+}
+
+static void configure1WListSaved(void) {
+  for (size_t i = 0; i < TEMP_MAX_ONEWIRE; i++) {
+    uint64_t as; /* Ensure 8byte alignment */
+    memcpy(&as, &config.oneWireAddr.addr[i], sizeof(as));
+    printf_("[%u] ", i);
+    for (size_t j = 0; j < 8; j++) {
+      printf_("%02x%s", (uint8_t)((as >> (8 * j)) & 0xFF),
+              ((j == 7) ? "\r\n" : " "));
     }
   }
 }
@@ -783,6 +835,22 @@ static void configureReconfigureAll(void) {
   ecmFlush();
 
   emon32EventSet(EVT_OPA_INIT);
+}
+
+static void configureRestore(void) {
+  if ('\0' == inBuffer[1]) {
+    configDefault();
+    configureReconfigureAll();
+
+    serialPuts("> Restored default values.\r\n");
+    unsavedChange = true;
+  } else if ('s' == inBuffer[1]) {
+    (void)configLoadFromNVM();
+    configureReconfigureAll();
+
+    serialPuts("> Restored values from NVM.\r\n");
+    unsavedChange = false;
+  }
 }
 
 static bool configureRFEnable(void) {
@@ -1182,6 +1250,15 @@ static void printUptime(void) {
   printf_("%lud %luh %lum %lus\r\n", tDays, tHours, tMinutes, tSeconds);
 }
 
+static void resetRequest(void) {
+  serialPuts(
+      "> Reset system? All unsaved changes will be lost. 'y' to proceed.\r\n");
+  __disable_irq();
+  confirmStartTime_ms = timerMillis();
+  confirmState        = CONFIRM_RESET;
+  __enable_irq();
+}
+
 /*! @brief Check if waiting for confirmation and handle if yes
  *  @param [in] c : character received
  *  @return true if character was handled as confirmation, false otherwise
@@ -1213,6 +1290,18 @@ static void handleConfirmation(char c) {
     if ('y' == c) {
       p_blsm  = (volatile uint32_t *)(HMCRAMC0_ADDR + HMCRAMC0_SIZE - 4);
       *p_blsm = blsm_key;
+      NVIC_SystemReset();
+    } else {
+      serialPuts("    - Cancelled.\r\n");
+    }
+    __disable_irq();
+    confirmState        = CONFIRM_IDLE;
+    confirmStartTime_ms = 0;
+    __enable_irq();
+    break;
+
+  case CONFIRM_RESET:
+    if ('y' == c) {
       NVIC_SystemReset();
     } else {
       serialPuts("    - Cancelled.\r\n");
@@ -1648,18 +1737,10 @@ void configProcessCmd(void) {
     }
     break;
   case 'q':
-    (void)configLoadFromNVM();
-    configureReconfigureAll();
-
-    serialPuts("> Restored values from NVM.\r\n");
-    unsavedChange = false;
+    resetRequest();
     break;
   case 'r':
-    configDefault();
-    configureReconfigureAll();
-
-    serialPuts("> Restored default values.\r\n");
-    unsavedChange = true;
+    configureRestore();
     break;
   case 's':
     /* Save to EEPROM config space after recalculating CRC and indicate if a
