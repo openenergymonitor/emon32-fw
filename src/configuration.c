@@ -252,7 +252,8 @@ static bool configureAnalog(void) {
     }
   }
 
-  if ((0 == posCalib) || (0 == posActive) || (0 == posPhase)) {
+  /* All or no parameters must be specified */
+  if ((0 == posCalib) ^ (0 == posActive) ^ (0 == posPhase)) {
     serialPutsError("Missing required parameters.");
     return false;
   }
@@ -273,6 +274,30 @@ static bool configureAnalog(void) {
 
   ch = convU.val.u32;
 
+  convU = utilAtoui(inBuffer + posActive, ITOA_BASE10);
+  if (!convU.valid || (convU.val.u32 > 1u)) {
+    serialPutsError("Invalid active value (valid: 0 or 1).");
+    return false;
+  }
+  active = (bool)convU.val.u8;
+
+  ecmCfg = ecmConfigGet();
+
+  /* Exit early if just activating or deactivating */
+  if (0 == posCalib) {
+    if (ch < NUM_V) {
+      ecmCfg->vCfg[ch].vActive      = active;
+      config.voltageCfg[ch].vActive = active;
+      printSettingV(ch);
+    } else {
+      ecmCfg->ctCfg[ch - NUM_V].active  = active;
+      config.ctCfg[ch - NUM_V].ctActive = active;
+      printSettingCT(ch - NUM_V);
+    }
+    ecmConfigChannel(ch);
+    return true;
+  }
+
   /* CT requires at least V1 */
   if (ch >= NUM_V) {
     if (0 == posV1) {
@@ -280,22 +305,6 @@ static bool configureAnalog(void) {
       return false;
     }
   }
-
-  ecmCfg = ecmConfigGet();
-  EMON32_ASSERT(ecmCfg);
-
-  convU = utilAtoui(inBuffer + posActive, ITOA_BASE10);
-  if (!convU.valid) {
-    serialPutsError("Invalid active value (valid: 0 or 1).");
-    return false;
-  }
-
-  if (convU.val.u32 > 1) {
-    serialPutsError("Invalid active value (valid: 0 or 1).");
-    return false;
-  }
-
-  active = (bool)convU.val.u8;
 
   convF = utilAtof(inBuffer + posCalib);
   if (!convF.valid) {
@@ -632,7 +641,7 @@ static void configure1WListSaved(void) {
   for (size_t i = 0; i < TEMP_MAX_ONEWIRE; i++) {
     uint64_t as; /* Ensure 8byte alignment */
     memcpy(&as, &config.oneWireAddr.addr[i], sizeof(as));
-    printf_("[%u] ", i);
+    printf_("[%u] ", i + 1u);
     for (size_t j = 0; j < 8; j++) {
       printf_("%02x%s", (uint8_t)((as >> (8 * j)) & 0xFF),
               ((j == 7) ? "\r\n" : " "));
@@ -739,20 +748,15 @@ static bool configureOPA(void) {
 
   /* Check if the channel is active or inactive */
   convU = utilAtoui(inBuffer + posActive, ITOA_BASE10);
-  if (!convU.valid) {
-    serialPutsError("Invalid OPA active value.");
-    return false;
-  }
-
-  if (convU.val.u32 > 1) {
+  if ((!convU.valid) || (convU.val.u32 > 1u)) {
     serialPutsError("Invalid OPA active value.");
     return false;
   }
 
   active = (bool)convU.val.u8;
 
-  if (!active) {
-    config.opaCfg[ch].opaActive = false;
+  if (!active || ('\0' == inBuffer[posFunc])) {
+    config.opaCfg[ch].opaActive = active;
     printSettingOPA(ch);
     return true;
   }
@@ -1639,7 +1643,7 @@ void configProcessCmd(void) {
       "   - x = f   : reset and find OneWire devices\r\n"
       "   - x = l   : list current addresses\r\n"
       "   - x = n   : list all saved addresses\r\n"
-      "   - x = s   : save current addresses\r\n"
+      "   - x = s   : save found indexes (overrides manually set values)\r\n"
       "   - x = <n> : save address to index n\r\n"
       " - p<n>        : set the RF power level\r\n"
       " - q           : reset system (requires confirmation)\r\n"
