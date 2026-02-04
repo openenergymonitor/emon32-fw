@@ -598,11 +598,15 @@ static bool configure1WAddrClear(void) {
   return true;
 }
 
-static void configure1WFind(void) { emon32EventSet(EVT_OPA_INIT); }
+static void configure1WFind(void) {
+  serialPuts("> Searching for 1-Wire devices...\r\n");
+  emon32EventSet(EVT_OPA_INIT);
+}
 
 static bool configure1WFreeze(void) {
   uint64_t *pAddrDev = tempAddress1WGet();
   memcpy(&config.oneWireAddr, pAddrDev, sizeof(config.oneWireAddr));
+  serialPuts("> 1-Wire addresses saved to config.\r\n");
   return true;
 }
 
@@ -686,6 +690,11 @@ static bool configure1WSave(void) {
 
   config.oneWireAddr.addr[ch] = addr;
 
+  printf_("> 1W_addr%d = ", (ch + 1));
+  for (size_t i = 0; i < 8; i++) {
+    printf_("%02x%s", (uint8_t)((addr >> (8 * i)) & 0xFF),
+            ((i == 7) ? "\r\n" : " "));
+  }
   return true;
 }
 
