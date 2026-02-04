@@ -641,7 +641,7 @@ static void configure1WListSaved(void) {
   for (size_t i = 0; i < TEMP_MAX_ONEWIRE; i++) {
     uint64_t as; /* Ensure 8byte alignment */
     memcpy(&as, &config.oneWireAddr.addr[i], sizeof(as));
-    printf_("[%u] ", i);
+    printf_("[%u] ", i + 1u);
     for (size_t j = 0; j < 8; j++) {
       printf_("%02x%s", (uint8_t)((as >> (8 * j)) & 0xFF),
               ((j == 7) ? "\r\n" : " "));
