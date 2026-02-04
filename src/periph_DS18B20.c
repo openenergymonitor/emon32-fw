@@ -135,24 +135,38 @@ static bool oneWireReset(const size_t opaIdx) {
    * t_PDLOW (max) = 240 us
    */
 
-  bool     presence  = 0;
-  uint32_t timeStart = timerMicros();
+  const uint32_t t_RSTx    = 500u;
+  const uint32_t t_PDx     = 300u;
+  bool           presence  = false;
+  uint32_t       timeStart = timerMicros();
 
+  timeStart = timerMicros();
   portPinDir(cfg[opaIdx].grp, cfg[opaIdx].pin, PIN_DIR_OUT);
 
   /* t_RSTL */
-  while (timerMicrosDelta(timeStart) < 500u)
+  while (timerMicrosDelta(timeStart) < t_RSTx)
     ;
 
-  /* t_RSTH */
-  timeStart = timerMicros();
+  /* Protect PDHIGH and PDLOW timing */
+  __disable_irq();
   portPinDir(cfg[opaIdx].grp, cfg[opaIdx].pin, PIN_DIR_IN);
-  while (timerMicrosDelta(timeStart) < 500u) {
-    /* Latch presence if found */
-    if (0 == presence) {
-      presence = !portPinValue(cfg[opaIdx].grp, cfg[opaIdx].pin);
+  timeStart = timerMicros();
+  /* Ensure pull-up has brought up line */
+  while (timerMicrosDelta(timeStart) < cfg->t_wait_us)
+    ;
+
+  while (timerMicrosDelta(timeStart) < t_PDx) {
+    presence = (bool)!portPinValue(cfg[opaIdx].grp, cfg[opaIdx].pin);
+    if (presence) {
+      break;
     }
   }
+
+  /* Need to ensure at least t_RSTH has elapsed before continuing but can allow
+   * interrupts to be handled again as t_RSTH has no maximum */
+  const uint32_t t_RSTH_residual = t_RSTx - timerMicrosDelta(timeStart);
+  __enable_irq();
+  timerDelay_us(t_RSTH_residual);
 
   return presence;
 }
