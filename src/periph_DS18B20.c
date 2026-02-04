@@ -165,8 +165,11 @@ static bool oneWireReset(const size_t opaIdx) {
   /* Need to ensure at least t_RSTH has elapsed before continuing but can allow
    * interrupts to be handled again as t_RSTH has no maximum */
   const uint32_t t_RSTH_residual = t_RSTx - timerMicrosDelta(timeStart);
+  timeStart                      = timerMicros();
   __enable_irq();
-  timerDelay_us(t_RSTH_residual);
+
+  while (timerMicrosDelta(timeStart) < t_RSTH_residual)
+    ;
 
   return presence;
 }
