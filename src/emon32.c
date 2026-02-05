@@ -567,7 +567,7 @@ static void transmitData(const Emon32Dataset_t *pSrc, uint32_t *pPkt) {
       }
 
       /* Only send CT7-12 if any are active */
-      for (size_t i = (NUM_CT / 2); i < (NUM_CT / 2); i++) {
+      for (size_t i = (NUM_CT / 2); i < NUM_CT; i++) {
         if (pConfig->ctCfg[i].ctActive) {
           *pPkt |= (1u << 2);
           break;
