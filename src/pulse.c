@@ -24,7 +24,7 @@ PulseCfg_t *pulseGetCfg(const size_t index) {
 }
 
 void pulseInit(const size_t index) {
-  const uint8_t opaPUs[] = {PIN_OPA1_PU, PIN_OPA2_PU};
+  static const uint8_t opaPUs[] = {PIN_OPA1_PU, PIN_OPA2_PU};
 
   const uint8_t pin = pulseCfg[index].pin;
 

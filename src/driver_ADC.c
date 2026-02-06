@@ -21,8 +21,8 @@ static void    adcSync(void);
  * using SAMD21 with sufficient ADC pins. */
 static void adcCalibrate(void) {
   /* Expected ADC values for 1/4 and 3/4 scale, /2 for differential */
-  const int32_t refScale14 = -16383 / 2;
-  const int32_t refScale34 = 16382 / 2;
+  static const int32_t refScale14 = -16383 / 2;
+  static const int32_t refScale34 = 16382 / 2;
 
   /* Real values from ADC conversion */
   int16_t expScale14;
