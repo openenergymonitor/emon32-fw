@@ -717,11 +717,11 @@ static bool configureOPA(void) {
    *      y[7] -> pull up enabled
    *      z[9] -> NULL: hysteresis
    */
-  const int32_t posCh     = 1;
-  const int32_t posActive = 3;
-  const int32_t posFunc   = 5;
-  const int32_t posPu     = 7;
-  const int32_t posPeriod = 9;
+  static const int32_t posCh     = 1;
+  static const int32_t posActive = 3;
+  static const int32_t posFunc   = 5;
+  static const int32_t posPu     = 7;
+  static const int32_t posPeriod = 9;
 
   ConvUint_t convU;
   uint8_t    ch     = 0;
@@ -995,8 +995,8 @@ static char *getLastReset(void) {
 
 uint32_t getUniqueID(const size_t idx) {
   /* Section 10.3.3 Serial Number */
-  const uint32_t id_addr_lut[4] = {0x0080A00C, 0x0080A040, 0x0080A044,
-                                   0x0080A048};
+  static const uint32_t id_addr_lut[4] = {0x0080A00C, 0x0080A040, 0x0080A044,
+                                          0x0080A048};
   return *(volatile uint32_t *)id_addr_lut[idx];
 }
 
@@ -1295,8 +1295,8 @@ bool configHandleConfirmation(const uint8_t c) {
  *  @param [in] c : character received ('y' or 'n' expected)
  */
 static void handleConfirmation(char c) {
-  volatile uint32_t *p_blsm;
-  const uint32_t     blsm_key = 0xF01669EF;
+  volatile uint32_t    *p_blsm;
+  static const uint32_t blsm_key = 0xF01669EF;
 
   switch (confirmState) {
   case CONFIRM_BOOTLOADER:
@@ -1609,7 +1609,7 @@ void configProcessCmd(void) {
   bool     termFound = false;
 
   /* Help text - serves as documentation interally as well */
-  const char helpText[] =
+  static const char helpText[] =
       "\r\n"
       "emon32 information and configuration commands\r\n\r\n"
       " - ?           : show this text again\r\n"
