@@ -57,7 +57,7 @@ int32_t  lastFamilyDiscrepancy = 0;
 int32_t  lastDeviceFlag        = 0;
 
 static uint8_t calcCRC8(const uint8_t crc, const uint8_t value) {
-  const uint8_t dscrc_table[] = {
+  static const uint8_t dscrc_table[] = {
       0,   94,  188, 226, 97,  63,  221, 131, 194, 156, 126, 32,  163, 253, 31,
       65,  157, 195, 33,  127, 252, 162, 64,  30,  95,  1,   227, 189, 62,  96,
       130, 220, 35,  125, 159, 193, 66,  28,  254, 160, 225, 191, 93,  3,   128,
@@ -136,10 +136,10 @@ static bool oneWireReset(const size_t opaIdx) {
    * t_PDLOW (max) = 240 us
    */
 
-  const uint32_t t_RSTx    = 500u;
-  const uint32_t t_PDx     = 300u;
-  bool           presence  = false;
-  uint32_t       timeStart = timerMicros();
+  static const uint32_t t_RSTx    = 500u;
+  static const uint32_t t_PDx     = 300u;
+  bool                  presence  = false;
+  uint32_t              timeStart = timerMicros();
 
   timeStart = timerMicros();
   portPinDir(cfg[opaIdx].grp, cfg[opaIdx].pin, PIN_DIR_OUT);
@@ -177,16 +177,16 @@ static bool oneWireReset(const size_t opaIdx) {
 
 static bool oneWireSearch(const size_t opaIdx) {
   /* Initialise for search */
-  const uint8_t CMD_SEARCH_ROM  = 0xF0u;
-  uint8_t       searchDirection = 0;
-  int32_t       idBitNumber     = 1;
-  int32_t       lastZero        = 0;
-  uint8_t       romByteMask     = 1;
-  bool          searchResult    = false;
-  uint8_t       idBit           = 0;
-  uint8_t       cmpidBit        = 0;
-  uint8_t       crc8            = 0;
-  uint8_t      *romBuffer       = (uint8_t *)&ROM_NO;
+  static const uint8_t CMD_SEARCH_ROM  = 0xF0u;
+  uint8_t              searchDirection = 0;
+  int32_t              idBitNumber     = 1;
+  int32_t              lastZero        = 0;
+  uint8_t              romByteMask     = 1;
+  bool                 searchResult    = false;
+  uint8_t              idBit           = 0;
+  uint8_t              cmpidBit        = 0;
+  uint8_t              crc8            = 0;
+  uint8_t             *romBuffer       = (uint8_t *)&ROM_NO;
 
   /* If the last call was not the last one... */
   if (!lastDeviceFlag) {
@@ -310,7 +310,7 @@ uint64_t *ds18b20AddressGet(void) { return devTableAddr; }
 uint32_t ds18b20InitSensors(const DS18B20_conf_t *pCfg) {
   EMON32_ASSERT(pCfg);
 
-  const uint8_t DS18B_FAMILY_CODE = 0x28;
+  static const uint8_t DS18B_FAMILY_CODE = 0x28;
 
   uint8_t  opaIdx       = pCfg->opaIdx;
   uint32_t deviceCount  = 0;
@@ -362,9 +362,9 @@ void ds18b20MapSensors(const uint64_t *pAddr) {
 uint8_t ds18b20MapToLogical(const size_t dev) { return devRemap[dev]; }
 
 bool ds18b20StartSample(const size_t opaIdx) {
-  const uint8_t CMD_SKIP_ROM  = 0xCC;
-  const uint8_t CMD_CONVERT_T = 0x44;
-  const uint8_t cmds[2]       = {CMD_SKIP_ROM, CMD_CONVERT_T};
+  static const uint8_t CMD_SKIP_ROM  = 0xCC;
+  static const uint8_t CMD_CONVERT_T = 0x44;
+  static const uint8_t cmds[2]       = {CMD_SKIP_ROM, CMD_CONVERT_T};
 
   /* Check for presence pulse before continuing */
   if (!oneWireReset(opaIdx)) {
@@ -376,11 +376,11 @@ bool ds18b20StartSample(const size_t opaIdx) {
 }
 
 TempRead_t ds18b20ReadSample(const size_t dev) {
-  const uint8_t CMD_MATCH_ROM    = 0x55;
-  const uint8_t CMD_READ_SCRATCH = 0xBE;
-  const int16_t DS_T85DEG        = 1360;
-  const int16_t DS_TNEG55DEG     = -880;
-  const int16_t DS_T125DEG       = 2000;
+  static const uint8_t CMD_MATCH_ROM    = 0x55;
+  static const uint8_t CMD_READ_SCRATCH = 0xBE;
+  static const int16_t DS_T85DEG        = 1360;
+  static const int16_t DS_TNEG55DEG     = -880;
+  static const int16_t DS_T125DEG       = 2000;
 
   const uint64_t *addrDev  = &devTableAddr[dev];
   Scratch_t       scratch  = {0};
