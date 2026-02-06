@@ -34,6 +34,7 @@ _Static_assert(9 == sizeof(Scratch_t), "Scratch_t is not 9 bytes.");
 static DS18B20_conf_t cfg[NUM_OPA];
 
 /* Device address table */
+static uint32_t numFound                       = 0;
 static uint64_t devTableAddr[TEMP_MAX_ONEWIRE] = {0};
 static uint8_t  devTableOpa[TEMP_MAX_ONEWIRE]  = {0};
 static uint8_t  devRemap[TEMP_MAX_ONEWIRE]     = {0};
@@ -299,7 +300,10 @@ static void oneWireWriteBytes(const void *pSrc, const uint8_t n,
   }
 }
 
-void ds18b20AddressClr(void) { memset(devTableAddr, 0, sizeof(devTableAddr)); }
+void ds18b20AddressClr(void) {
+  numFound = 0;
+  memset(devTableAddr, 0, sizeof(devTableAddr));
+}
 
 uint64_t *ds18b20AddressGet(void) { return devTableAddr; }
 
@@ -324,18 +328,19 @@ uint32_t ds18b20InitSensors(const DS18B20_conf_t *pCfg) {
   portPinDrv(cfg[opaIdx].grp, cfg[opaIdx].pin, PIN_DRV_CLR);
   searchResult = oneWireFirst(opaIdx);
 
-  while (searchResult && (deviceCount < TEMP_MAX_ONEWIRE)) {
+  while (searchResult && ((deviceCount + numFound) < TEMP_MAX_ONEWIRE)) {
 
     /* Only count DS18B20 devices. */
     if (DS18B_FAMILY_CODE == (uint8_t)ROM_NO) {
-      devTableAddr[deviceCount] = ROM_NO;
-      devTableOpa[deviceCount]  = opaIdx;
+      devTableAddr[(deviceCount + numFound)] = ROM_NO;
+      devTableOpa[(deviceCount + numFound)]  = opaIdx;
       deviceCount++;
     }
 
     searchResult = oneWireNext(opaIdx);
   }
 
+  numFound += deviceCount;
   return deviceCount;
 }
 
