@@ -93,6 +93,7 @@ static void     printSettingsHR(void);
 static void     printSettingsKV(void);
 static void     printUptime(void);
 static void     putFloat(float val, const size_t flt_len);
+static void     saveToNVM(void);
 static void     resetRequest(void);
 static void     zeroAccumulators(void);
 
@@ -1272,6 +1273,21 @@ static void resetRequest(void) {
   __enable_irq();
 }
 
+static void saveToNVM(void) {
+  /* Save to NVM config space after recalculating CRC */
+  if (unsavedChange) {
+    config.crc16_ccitt = calcCRC16_ccitt(&config, (sizeof(config) - 2));
+
+    serialPuts("> Saving configuration to NVM... ");
+    eepromInitConfig(&config, sizeof(config));
+    serialPuts("Done!\r\n");
+
+    unsavedChange = false;
+  } else {
+    serialPuts("> No changes to save.\r\n");
+  }
+}
+
 /*! @brief Check if waiting for confirmation and handle if yes
  *  @param [in] c : character received
  *  @return true if character was handled as confirmation, false otherwise
@@ -1760,16 +1776,7 @@ void configProcessCmd(void) {
     configureRestore();
     break;
   case 's':
-    /* Save to EEPROM config space after recalculating CRC and indicate if a
-     * reset is required.
-     */
-    config.crc16_ccitt = calcCRC16_ccitt(&config, (sizeof(config) - 2));
-
-    serialPuts("> Saving configuration to NVM... ");
-    eepromInitConfig(&config, sizeof(config));
-    serialPuts("Done!\r\n");
-
-    unsavedChange = false;
+    saveToNVM();
     break;
   case 't':
     emon32EventSet(EVT_ECM_TRIG);
