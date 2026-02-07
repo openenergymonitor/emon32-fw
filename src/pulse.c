@@ -14,14 +14,7 @@ static uint32_t   pulseCount[NUM_OPA];
 static PulseCfg_t pulseCfg[NUM_OPA];
 static PulseLvl_t pulseLvlLast[NUM_OPA];
 
-PulseCfg_t *pulseGetCfg(const size_t index) {
-  /* If no pulse counters attached or index out of range, return 0 */
-  if ((0 == NUM_OPA) || (index > (NUM_OPA - 1u))) {
-    return 0;
-  }
-
-  return &pulseCfg[index];
-}
+PulseCfg_t *pulseGetCfg(const size_t index) { return &pulseCfg[index]; }
 
 void pulseInit(const size_t index) {
   static const uint8_t opaPUs[] = {PIN_OPA1_PU, PIN_OPA2_PU};

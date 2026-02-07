@@ -847,15 +847,11 @@ int main(void) {
         }
       }
 
-      /* Configuration:
-       *   - Process command
-       *   - Change (set PROG LED)
-       *   - Save (clear PROG LED)
-       */
       if (evtPending(EVT_PROCESS_CMD)) {
         configProcessCmd();
         emon32EventClr(EVT_PROCESS_CMD);
       }
+
       if (evtPending(EVT_OPA_INIT)) {
         pulseConfigure();
         numTempSensors = tempSetup(&dataset);
