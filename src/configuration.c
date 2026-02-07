@@ -66,6 +66,7 @@ static void     configure1WFind(void);
 static bool     configure1WFreeze(void);
 static void     configure1WList(void);
 static void     configure1WListSaved(void);
+static bool     configure1WRemap(void);
 static bool     configure1WSave(void);
 static bool     configureOPA(void);
 static bool     configureNodeID(void);
@@ -566,12 +567,14 @@ static bool configure1WAddr(void) {
   case 'l':
     configure1WList();
     return false;
+  case 'h':
+    configure1WFreeze();
+    return true;
   case 'n':
     configure1WListSaved();
     return false;
-  case 's':
-    configure1WFreeze();
-    return true;
+  case 'r':
+    return configure1WRemap();
   default:
     return configure1WSave();
   }
@@ -650,10 +653,55 @@ static void configure1WListSaved(void) {
   }
 }
 
+static bool configure1WRemap(void) {
+  if (2u != inBufferTok()) {
+    serialPutsError("1-Wire remap requires two parameters.");
+    return false;
+  }
+
+  ConvUint_t convU = utilAtoui(inBuffer + 3, ITOA_BASE10);
+  if (!convU.valid) {
+    serialPutsError("Invalid 1-Wire channel value.");
+    return false;
+  }
+
+  if ((convU.val.u32 < 1) || (convU.val.u32 > (TEMP_MAX_ONEWIRE))) {
+    printfError("1-Wire channel out of range (valid: 1-%d).", TEMP_MAX_ONEWIRE);
+    return false;
+  }
+  const size_t ch = convU.val.u32 - 1u;
+
+  convU = utilAtoui(inBuffer + 5, ITOA_BASE10);
+  if (!convU.valid) {
+    serialPutsError("Invalid 1-Wire remap channel value.");
+    return false;
+  }
+
+  if ((convU.val.u32 < 1) || (convU.val.u32 > (TEMP_MAX_ONEWIRE))) {
+    printfError("1-Wire remap channel out of range (valid: 1-%d).",
+                TEMP_MAX_ONEWIRE);
+    return false;
+  }
+  const size_t chRemap = convU.val.u32 - 1u;
+
+  const uint64_t *pAddr = tempAddress1WGet();
+  const uint64_t  ar    = pAddr[ch];
+
+  memcpy(&config.oneWireAddr.addr[chRemap], &ar, sizeof(ar));
+
+  printf_("> 1W_addr%d = ", (chRemap + 1));
+  for (size_t i = 0; i < 8; i++) {
+    printf_("%02x%s", (uint8_t)((ar >> (8 * i)) & 0xFF),
+            ((i == 7) ? "\r\n" : " "));
+  }
+
+  return true;
+}
+
 static bool configure1WSave(void) {
   size_t ch;
 
-  if (8 != inBufferTok()) {
+  if (8u != inBufferTok()) {
     serialPutsError("1-Wire save requires 8 address bytes.");
     return false;
   }
@@ -1119,7 +1167,7 @@ static void printAccumulators(void) {
 
   for (size_t i = 0; i < NUM_CT; i++) {
     int32_t wh = eepromOK ? cumulative.wattHour[i] : 0;
-    printf_("  E%u = %lu Wh\r\n", (i + 1), wh);
+    printf_("  E%u = %ld Wh\r\n", (i + 1), wh);
   }
   for (size_t i = 0; i < NUM_OPA; i++) {
     uint32_t pulse = eepromOK ? cumulative.pulseCnt[i] : 0;
@@ -1657,10 +1705,11 @@ void configProcessCmd(void) {
       "   - x = ca  : clear all saved OneWire addresses\r\n"
       "   - x = c<n>: clear saved address for channel n\r\n"
       "   - x = f   : reset and find OneWire devices\r\n"
+      "   - x = h   : hold found addresses (overrides manually set values)\r\n"
       "   - x = l   : list current addresses\r\n"
       "   - x = n   : list all saved addresses\r\n"
-      "   - x = s   : save found indexes (overrides manually set values)\r\n"
-      "   - x = <n> : save address to index n\r\n"
+      "   - x = r <a> <b> : remap found sensor <a> to index <b>\r\n"
+      "   - x = <n> : move address to index <n>\r\n"
       " - p<n>        : set the RF power level\r\n"
       " - q           : reset system (requires confirmation)\r\n"
       " - r           : restore defaults\r\n"

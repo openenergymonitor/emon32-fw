@@ -859,6 +859,8 @@ int main(void) {
       if (evtPending(EVT_OPA_INIT)) {
         pulseConfigure();
         numTempSensors = tempSetup(&dataset);
+        printf_("> Found %lu OneWire temperature sensor%s.\r\n", numTempSensors,
+                (1u == numTempSensors ? "" : "s"));
         emon32EventClr(EVT_OPA_INIT);
       }
     }
