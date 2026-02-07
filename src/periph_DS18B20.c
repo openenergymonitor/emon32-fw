@@ -322,10 +322,15 @@ uint32_t ds18b20InitSensors(const DS18B20_conf_t *pCfg) {
   /* If not overridden, default to 5 us pull low */
   cfg[opaIdx].t_wait_us = pCfg->t_wait_us ? pCfg->t_wait_us : 5u;
 
-  /* Enable the hard pull up, and search for devices */
+  /* Enable pull up, allow time to pull the line up, then search for devices */
   portPinDrv(cfg[opaIdx].grp, cfg[opaIdx].pinPU, PIN_DRV_SET);
   portPinDir(cfg[opaIdx].grp, cfg[opaIdx].pinPU, PIN_DIR_OUT);
   portPinDrv(cfg[opaIdx].grp, cfg[opaIdx].pin, PIN_DRV_CLR);
+
+  const uint32_t tStart = timerMillis();
+  while (timerMillisDelta(tStart) < 10u)
+    ;
+
   searchResult = oneWireFirst(opaIdx);
 
   while (searchResult && ((deviceCount + numFound) < TEMP_MAX_ONEWIRE)) {
