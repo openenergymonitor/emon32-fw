@@ -639,6 +639,7 @@ static void configure1WList(void) {
       }
     }
   }
+  serialPuts("[end]\r\n]");
 }
 
 static void configure1WListSaved(void) {
@@ -651,6 +652,7 @@ static void configure1WListSaved(void) {
               ((j == 7) ? "\r\n" : " "));
     }
   }
+  serialPuts("[end]\r\n");
 }
 
 static bool configure1WRemap(void) {
