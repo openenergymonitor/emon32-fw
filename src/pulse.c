@@ -47,37 +47,45 @@ void pulseSetCount(const size_t index, const uint32_t value) {
 uint32_t pulseGetCount(const size_t index) { return pulseCount[index]; }
 
 void pulseUpdate(void) {
-  uint32_t   mask;
-  PulseLvl_t level;
+  PulseLvl_t      level               = PULSE_LVL_LOW;
+  static uint32_t tLastPulse[NUM_OPA] = {0};
 
   for (size_t i = 0; i < NUM_OPA; i++) {
     if (pulseCfg[i].active) {
-      mask  = (1 << pulseCfg[i].periods) - 1u;
-      level = pulseLvlLast[i];
+      bool incrPulse = false;
+      level          = pulseLvlLast[i];
 
       pinValue[i] <<= 1;
       pinValue[i] += (uint8_t)portPinValue(pulseCfg[i].grp, pulseCfg[i].pin);
 
-      if (0 == (pinValue[i] & mask)) {
+      /* Debounce for 8 ms */
+      if (0 == pinValue[i]) {
         level = PULSE_LVL_LOW;
-      } else if (mask == (pinValue[i] & mask)) {
+      } else if (UINT8_MAX == pinValue[i]) {
         level = PULSE_LVL_HIGH;
       }
 
       switch (pulseCfg[i].edge) {
       case PULSE_EDGE_RISING:
         if ((PULSE_LVL_LOW == pulseLvlLast[i]) && (PULSE_LVL_HIGH == level)) {
-          pulseCount[i]++;
+          incrPulse = true;
         }
         break;
       case PULSE_EDGE_FALLING:
         if ((PULSE_LVL_HIGH == pulseLvlLast[i]) && (PULSE_LVL_LOW == level)) {
-          pulseCount[i]++;
+          incrPulse = true;
         }
         break;
       case PULSE_EDGE_BOTH:
         if (pulseLvlLast[i] != level) {
+          incrPulse = true;
+        }
+      }
+
+      if (incrPulse) {
+        if (timerMillisDelta(tLastPulse[i]) >= pulseCfg[i].periods) {
           pulseCount[i]++;
+          tLastPulse[i] = timerMillis();
         }
       }
 
