@@ -33,8 +33,11 @@ void pulseInit(const size_t index) {
     }
     timerDelay_ms(1);
   } else {
-    portPinDir(GRP_OPA, opaPUs[index], PIN_DIR_IN);
-    portPinCfg(GRP_OPA, opaPUs[index], PORT_PINCFG_PULLEN, PIN_CFG_CLR);
+    /* Disable external pull ups */
+    if (index < 2u) {
+      portPinDir(GRP_OPA, opaPUs[index], PIN_DIR_IN);
+      portPinCfg(GRP_OPA, opaPUs[index], PORT_PINCFG_PULLEN, PIN_CFG_CLR);
+    }
 
     /* Enable weak pull down */
     portPinCfg(GRP_OPA, pin, PORT_PINCFG_PULLEN, PIN_CFG_SET);

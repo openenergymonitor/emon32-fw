@@ -29,27 +29,17 @@ const uint8_t pinsUnused[][2] = {
 
 /* ADC input pins. Voltages are the first and contiguous; CT channels can be
  * remapped to ease layout. */
-const uint8_t pinsADC[][2] = {{GRP_ADC_VMID, PIN_ADC_VMID},
-                              {GRP_ADC_VREF, PIN_ADC_VREF},
-                              {GRP_ADC_VSENS1, PIN_ADC_VSENS1},
-                              {GRP_ADC_VSENS2, PIN_ADC_VSENS2},
-                              {GRP_ADC_VSENS3, PIN_ADC_VSENS3},
-                              {GRP_ADC_CT1, PIN_ADC_CT1},
-                              {GRP_ADC_CT2, PIN_ADC_CT2},
-                              {GRP_ADC_CT3, PIN_ADC_CT3},
-                              {GRP_ADC_CT4, PIN_ADC_CT4},
-                              {GRP_ADC_CT5, PIN_ADC_CT5},
-                              {GRP_ADC_CT6, PIN_ADC_CT6},
-                              {GRP_ADC_CT7, PIN_ADC_CT7},
-                              {GRP_ADC_CT8, PIN_ADC_CT8},
-                              {GRP_ADC_CT9, PIN_ADC_CT9},
-                              {GRP_ADC_CT10, PIN_ADC_CT10},
-                              {GRP_ADC_CT11, PIN_ADC_CT11},
-                              {GRP_ADC_CT12, PIN_ADC_CT12},
-                              {GRP_ADC_AIN, PIN_ADC_AIN},
-                              {GRP_ADC_VCAL_H, PIN_ADC_VCAL_H},
-                              {GRP_ADC_VCAL_L, PIN_ADC_VCAL_L},
-                              {0xFF, 0}};
+const uint8_t pinsADC[][2] = {
+    {GRP_ADC_VMID, PIN_ADC_VMID},     {GRP_ADC_VREF, PIN_ADC_VREF},
+    {GRP_ADC_VSENS1, PIN_ADC_VSENS1}, {GRP_ADC_VSENS2, PIN_ADC_VSENS2},
+    {GRP_ADC_VSENS3, PIN_ADC_VSENS3}, {GRP_ADC_CT1, PIN_ADC_CT1},
+    {GRP_ADC_CT2, PIN_ADC_CT2},       {GRP_ADC_CT3, PIN_ADC_CT3},
+    {GRP_ADC_CT4, PIN_ADC_CT4},       {GRP_ADC_CT5, PIN_ADC_CT5},
+    {GRP_ADC_CT6, PIN_ADC_CT6},       {GRP_ADC_CT7, PIN_ADC_CT7},
+    {GRP_ADC_CT8, PIN_ADC_CT8},       {GRP_ADC_CT9, PIN_ADC_CT9},
+    {GRP_ADC_CT10, PIN_ADC_CT10},     {GRP_ADC_CT11, PIN_ADC_CT11},
+    {GRP_ADC_CT12, PIN_ADC_CT12},     {GRP_ADC_VCAL_H, PIN_ADC_VCAL_H},
+    {GRP_ADC_VCAL_L, PIN_ADC_VCAL_L}, {0xFF, 0}};
 
 /* Remapping for analog CT inputs. This maps the 0-indexed CT physical pin to
  * the logical pin. For example, physical CT1 is the 4th CT sampled so:
