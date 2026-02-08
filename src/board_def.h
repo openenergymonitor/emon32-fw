@@ -123,11 +123,11 @@
 
 /* OneWire/Pulse interface */
 #define GRP_OPA     GRP_PINA
-#define PIN_OPA1    16
-#define PIN_OPA2    17
-#define PIN_OPA3    9
-#define PIN_OPA1_PU 18
-#define PIN_OPA2_PU 19
+#define PIN_OPA1    16u
+#define PIN_OPA2    17u
+#define PIN_OPA3    9u
+#define PIN_OPA1_PU 18u
+#define PIN_OPA2_PU 19u
 
 /* DISABLE_EXT_INTF */
 #define GRP_DISABLE_EXT GRP_PINB

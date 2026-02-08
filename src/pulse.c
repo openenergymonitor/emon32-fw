@@ -21,10 +21,16 @@ void pulseInit(const size_t index) {
 
   const uint8_t pin = pulseCfg[index].pin;
 
-  /* Enable pull up if configured and allow a delay to charge RC */
+  /* Enable pull up if configured and allow a delay to charge RC. OPA1/2 have an
+   * external pull-up; for OPA3 enable the weak internal pull-up */
   if (pulseCfg[index].puEn) {
-    portPinDir(GRP_OPA, opaPUs[index], PIN_DIR_OUT);
-    portPinDrv(GRP_OPA, opaPUs[index], PIN_DRV_SET);
+    if (index < 2u) {
+      portPinDir(GRP_OPA, opaPUs[index], PIN_DIR_OUT);
+      portPinDrv(GRP_OPA, opaPUs[index], PIN_DRV_SET);
+    } else {
+      portPinCfg(GRP_OPA, pin, PORT_PINCFG_PULLEN, PIN_CFG_SET);
+      portPinDrv(GRP_OPA, pin, PIN_DRV_SET);
+    }
     timerDelay_ms(1);
   } else {
     portPinDir(GRP_OPA, opaPUs[index], PIN_DIR_IN);

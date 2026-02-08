@@ -11,12 +11,17 @@ const uint8_t pinsGPIO_Out[][2] = {{GRP_PINB, PIN_LED_STATUS},
                                    {GRP_PINA, PIN_SPI_RFM_SS},
                                    {0xFF, 0}};
 
-const uint8_t pinsGPIO_In[][2] = {
-    {GRP_OPA, PIN_OPA1},         {GRP_OPA, PIN_OPA2},
-    {GRP_OPA, PIN_OPA1_PU},      {GRP_OPA, PIN_OPA2_PU},
-    {GRP_RFM_INTF, PIN_RFM_IRQ}, {GRP_RFM_INTF, PIN_RFM_RST},
-    {GRP_PINA, PIN_REV0},        {GRP_PINA, PIN_REV1},
-    {GRP_PINB, PIN_REV2},        {0xFF, 0}};
+const uint8_t pinsGPIO_In[][2] = {{GRP_OPA, PIN_OPA1},
+                                  {GRP_OPA, PIN_OPA2},
+                                  {GRP_OPA, PIN_OPA1_PU},
+                                  {GRP_OPA, PIN_OPA2_PU},
+                                  {GRP_OPA, PIN_OPA3},
+                                  {GRP_RFM_INTF, PIN_RFM_IRQ},
+                                  {GRP_RFM_INTF, PIN_RFM_RST},
+                                  {GRP_PINA, PIN_REV0},
+                                  {GRP_PINA, PIN_REV1},
+                                  {GRP_PINB, PIN_REV2},
+                                  {0xFF, 0}};
 
 const uint8_t pinsUnused[][2] = {
     {GRP_PINA, 0u},  {GRP_PINA, 1u},  {GRP_PINB, 10u}, {GRP_PINB, 11u},

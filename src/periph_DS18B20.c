@@ -51,10 +51,10 @@ static void oneWireWriteBit(uint8_t bit, const size_t opaIdx);
 static void oneWireWriteBytes(const void *pSrc, const uint8_t n,
                               const size_t opaIdx);
 
-uint64_t ROM_NO                = 0;
-int32_t  lastDiscrepancy       = 0;
-int32_t  lastFamilyDiscrepancy = 0;
-int32_t  lastDeviceFlag        = 0;
+static uint64_t ROM_NO                = 0;
+static int32_t  lastDiscrepancy       = 0;
+static int32_t  lastFamilyDiscrepancy = 0;
+static bool     lastDeviceFlag        = false;
 
 static uint8_t calcCRC8(const uint8_t crc, const uint8_t value) {
   static const uint8_t dscrc_table[] = {
@@ -86,8 +86,8 @@ static uint8_t calcCRC8(const uint8_t crc, const uint8_t value) {
 static bool oneWireFirst(const size_t opaIdx) {
   /* Reset the search state */
   lastDiscrepancy       = 0;
-  lastDeviceFlag        = 0;
   lastFamilyDiscrepancy = 0;
+  lastDeviceFlag        = false;
 
   return oneWireSearch(opaIdx);
 }
@@ -194,8 +194,8 @@ static bool oneWireSearch(const size_t opaIdx) {
     if (!oneWireReset(opaIdx)) {
       /* Reset the search */
       lastDiscrepancy       = 0;
-      lastDeviceFlag        = 0;
       lastFamilyDiscrepancy = 0;
+      lastDeviceFlag        = false;
       return 0;
     }
 
@@ -260,7 +260,7 @@ static bool oneWireSearch(const size_t opaIdx) {
 
     /* Check for last device */
     if (0 == lastDiscrepancy) {
-      lastDeviceFlag = 1;
+      lastDeviceFlag = true;
     }
   }
 
