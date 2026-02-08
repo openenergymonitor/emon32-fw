@@ -200,9 +200,7 @@ static void configDefault(void) {
   config.crc16_ccitt = calcCRC16_ccitt(&config, (sizeof(config) - 2u));
 }
 
-/*! @brief Write the configuration values to index 0, and zero the
- *         accumulator space to.
- */
+/*! @brief Write the configuration values to index 0, and clear accumulators */
 static void configInitialiseNVM(void) {
 
   serialPuts("  - Initialising NVM... ");
@@ -827,16 +825,10 @@ static bool configureOPA(void) {
 
   if (isPulse) {
     convU = utilAtoui((inBuffer + posPu), ITOA_BASE10);
-    if (!convU.valid) {
+    if (!convU.valid || (convU.val.u32 > 1u)) {
       serialPutsError("Invalid OPA pull-up value.");
       return false;
     }
-
-    if (convU.val.u32 > 1) {
-      serialPutsError("Invalid OPA pull-up value.");
-      return false;
-    }
-
     pu = (bool)convU.val.u8;
 
     convU = utilAtoui((inBuffer + posPeriod), ITOA_BASE10);
@@ -844,11 +836,16 @@ static bool configureOPA(void) {
       serialPutsError("Invalid OPA period value.");
       return false;
     }
+    if (convU.val.u8 < 10u) {
+      serialPutsError("OPA period must be >= 10.");
+      return false;
+    }
+
     period = convU.val.u8;
   }
 
   /* OPA3 can only be a pulse or analog input */
-  if ((2 == ch) && !isPulse) {
+  if ((2u == ch) && !isPulse) {
     serialPutsError("OPA3 only supports pulse input.");
     return false;
   }
