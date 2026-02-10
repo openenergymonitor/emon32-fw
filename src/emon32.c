@@ -458,7 +458,7 @@ static uint32_t tempSetup(Emon32Dataset_t *pData) {
   uint32_t       numTempSensors = 0;
   DS18B20_conf_t dsCfg          = {0};
   dsCfg.grp                     = GRP_OPA;
-  dsCfg.t_wait_us               = 5;
+  dsCfg.t_wait_us               = 5u;
 
   tempInitClear();
 
@@ -610,10 +610,11 @@ static void waitWithUSB(uint32_t t_ms) {
 
 int main(void) {
 
-  Emon32Dataset_t    dataset        = {0};
-  uint32_t           numTempSensors = 0;
-  Emon32Cumulative_t nvmCumulative  = {0};
-  uint32_t           rfmPkts        = 0;
+  Emon32Dataset_t    dataset            = {0};
+  uint32_t           numTempSensors     = 0;
+  uint32_t           numTempSensorsLast = 0;
+  Emon32Cumulative_t nvmCumulative      = {0};
+  uint32_t           rfmPkts            = 0;
 
   ucSetup();
   uiLedColour(LED_RED);
@@ -647,7 +648,8 @@ int main(void) {
 
   /* Set up pulse and temperature sensors, if present. */
   pulseConfigure();
-  numTempSensors = tempSetup(&dataset);
+  numTempSensors     = tempSetup(&dataset);
+  numTempSensorsLast = numTempSensors;
 
   /* Wait 1s to allow USB to enumerate as serial. Not always possible, but
    * gives the possibility. The board information can be accessed through the
@@ -853,8 +855,11 @@ int main(void) {
       if (evtPending(EVT_OPA_INIT)) {
         pulseConfigure();
         numTempSensors = tempSetup(&dataset);
-        printf_("> Found %lu OneWire temperature sensor%s.\r\n", numTempSensors,
-                (1u == numTempSensors ? "" : "s"));
+        if (numTempSensorsLast != numTempSensors) {
+          printf_("> Found %lu OneWire temperature sensor%s.\r\n",
+                  numTempSensors, (1u == numTempSensors ? "" : "s"));
+          numTempSensorsLast = numTempSensors;
+        }
         emon32EventClr(EVT_OPA_INIT);
       }
     }
