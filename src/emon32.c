@@ -109,6 +109,7 @@ static void cumulativeNVMLoad(Emon32Cumulative_t *pPkt,
   for (size_t idxPulse = 0; idxPulse < NUM_OPA; idxPulse++) {
     uint32_t pulse = eepromOK ? pPkt->pulseCnt[idxPulse] : 0;
 
+    pulseSetCount(idxPulse, pulse);
     pData->pulseCnt[idxPulse] = pulse;
     totalP += pulse;
   }
@@ -193,7 +194,6 @@ static void cumulativeProcess(Emon32Cumulative_t    *pPkt,
  *  @param [out] pDst : pointer to the data struct
  */
 static void datasetAddPulse(Emon32Dataset_t *pDst) {
-  EMON32_ASSERT(pDst);
   for (size_t i = 0; i < NUM_OPA; i++) {
     pDst->pulseCnt[i] = pulseGetCount(i);
   }
@@ -338,8 +338,6 @@ static void pulseConfigure(void) {
 
   for (size_t i = 0; i < NUM_OPA; i++) {
     PulseCfg_t *pulseCfg = pulseGetCfg(i);
-
-    EMON32_ASSERT(pulseCfg);
 
     if (('o' != pConfig->opaCfg[i].func) && (pConfig->opaCfg[i].opaActive)) {
       pulseCfg->edge    = (PulseEdge_t)pConfig->opaCfg[i].func;

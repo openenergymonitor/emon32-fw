@@ -83,8 +83,8 @@ void portSetup(void) {
   for (size_t i = 0; pinsGPIO_In[i][0] != 0xFF; i++) {
     if (GRP_OPA == pinsGPIO_In[i][0]) {
       uint8_t p = pinsGPIO_In[i][1];
-      if ((PIN_OPA1 == p) || (PIN_OPA2 == p) || (PIN_OPA1_PU == p) ||
-          (PIN_OPA2_PU == p)) {
+      if ((PIN_OPA1 == p) || (PIN_OPA2 == p) || (PIN_OPA3 == p) ||
+          (PIN_OPA1_PU == p) || (PIN_OPA2_PU == p)) {
         input(pinsGPIO_In[i][0], pinsGPIO_In[i][1], false);
       }
     } else {

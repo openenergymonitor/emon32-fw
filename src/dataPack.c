@@ -35,6 +35,7 @@ static void   catMsg(StrN_t *strD, uint32_t msg, bool json);
 static void   initFields(StrN_t *pD, char *pS, const size_t m);
 static size_t strnCat(StrN_t *strD, const StrN_t *strS);
 static size_t strnCatFloat(StrN_t *strD, float v);
+static size_t strnCatFromTmp(StrN_t *strD, const size_t len);
 static size_t strnCatInt(StrN_t *strD, int32_t v);
 static size_t strnCatUint(StrN_t *strD, uint32_t v);
 

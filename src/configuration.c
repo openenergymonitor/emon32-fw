@@ -194,7 +194,7 @@ static void configDefault(void) {
    */
   config.opaCfg[2].func      = 'r';
   config.opaCfg[2].opaActive = false;
-  config.opaCfg[2].period    = 100;
+  config.opaCfg[2].period    = PULSE_BLANK_DEF;
   config.opaCfg[2].puEn      = false;
 
   config.crc16_ccitt = calcCRC16_ccitt(&config, (sizeof(config) - 2u));

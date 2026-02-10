@@ -5,7 +5,6 @@
 /* Each pin are defined in {GROUP, PIN} pairs. Pin numberings are logical,
  * not physical. Each collection of pins is terminated with a {0xFF, 0} pair.
  */
-
 const uint8_t pinsGPIO_Out[][2] = {{GRP_PINB, PIN_LED_STATUS},
                                    {GRP_PINB, PIN_LED_PROG},
                                    {GRP_PINA, PIN_SPI_RFM_SS},
@@ -13,9 +12,9 @@ const uint8_t pinsGPIO_Out[][2] = {{GRP_PINB, PIN_LED_STATUS},
 
 const uint8_t pinsGPIO_In[][2] = {{GRP_OPA, PIN_OPA1},
                                   {GRP_OPA, PIN_OPA2},
+                                  {GRP_OPA, PIN_OPA3},
                                   {GRP_OPA, PIN_OPA1_PU},
                                   {GRP_OPA, PIN_OPA2_PU},
-                                  {GRP_OPA, PIN_OPA3},
                                   {GRP_RFM_INTF, PIN_RFM_IRQ},
                                   {GRP_RFM_INTF, PIN_RFM_RST},
                                   {GRP_PINA, PIN_REV0},

@@ -19,6 +19,7 @@ _Static_assert((sizeof(bool) == 1), "bool must be 1 byte");
 #define REPORT_TIME_DEF    9.8f /* Report time, in seconds */
 #define ASSUMED_VRMS_DEF   0    /* Assumed voltage, used if no AC sense */
 #define CT_LEAD_DEF        1.5f /* CT lead angle */
+#define PULSE_BLANK_DEF    25u  /* Minimum time between pulses (ms) */
 
 #define PERF_ENABLED       0u     /* Performance tracing */
 #define TX_INDICATE_T      250u   /* Transmission indication time (ms) */
