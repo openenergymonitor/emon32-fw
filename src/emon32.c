@@ -398,7 +398,7 @@ static void ssd1306Setup(void) {
     ssd1306SetPosition((PosXY_t){.x = 44u, .y = 0u});
     ssd1306DrawString("emonPi3");
     ssd1306SetPosition((PosXY_t){.x = 46u, .y = 1u});
-    ssd1306DrawString(vInfo.version);
+    ssd1306DrawString(vInfo.release);
     ssd1306SetPosition((PosXY_t){.x = (44u - offset), .y = 2u});
     ssd1306DrawString(vInfo.revision);
     ssd1306DisplayUpdate();

@@ -26,13 +26,6 @@ _Static_assert((sizeof(bool) == 1), "bool must be 1 byte");
 #define CONFIRM_TIMEOUT_MS 30000u /* Confirmation timeout (ms) */
 
 /*********************************
- * Firmware version
- *********************************/
-#define VERSION_FW_MAJ 1u
-#define VERSION_FW_MIN 0u
-#define VERSION_FW_REV 0u
-
-/*********************************
  * Remaining
  *********************************/
 

@@ -426,8 +426,7 @@ static void configureBackup(void) {
   printf_("\"revision\":%ld,", getBoardRevision());
   printf_("\"serial\":\"0x%02lx%02lx%02lx%02lx\",", getUniqueID(0),
           getUniqueID(1), getUniqueID(2), getUniqueID(3));
-  printf_("\"fw\":\"%d.%d.%d\"},", VERSION_FW_MAJ, VERSION_FW_MIN,
-          VERSION_FW_REV);
+  printf_("\"fw\":\"%s\"},", emon32_build_info().release);
 
   /* {board_config} dict */
   utilFtoa(strBuf, config.baseCfg.reportTime);
@@ -1268,8 +1267,7 @@ static void printSettingsHR(void) {
 static void printSettingsKV(void) {
   serialPuts("hardware = emonPi3\r\n");
   printf_("hardware_rev = %lu\r\n", getBoardRevision());
-  printf_("version = %d.%d.%d\r\n", VERSION_FW_MAJ, VERSION_FW_MIN,
-          VERSION_FW_REV);
+  printf_("version = %s\r\n", emon32_build_info().release);
   printf_("commit = %s\r\n", emon32_build_info().revision);
   printf_("assumedV = %d\r\n", config.baseCfg.assumedVrms);
   for (size_t i = 0; i < NUM_V; i++) {
@@ -1625,8 +1623,7 @@ void configFirmwareBoardInfo(void) {
   serialPuts("\r\n");
 
   serialPuts("> Firmware:\r\n");
-  printf_("  - Version:    %d.%d.%d\r\n", VERSION_FW_MAJ, VERSION_FW_MIN,
-          VERSION_FW_REV);
+  printf_("  - Version:    %s\r\n", emon32_build_info().release);
   serialPuts("  - Build:      ");
   serialPuts(emon32_build_info_string());
   serialPuts("\r\n\r\n");
@@ -1865,7 +1862,7 @@ uint16_t configTimeToCycles(const float time, const uint32_t mainsFreq) {
 
 VersionInfo_t configVersion(void) {
   struct Emon32BuildInfo binfo = emon32_build_info();
-  return (VersionInfo_t){.version = binfo.version, .revision = binfo.revision};
+  return (VersionInfo_t){.release = binfo.release, .revision = binfo.revision};
 }
 
 /* =======================

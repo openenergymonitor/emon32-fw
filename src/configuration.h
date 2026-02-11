@@ -83,7 +83,7 @@ _Static_assert((sizeof(CTCfgPacked_t) == 12),
                "CTCfgPacked_t is not 12 bytes wide.");
 
 typedef struct VersionInfo_ {
-  const char *version;
+  const char *release;
   const char *revision;
 } VersionInfo_t;
 
