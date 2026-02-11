@@ -31,3 +31,11 @@ jobs:
               with:
                 name: firmware-${{ github.ref_name }}
                 path: bin/emon32*.*
+
+            - name: Create GitHub release and upload assets
+              uses: softprops/action-gh-release@v2
+              with:
+                tag_name: ${{ github.ref_name }}
+                name: ${{ github.ref_name }}
+                files: |
+                  bin/emon32*.*
