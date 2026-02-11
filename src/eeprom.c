@@ -78,6 +78,7 @@ typedef struct wlAsyncCtx_ {
 static Address_t        calcAddress(const uint32_t addrFull);
 static uint8_t          nextValidByte(const uint8_t currentValid);
 static eepromWLStatus_t wlFindLast(void);
+static bool             eepromPollReady(uint32_t devAddr);
 static I2CM_Status_t    writeBytes(wrLocal_t *wr, uint32_t n);
 
 /* Local values */
@@ -202,6 +203,11 @@ static I2CM_Status_t writeBytes(wrLocal_t *wr, uint32_t n) {
   I2CM_Status_t i2cm_s;
   Address_t     address = calcAddress(wr->addr);
 
+  /* ACK poll: ensure EEPROM is ready before writing */
+  if (!eepromPollReady(address.msb)) {
+    return I2CM_TIMEOUT;
+  }
+
   /* Setup next transaction */
   wr->addr += n;
   wr->n_residual -= n;
@@ -226,6 +232,32 @@ static I2CM_Status_t writeBytes(wrLocal_t *wr, uint32_t n) {
   i2cAck(SERCOM_I2CM, I2CM_ACK, I2CM_ACK_CMD_STOP);
 
   return i2cm_s;
+}
+
+/*! @brief Poll EEPROM until ready (ACK polling per datasheet)
+ *  @param [in] devAddr : I2C device address (with R/W bit)
+ *  @return true if EEPROM is ready, false on timeout or bus error
+ */
+static bool eepromPollReady(uint32_t devAddr) {
+  static const uint32_t POLL_TIMEOUT_US  = 10000u; /* 10 ms (2x worst-case) */
+  static const uint32_t POLL_INTERVAL_US = 100u;
+
+  uint32_t tStart = timerMicros();
+
+  while (timerMicrosDelta(tStart) < POLL_TIMEOUT_US) {
+    I2CM_Status_t s = i2cActivate(SERCOM_I2CM, devAddr);
+    i2cAck(SERCOM_I2CM, I2CM_ACK, I2CM_ACK_CMD_STOP);
+
+    if (I2CM_SUCCESS == s) {
+      return true;
+    }
+    if (I2CM_NOACK != s) {
+      return false; /* Bus error or timeout - not recoverable by polling */
+    }
+    timerDelay_us(POLL_INTERVAL_US);
+  }
+
+  return false;
 }
 
 uint32_t eepromDiscoverSize(void) {
