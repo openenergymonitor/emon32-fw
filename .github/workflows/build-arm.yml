@@ -39,3 +39,5 @@ jobs:
                 name: ${{ github.ref_name }}
                 files: |
                   bin/emon32*.*
+              env:
+                GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
