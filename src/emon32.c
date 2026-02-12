@@ -472,7 +472,7 @@ static uint32_t tempSetup(Emon32Dataset_t *pData) {
       portPinCfg(GRP_OPA, opaPins[i], PORT_PINCFG_PULLEN, PIN_CFG_CLR);
       portPinDrv(GRP_OPA, opaPins[i], PIN_DRV_CLR);
 
-      if (pConfig->opaCfg[i].opaActive) {
+      if (pConfig->opaCfg[i].opaActive && sercomExtIntfEnabled()) {
         dsCfg.opaIdx = i;
         dsCfg.pin    = opaPins[i];
         dsCfg.pinPU  = opaPUs[i];
@@ -743,7 +743,7 @@ int main(void) {
        * the last temperature sample, start a temperature sample as well.
        */
       if (evtPending(EVT_ECM_TRIG)) {
-        if (numTempSensors > 0) {
+        if (sercomExtIntfEnabled() && (numTempSensors > 0)) {
           for (size_t i = 0; i < NUM_OPA; i++) {
             if (('o' == pConfig->opaCfg[i].func) &&
                 pConfig->opaCfg[i].opaActive) {
@@ -757,7 +757,7 @@ int main(void) {
 
       /* Trigger a temperature sample 1 s before the report is due. */
       if (evtPending(EVT_ECM_PEND_1S)) {
-        if (numTempSensors > 0) {
+        if (sercomExtIntfEnabled() && (numTempSensors > 0)) {
           for (size_t i = 0; i < NUM_OPA; i++) {
             if (('o' == pConfig->opaCfg[i].func) &&
                 pConfig->opaCfg[i].opaActive) {
@@ -780,7 +780,11 @@ int main(void) {
        * through the configured interface.
        */
       if (evtPending(EVT_TEMP_READ)) {
-        tempReadEvt(&dataset, numTempSensors);
+        if (sercomExtIntfEnabled()) {
+          tempReadEvt(&dataset, numTempSensors);
+        } else {
+          emon32EventClr(EVT_TEMP_READ);
+        }
       }
 
       /* Report period elapsed; generate, pack, and send through the
