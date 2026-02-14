@@ -199,31 +199,47 @@ static eepromWLStatus_t wlFindLast(void) {
  *  @return Status from the write
  */
 static I2CM_Status_t writeBytes(wrLocal_t *wr, uint32_t n) {
-  I2CM_Status_t i2cm_s;
-  Address_t     address = calcAddress(wr->addr);
+  I2CM_Status_t  i2cm_s;
+  Address_t      address  = calcAddress(wr->addr);
+  const uint32_t nToWrite = n;
 
-  /* Setup next transaction */
-  wr->addr += n;
-  wr->n_residual -= n;
-
-  /* Write to select, then lower address */
-  i2cm_s = i2cActivate(SERCOM_I2CM, address.msb);
-  if (I2CM_SUCCESS != i2cm_s) {
+  /* Retry loop: EEPROM NACKs address during internal write cycle.
+   * STOP + 500us delay per retry, up to 10 retries (~5ms total).
+   */
+  for (unsigned retry = 0;; retry++) {
+    i2cm_s = i2cActivate(SERCOM_I2CM, address.msb);
+    if (I2CM_SUCCESS == i2cm_s) {
+      break;
+    }
+    if (I2CM_NOACK == i2cm_s) {
+      i2cAck(SERCOM_I2CM, I2CM_ACK, I2CM_ACK_CMD_STOP);
+      if (retry < 10) {
+        timerDelay_us(500);
+        continue;
+      }
+    }
+    /* TIMEOUT, ERROR, or NOACK retries exhausted */
     return i2cm_s;
   }
 
   i2cm_s = i2cDataWrite(SERCOM_I2CM, (uint8_t)address.lsb);
   if (I2CM_SUCCESS != i2cm_s) {
+    i2cAck(SERCOM_I2CM, I2CM_ACK, I2CM_ACK_CMD_STOP);
     return i2cm_s;
   }
 
   while (n--) {
     i2cm_s = i2cDataWrite(SERCOM_I2CM, *wr->pData++);
     if (I2CM_SUCCESS != i2cm_s) {
+      i2cAck(SERCOM_I2CM, I2CM_ACK, I2CM_ACK_CMD_STOP);
       return i2cm_s;
     }
   }
   i2cAck(SERCOM_I2CM, I2CM_ACK, I2CM_ACK_CMD_STOP);
+
+  /* Advance state only after successful transaction */
+  wr->addr += nToWrite;
+  wr->n_residual -= nToWrite;
 
   return i2cm_s;
 }
