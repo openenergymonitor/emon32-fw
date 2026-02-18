@@ -34,7 +34,7 @@ void pulseUpdate(void);
 
 /*! @brief Sets the pulse count value
  *  @param [in] index : pulse count index to set
- *  @param [in] pulseCount : the value to set
+ *  @param [in] value : the value to set
  */
 void pulseSetCount(const size_t index, const uint32_t value);
 

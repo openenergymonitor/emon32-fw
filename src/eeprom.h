@@ -35,7 +35,7 @@ void eepromDump(void);
 void eepromInitBlock(uint32_t startAddr, const uint32_t val, size_t n);
 
 /*! @brief Store values at address 0
- *  @param [in] pCfg : pointer to the data source
+ *  @param [in] pSrc : pointer to the data source
  *  @param [in] n : number of bytes to write
  */
 void eepromInitConfig(const void *pSrc, const size_t n);

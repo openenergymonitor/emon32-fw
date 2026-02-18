@@ -105,7 +105,7 @@ void debugPuts(const char *s);
 void ecmConfigure(void);
 
 /*! @brief Clear a pending event/interrupt flag after the task has been handled
- *  @param [in] Event source in enum
+ *  @param [in] evt : event source in enum
  */
 void emon32EventClr(const EVTSRC_t evt);
 

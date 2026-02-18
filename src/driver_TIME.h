@@ -44,7 +44,7 @@ uint32_t timerMicrosDelta(const uint32_t prevMicros);
 uint32_t timerMillis(void);
 
 /*! @brief Returns the time delta between milliseconds, accounting for wrap
- *  @param [in] prevMicros : previous count value
+ *  @param [in] prevMillis : previous count value
  *  @return time delta in milliseconds
  */
 uint32_t timerMillisDelta(const uint32_t prevMillis);

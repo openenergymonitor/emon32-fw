@@ -323,14 +323,12 @@ static void evtKiloHertz(void) {
 }
 
 /*! @brief Check if an event source is active
- *  @param [in] : event source to check
+ *  @param [in] evt : event source to check
  *  @return true if pending, false otherwise
  */
 static bool evtPending(EVTSRC_t evt) { return (evtPend & (1u << evt)) != 0; }
 
-/*! @brief Configure any pulse counter interfaces
- *  @param [in] pCfg : pointer to the configuration struct
- */
+/*! @brief Configure any pulse counter interfaces */
 static void pulseConfigure(void) {
 
   uint8_t pinsPulse[][NUM_OPA] = {

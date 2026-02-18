@@ -59,7 +59,7 @@ void dmacDisableChannelInterrupt(uint8_t ch);
 void dmacClearChannelInterrupt(uint8_t ch);
 
 /*! @brief Calculate the CRC16 (CCITT - 0x1021)
- *  @param [in] pData : pointer to data
+ *  @param [in] pSrc : pointer to data
  *  @param [in] n : number of bytes in data
  *  @return CRC16 value
  */

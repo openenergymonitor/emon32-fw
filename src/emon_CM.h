@@ -202,7 +202,7 @@ void ecmPhaseCalibrate(AutoPhaseRes_t *pDst);
 ECM_STATUS_t ecmProcessCycle(void) RAMFUNC;
 
 /*! @brief Processes a whole data set
- *  @param [out] pData : pointer to the processed data structure
+ *  @return pointer to the processed data structure
  */
 ECMDataset_t *ecmProcessSet(void) RAMFUNC;
 
