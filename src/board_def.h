@@ -28,7 +28,7 @@
 
 #define ADC_VREF     1.024f
 #define ADC_RES_BITS 11
-#define CAL_V        8.16f
+#define CAL_V        8.0087f
 #define CAL_CT       3.027f
 
 /* OneWire/Pulse setup */
