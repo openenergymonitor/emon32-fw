@@ -326,8 +326,8 @@ RAMFUNC bool zeroCrossingSW(q15_t smpV, uint32_t timeNow_us) {
           uint32_t period_us = timeNow_us - lastZC_us;
           /* Accept period if within reasonable bounds for 40-71 Hz */
           validPeriod        = (period_us >= ZC_PERIOD_MIN_US &&
-                         period_us <= ZC_PERIOD_MAX_US) ||
-                        useAssumedV;
+                                period_us <= ZC_PERIOD_MAX_US) ||
+                               useAssumedV;
         }
 
         if (validAmplitude && validPeriod) {
@@ -616,17 +616,17 @@ RAMFUNC ECM_STATUS_t ecmInjectSample(void) {
       int32_t thisV = sampleBuffer[thisVidx].smpV[v1];
       int32_t lastV = sampleBuffer[lastVidx].smpV[v1];
 
-      accumCollecting->processCT[idxCT].sumPA[0] += smul64(thisCT, lastV);
-      accumCollecting->processCT[idxCT].sumPB[0] += smul64(thisCT, thisV);
-      accumCollecting->processCT[idxCT].sumI_sqr += ssqr64(thisCT);
+      accumCollecting->processCT[idxCT].sumPA[0] += (int64_t)(thisCT * lastV);
+      accumCollecting->processCT[idxCT].sumPB[0] += (int64_t)(thisCT * thisV);
+      accumCollecting->processCT[idxCT].sumI_sqr += (int64_t)(thisCT * thisCT);
       accumCollecting->processCT[idxCT].sumI_deltas += thisCT;
 
       /* L-L load */
       if (v1 != v2) {
         thisV = sampleBuffer[thisVidx].smpV[v2];
         lastV = sampleBuffer[lastVidx].smpV[v2];
-        accumCollecting->processCT[idxCT].sumPA[1] += smul64(thisCT, lastV);
-        accumCollecting->processCT[idxCT].sumPB[1] += smul64(thisCT, thisV);
+        accumCollecting->processCT[idxCT].sumPA[1] += (int64_t)(thisCT * lastV);
+        accumCollecting->processCT[idxCT].sumPB[1] += (int64_t)(thisCT * thisV);
       }
     }
   }

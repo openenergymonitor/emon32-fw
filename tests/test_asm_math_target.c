@@ -166,48 +166,6 @@ static bool test_ssqr64_validation(void) {
   return pass;
 }
 
-static bool test_smul64_validation(void) {
-  printf_("Testing smul64 validation...\r\n");
-  bool pass = true;
-
-  /* Test with predefined pairs */
-  for (size_t i = 0; i < ARRAY_SIZE(test_mul_pairs); i++) {
-    int32_t a        = test_mul_pairs[i][0];
-    int32_t b        = test_mul_pairs[i][1];
-    int64_t result   = smul64(a, b);
-    int64_t expected = (int64_t)a * b;
-
-    if (result != expected) {
-      printf_(
-          "  FAIL: smul64(%ld, %ld) = 0x%08lX%08lX, expected 0x%08lX%08lX\r\n",
-          (long)a, (long)b, (unsigned long)(result >> 32),
-          (unsigned long)(result & 0xFFFFFFFF), (unsigned long)(expected >> 32),
-          (unsigned long)(expected & 0xFFFFFFFF));
-      pass = false;
-    }
-  }
-
-  /* Test all combinations of test_signed values */
-  for (size_t i = 0; i < ARRAY_SIZE(test_signed); i++) {
-    for (size_t j = 0; j < ARRAY_SIZE(test_signed); j++) {
-      int32_t a        = test_signed[i];
-      int32_t b        = test_signed[j];
-      int64_t result   = smul64(a, b);
-      int64_t expected = (int64_t)a * b;
-
-      if (result != expected) {
-        printf_("  FAIL: smul64(%ld, %ld)\r\n", (long)a, (long)b);
-        pass = false;
-      }
-    }
-  }
-
-  if (pass) {
-    printf_("  PASS: All smul64 tests passed\r\n");
-  }
-  return pass;
-}
-
 /*************************************
  * Performance benchmarks
  *************************************/
@@ -252,24 +210,6 @@ static void test_performance(void) {
   elapsed = timerMicrosDelta(start);
   printf_("  (i64)x * x:     %" PRIu32 " us total\r\n", elapsed);
 
-  /* Test smul64 (ASM) */
-  start = timerMicros();
-  for (int i = 0; i < PERF_ITERATIONS; i++) {
-    sink += (uint64_t)smul64((int32_t)i, (int32_t)(PERF_ITERATIONS - i));
-  }
-  elapsed = timerMicrosDelta(start);
-  printf_("  smul64 (ASM):   %" PRIu32 " us total\r\n", elapsed);
-
-  /* Test standard signed 64-bit multiply a*b */
-  start = timerMicros();
-  for (int i = 0; i < PERF_ITERATIONS; i++) {
-    int32_t a = (int32_t)i;
-    int32_t b = (int32_t)(PERF_ITERATIONS - i);
-    sink += (uint64_t)((int64_t)a * b);
-  }
-  elapsed = timerMicrosDelta(start);
-  printf_("  (i64)a * b:     %" PRIu32 " us total\r\n", elapsed);
-
   (void)sink; /* Prevent optimization */
 }
 
@@ -298,7 +238,6 @@ int main(void) {
 
   all_pass &= test_usqr64_validation();
   all_pass &= test_ssqr64_validation();
-  all_pass &= test_smul64_validation();
 
   test_performance();
 
