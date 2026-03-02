@@ -80,6 +80,22 @@ static uint8_t          nextValidByte(const uint8_t currentValid);
 static eepromWLStatus_t wlFindLast(void);
 static I2CM_Status_t    writeBytes(wrLocal_t *wr, uint32_t n);
 
+/* Diagnostic: last I2C error context for "WR FAIL!" / "RD FAIL!" messages.
+ *   phase: 'A'ctivate, 'L'SB, 'D'ata (uppercase=write, lowercase=read,
+ *          'r'=read re-activate)
+ *   status: I2CM_Status_t value (1=ERROR, 2=TIMEOUT, 3=NOACK)
+ *   retries: retry count (activate phase only)
+ *   sercomStatus: SERCOM I2CM STATUS register at point of failure
+ *   preState: SERCOM I2CM STATUS register BEFORE i2cActivate() call
+ *     Bits: [4:5]=BUSSTATE (0=UNK,1=IDLE,2=OWNER,3=BUSY)
+ *           [0]=BUSERR [1]=ARBLOST [6]=LOWTOUT [7]=CLKHOLD
+ */
+static char          lastI2CErrPhase       = '?';
+static I2CM_Status_t lastI2CErrStatus      = I2CM_SUCCESS;
+static uint8_t       lastI2CErrRetries     = 0;
+static uint16_t      lastI2CErrSercomState = 0;
+static uint16_t      lastI2CErrPreState    = 0; /* STATUS before i2cActivate */
+
 /* Local values */
 static uint32_t eepromSizeBytes = EEPROM_SIZE;
 
@@ -199,31 +215,62 @@ static eepromWLStatus_t wlFindLast(void) {
  *  @return Status from the write
  */
 static I2CM_Status_t writeBytes(wrLocal_t *wr, uint32_t n) {
-  I2CM_Status_t i2cm_s;
-  Address_t     address = calcAddress(wr->addr);
+  I2CM_Status_t  i2cm_s;
+  Address_t      address  = calcAddress(wr->addr);
+  const uint32_t nToWrite = n;
 
-  /* Setup next transaction */
-  wr->addr += n;
-  wr->n_residual -= n;
-
-  /* Write to select, then lower address */
-  i2cm_s = i2cActivate(SERCOM_I2CM, address.msb);
-  if (I2CM_SUCCESS != i2cm_s) {
+  /* Retry loop: EEPROM NACKs address during internal write cycle.
+   * STOP + 500us delay per retry, up to 10 retries (~5ms total).
+   */
+  for (unsigned retry = 0;; retry++) {
+    uint16_t preStatus = SERCOM_I2CM->I2CM.STATUS.reg;
+    i2cm_s             = i2cActivate(SERCOM_I2CM, address.msb);
+    if (I2CM_SUCCESS == i2cm_s) {
+      break;
+    }
+    /* Capture SERCOM status BEFORE STOP changes it */
+    uint16_t sercomStatus = SERCOM_I2CM->I2CM.STATUS.reg;
+    /* Release bus before retry or return */
+    i2cAck(SERCOM_I2CM, I2CM_ACK, I2CM_ACK_CMD_STOP);
+    if ((I2CM_NOACK == i2cm_s) && (retry < 10)) {
+      timerDelay_us(500);
+      continue;
+    }
+    /* TIMEOUT, ERROR, or NOACK retries exhausted */
+    lastI2CErrPhase       = 'A';
+    lastI2CErrStatus      = i2cm_s;
+    lastI2CErrRetries     = retry;
+    lastI2CErrSercomState = sercomStatus;
+    lastI2CErrPreState    = preStatus;
     return i2cm_s;
   }
 
   i2cm_s = i2cDataWrite(SERCOM_I2CM, (uint8_t)address.lsb);
   if (I2CM_SUCCESS != i2cm_s) {
+    lastI2CErrPhase       = 'L';
+    lastI2CErrStatus      = i2cm_s;
+    lastI2CErrRetries     = 0;
+    lastI2CErrSercomState = SERCOM_I2CM->I2CM.STATUS.reg;
+    i2cAck(SERCOM_I2CM, I2CM_ACK, I2CM_ACK_CMD_STOP);
     return i2cm_s;
   }
 
   while (n--) {
     i2cm_s = i2cDataWrite(SERCOM_I2CM, *wr->pData++);
     if (I2CM_SUCCESS != i2cm_s) {
+      lastI2CErrPhase       = 'D';
+      lastI2CErrStatus      = i2cm_s;
+      lastI2CErrRetries     = 0;
+      lastI2CErrSercomState = SERCOM_I2CM->I2CM.STATUS.reg;
+      i2cAck(SERCOM_I2CM, I2CM_ACK, I2CM_ACK_CMD_STOP);
       return i2cm_s;
     }
   }
   i2cAck(SERCOM_I2CM, I2CM_ACK, I2CM_ACK_CMD_STOP);
+
+  /* Advance state only after successful transaction */
+  wr->addr += nToWrite;
+  wr->n_residual -= nToWrite;
 
   return i2cm_s;
 }
@@ -291,17 +338,20 @@ void eepromInitBlock(uint32_t startAddr, const uint32_t val, size_t n) {
     address = calcAddress(startAddr);
     i2cm_s  = i2cActivate(SERCOM_I2CM, address.msb);
     if (I2CM_SUCCESS != i2cm_s) {
+      i2cAck(SERCOM_I2CM, I2CM_ACK, I2CM_ACK_CMD_STOP);
       return;
     }
 
     i2cm_s = i2cDataWrite(SERCOM_I2CM, (uint8_t)address.lsb);
     if (I2CM_SUCCESS != i2cm_s) {
+      i2cAck(SERCOM_I2CM, I2CM_ACK, I2CM_ACK_CMD_STOP);
       return;
     }
 
     for (size_t i = 0; i < EEPROM_PAGE_SIZE; i++) {
       i2cm_s = i2cDataWrite(SERCOM_I2CM, (uint8_t)val);
       if (I2CM_SUCCESS != i2cm_s) {
+        i2cAck(SERCOM_I2CM, I2CM_ACK, I2CM_ACK_CMD_STOP);
         return;
       }
     }
@@ -343,13 +393,26 @@ bool eepromRead(uint32_t addr, void *pDst, size_t n) {
 
   /* Write select with address high and ack with another start, then send low
    * byte of address */
-  i2cm_s = i2cActivate(SERCOM_I2CM, address.msb);
+  uint16_t preStatus = SERCOM_I2CM->I2CM.STATUS.reg;
+  i2cm_s             = i2cActivate(SERCOM_I2CM, address.msb);
   if (I2CM_SUCCESS != i2cm_s) {
+    lastI2CErrPhase       = 'a';
+    lastI2CErrStatus      = i2cm_s;
+    lastI2CErrRetries     = 0;
+    lastI2CErrSercomState = SERCOM_I2CM->I2CM.STATUS.reg;
+    lastI2CErrPreState    = preStatus;
+    i2cAck(SERCOM_I2CM, I2CM_ACK, I2CM_ACK_CMD_STOP);
     return false;
   }
 
   i2cm_s = i2cDataWrite(SERCOM_I2CM, (uint8_t)address.lsb);
   if (I2CM_SUCCESS != i2cm_s) {
+    lastI2CErrPhase       = 'l';
+    lastI2CErrStatus      = i2cm_s;
+    lastI2CErrRetries     = 0;
+    lastI2CErrSercomState = SERCOM_I2CM->I2CM.STATUS.reg;
+    lastI2CErrPreState    = 0;
+    i2cAck(SERCOM_I2CM, I2CM_ACK, I2CM_ACK_CMD_STOP);
     return false;
   }
 
@@ -357,14 +420,26 @@ bool eepromRead(uint32_t addr, void *pDst, size_t n) {
    * final byte, respond with NACK */
   address.msb += 1u;
 
-  i2cm_s = i2cActivate(SERCOM_I2CM, address.msb);
+  preStatus = SERCOM_I2CM->I2CM.STATUS.reg;
+  i2cm_s    = i2cActivate(SERCOM_I2CM, address.msb);
   if (I2CM_SUCCESS != i2cm_s) {
+    lastI2CErrPhase       = 'r';
+    lastI2CErrStatus      = i2cm_s;
+    lastI2CErrRetries     = 0;
+    lastI2CErrSercomState = SERCOM_I2CM->I2CM.STATUS.reg;
+    lastI2CErrPreState    = preStatus;
+    i2cAck(SERCOM_I2CM, I2CM_ACK, I2CM_ACK_CMD_STOP);
     return false;
   }
 
   while (n) {
     i2cm_s = i2cDataRead(SERCOM_I2CM, pData++);
     if (I2CM_SUCCESS != i2cm_s) {
+      lastI2CErrPhase       = 'd';
+      lastI2CErrStatus      = i2cm_s;
+      lastI2CErrRetries     = 0;
+      lastI2CErrSercomState = SERCOM_I2CM->I2CM.STATUS.reg;
+      i2cAck(SERCOM_I2CM, I2CM_ACK, I2CM_ACK_CMD_STOP);
       return false;
     }
     n--;
@@ -548,6 +623,9 @@ static void eepromWLAsyncCallback(void) {
                          sizeof(wlAsyncCtx.header));
     if (status == EEPROM_WR_FAIL) {
       /* I2C failed - perform bus recovery and retry once */
+      printf_("WR FAIL! %c:%d r%u s0x%04X pre0x%04X (retry)\r\n",
+              lastI2CErrPhase, lastI2CErrStatus, lastI2CErrRetries,
+              lastI2CErrSercomState, lastI2CErrPreState);
       eepromBusRecovery();
       status = eepromWrite(wlAsyncCtx.addrWr, (const void *)&wlAsyncCtx.header,
                            sizeof(wlAsyncCtx.header));
@@ -587,7 +665,9 @@ static void eepromWLAsyncCallback(void) {
         wlAsyncCtx.state = WL_ASYNC_IDLE;
       }
     } else if (status == EEPROM_WR_FAIL) {
-      printf_("WR FAIL!\r\n");
+      printf_("WR FAIL! %c:%d r%u s0x%04X pre0x%04X\r\n", lastI2CErrPhase,
+              lastI2CErrStatus, lastI2CErrRetries, lastI2CErrSercomState,
+              lastI2CErrPreState);
       eepromBusRecovery();
       wlAsyncCtx.busyRetries = 0;
       wlAsyncCtx.state       = WL_ASYNC_IDLE;
@@ -616,7 +696,9 @@ static void eepromWLAsyncCallback(void) {
         wlAsyncCtx.state = WL_ASYNC_IDLE;
       }
     } else if (status == EEPROM_WR_FAIL) {
-      printf_("WR FAIL!\r\n");
+      printf_("WR FAIL! %c:%d r%u s0x%04X pre0x%04X\r\n", lastI2CErrPhase,
+              lastI2CErrStatus, lastI2CErrRetries, lastI2CErrSercomState,
+              lastI2CErrPreState);
       eepromBusRecovery();
       wlAsyncCtx.state = WL_ASYNC_IDLE;
     }
@@ -652,7 +734,9 @@ static void eepromWLAsyncCallback(void) {
         wlAsyncCtx.state = WL_ASYNC_IDLE;
       }
     } else if (status == EEPROM_WR_FAIL) {
-      printf_("WR FAIL!\r\n");
+      printf_("WR FAIL! %c:%d r%u s0x%04X pre0x%04X\r\n", lastI2CErrPhase,
+              lastI2CErrStatus, lastI2CErrRetries, lastI2CErrSercomState,
+              lastI2CErrPreState);
       eepromBusRecovery();
       wlAsyncCtx.state = WL_ASYNC_IDLE;
     }
@@ -681,6 +765,8 @@ static void eepromWLAsyncCallback(void) {
         uint32_t validByte;
         if (!eepromRead(wlAsyncCtx.addrWr, &validByte, 1u)) {
           /* Read failed - cannot update valid byte, treat as error */
+          printf_("RD FAIL! %c:%d s0x%04X pre0x%04X\r\n", lastI2CErrPhase,
+                  lastI2CErrStatus, lastI2CErrSercomState, lastI2CErrPreState);
           wlAsyncCtx.state = WL_ASYNC_IDLE;
           break;
         }
@@ -700,7 +786,9 @@ static void eepromWLAsyncCallback(void) {
         wlAsyncCtx.state = WL_ASYNC_IDLE;
       }
     } else if (status == EEPROM_WR_FAIL) {
-      printf_("WR FAIL!\r\n");
+      printf_("WR FAIL! %c:%d r%u s0x%04X pre0x%04X\r\n", lastI2CErrPhase,
+              lastI2CErrStatus, lastI2CErrRetries, lastI2CErrSercomState,
+              lastI2CErrPreState);
       eepromBusRecovery();
       wlAsyncCtx.state = WL_ASYNC_IDLE;
     }
