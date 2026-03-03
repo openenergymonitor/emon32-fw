@@ -340,7 +340,8 @@ I2CM_Status_t i2cActivate(Sercom *sercom, const uint32_t addr) {
   /* MB: master on bus, SB: slave on bus */
   while (!(sercom->I2CM.INTFLAG.reg &
            (SERCOM_I2CM_INTFLAG_MB | SERCOM_I2CM_INTFLAG_SB))) {
-    if (timerMicrosDelta(t) > I2CM_ACTIVATE_TIMEOUT_US) {
+    uint32_t delta = timerMicrosDelta(t);
+    if (delta > I2CM_ACTIVATE_TIMEOUT_US) {
       return I2CM_TIMEOUT;
     }
   }
@@ -364,6 +365,29 @@ void i2cAck(Sercom *sercom, const I2CM_Ack_t ack, const I2CM_AckCmd_t cmd) {
       (ack << SERCOM_I2CM_CTRLB_ACKACT_Pos) | SERCOM_I2CM_CTRLB_CMD(cmd);
   while (sercom->I2CM.SYNCBUSY.reg & SERCOM_I2CM_SYNCBUSY_SYSOP)
     ;
+
+  /* After STOP, verify bus returns to IDLE. SYNCBUSY only confirms the
+   * command register write was synced, not that the physical STOP completed.
+   * If the bus doesn't reach IDLE within 100us, the SERCOM state machine is
+   * stuck. Do NOT re-issue STOP — issuing a CMD while the bus is mid-
+   * transition can violate the I2C protocol and permanently hang the SERCOM.
+   * Instead, perform a software reset and reinitialize. Per the datasheet,
+   * SWRST is the only reliable recovery from a hung state, and BUSSTATE can
+   * be forced to IDLE from the resulting UNKNOWN state.
+   */
+  if (I2CM_ACK_CMD_STOP == cmd) {
+    uint32_t t = timerMicros();
+    while ((sercom->I2CM.STATUS.reg & SERCOM_I2CM_STATUS_BUSSTATE_Msk) !=
+           SERCOM_I2CM_STATUS_BUSSTATE(1u)) {
+      if (timerMicrosDelta(t) > 100u) {
+        sercom->I2CM.CTRLA.reg = SERCOM_I2CM_CTRLA_SWRST;
+        while (sercom->I2CM.CTRLA.reg & SERCOM_I2CM_CTRLA_SWRST)
+          ;
+        i2cmCommon(sercom);
+        break;
+      }
+    }
+  }
 }
 
 I2CM_Status_t i2cDataWrite(Sercom *sercom, const uint8_t data) {

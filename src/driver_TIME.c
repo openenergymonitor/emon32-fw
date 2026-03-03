@@ -9,6 +9,7 @@
  */
 static void commonSetup(const uint32_t delay);
 static void timerSync(Tc *tc);
+static void timerTickRestoreRCONT(void);
 
 static volatile uint32_t timeMillisCounter  = 0;
 static volatile uint32_t timeSecondsCounter = 0;
@@ -48,6 +49,18 @@ static void timerSync(Tc *tc) {
   /* All STATUS registers are at the same offset, use COUNT32 for access */
   while (tc->COUNT32.STATUS.reg & TC_STATUS_SYNCBUSY)
     ;
+}
+
+/*! @brief Restore RCONT on TIMER_TICK after a core register write clears it.
+ *  Writing to any core register (COUNT, CC[0], CC[1]) clears RCONT.
+ *  RREQ must be set once after RCONT to start continuous mode (datasheet
+ *  30.8.6). Must poll SYNCBUSY first to avoid CPU stall.
+ */
+static void timerTickRestoreRCONT(void) {
+  timerSync(TIMER_TICK);
+  TIMER_TICK->COUNT32.READREQ.reg =
+      TC_READREQ_RCONT | TC_READREQ_RREQ | TC_READREQ_ADDR(0x10);
+  timerSync(TIMER_TICK);
 }
 
 uint16_t timerADCPeriod(void) {
@@ -111,9 +124,14 @@ uint32_t timerElapsedStop(void) {
 }
 
 uint32_t timerMicros(void) {
-  /* Resynchronise COUNT32.COUNT, and then return the result */
-  TIMER_TICK->COUNT32.READREQ.reg = TC_READREQ_RREQ | TC_READREQ_ADDR(0x10);
-  timerSync(TIMER_TICK);
+  /* RCONT (Read Continuously) keeps COUNT synchronized from the timer clock
+   * domain to the APB bus on every CLK_TCx edge (1 MHz). A single 32-bit
+   * register read is atomic on Cortex-M0+, so no interrupt protection needed.
+   *
+   * IMPORTANT: RCONT is cleared by any write to a TC core register (COUNT,
+   * CC[0], CC[1]). All such writes MUST call timerTickRestoreRCONT() after,
+   * or this function will return stale values.
+   */
   return TIMER_TICK->COUNT32.COUNT.reg;
 }
 
@@ -206,6 +224,21 @@ void timerSetup(void) {
   TIMER_TICK->COUNT32.CTRLA.bit.ENABLE = 1;
   timerSync(TIMER_TICK);
 
+  /* Enable continuous read synchronization for COUNT register (0x10).
+   * Without RCONT, each timerMicros() call must issue a one-shot READREQ
+   * and wait for SYNCBUSY. There is a race: SYNCBUSY propagates from the
+   * timer clock domain to the APB domain asynchronously, so polling it
+   * immediately after writing RREQ can find it still clear from the
+   * PREVIOUS sync, causing a stale COUNT read (observed as ~180 us jump).
+   * With RCONT, hardware issues a read request on every CLK_TCx edge
+   * (1 MHz), keeping the APB-side COUNT always fresh (within ~1 us).
+   *
+   * RREQ must be set once after RCONT to start continuous mode (datasheet
+   * 30.8.6). RCONT is cleared by any write to a core register (COUNT, CC),
+   * so timerTickRestoreRCONT() must be called after CC[1] writes.
+   */
+  timerTickRestoreRCONT();
+
   /* Setup SysTick for 1 ms periodic tick
    * Core clock is F_CORE, so (F_CORE / 1000) ticks = 1 ms
    */
@@ -262,7 +295,7 @@ bool timerScheduleCallback(TimerCallback_t callback, uint32_t delay_us) {
   if (need_update) {
     TIMER_TICK->COUNT32.INTENSET.reg = TC_INTENSET_MC1;
     TIMER_TICK->COUNT32.CC[1].reg    = target_us;
-    timerSync(TIMER_TICK); /* Sync outside critical section */
+    timerTickRestoreRCONT(); /* CC write clears RCONT; restore it */
   }
 
   return (slot != SIZE_MAX);
@@ -336,7 +369,7 @@ static void processCallbackQueue(uint32_t current_us) {
   if (found_next) {
     nextScheduledEvent_us         = next_event;
     TIMER_TICK->COUNT32.CC[1].reg = next_event;
-    timerSync(TIMER_TICK);
+    timerTickRestoreRCONT(); /* CC write clears RCONT; restore it */
   } else {
     /* No more pending events */
     nextScheduledEvent_us            = UINT32_MAX;
