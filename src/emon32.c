@@ -225,6 +225,10 @@ void ecmConfigure(void) {
   ecmCfg->timeMicros    = &timerMicros;
   ecmCfg->timeMicrosDelta = &timerMicrosDelta;
 
+  ecmCfg->dither = true;
+  ecmCfg->s0     = getUniqueID(0);
+  ecmCfg->s1     = getUniqueID(1u);
+
   if (adcCorrectionValid()) {
     ecmCfg->correction.valid  = true;
     ecmCfg->correction.gain   = adcCorrectionGain();

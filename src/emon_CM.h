@@ -97,6 +97,9 @@ typedef struct ECMCfg_ {
   uint8_t mapCTLog[NUM_CT]; /* Map of CT to microcontroller pins */
 
   GainOffset_t correction; /* Gain and offset correction */
+  bool         dither;     /* Apply "dither" to output */
+  uint32_t     s0;         /* Random seed 0 */
+  uint32_t     s1;         /* Random seed 0 */
 
   CTCfg_t ctCfg[NUM_CT]; /* CT Configuration */
   VCfg_t  vCfg[NUM_V];   /* Voltage configuration */

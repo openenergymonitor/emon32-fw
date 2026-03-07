@@ -223,6 +223,10 @@ int main(int argc, char *argv[]) {
   pEcmCfg->timeMicros      = &timeMicros;
   pEcmCfg->timeMicrosDelta = &timeMicrosDelta;
 
+  pEcmCfg->dither = false;
+  pEcmCfg->s0     = 0;
+  pEcmCfg->s1     = 0;
+
   for (int i = 0; i < NUM_V; i++) {
     pEcmCfg->vCfg[i].voltageCalRaw = 100.0f;
     pEcmCfg->vCfg[i].vActive       = (i == 0);
