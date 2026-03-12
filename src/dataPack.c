@@ -3,6 +3,7 @@
 #include <string.h>
 
 #include "dataPack.h"
+#include "driver_SERCOM.h"
 #include "emon32_assert.h"
 #include "temperature.h"
 #include "util.h"
@@ -192,21 +193,24 @@ size_t dataPackSerial(const Emon32Dataset_t *pData, char *pDst, const size_t m,
     strn.n += strnCatInt(&strn, pData->pECM->CT[i].wattHour);
   }
 
-  for (size_t i = 0; i < NUM_OPA; i++) {
-    if (json && !pChsActive->pulse[i]) {
-      continue;
+  /* When functioning as emonPi, don't send 1Wire/Pulse values */
+  if (!sercomExtIntfEnabled()) {
+    for (size_t i = 0; i < NUM_OPA; i++) {
+      if (json && !pChsActive->pulse[i]) {
+        continue;
+      }
+      catId(&strn, (i + 1), STR_PULSE, json);
+      strn.n += strnCatUint(&strn, pData->pulseCnt[i]);
     }
-    catId(&strn, (i + 1), STR_PULSE, json);
-    strn.n += strnCatUint(&strn, pData->pulseCnt[i]);
-  }
 
-  for (size_t i = 0; i < TEMP_MAX_ONEWIRE; i++) {
-    if (json && (pData->temp[i] == 4800)) {
-      continue;
+    for (size_t i = 0; i < TEMP_MAX_ONEWIRE; i++) {
+      if (json && (pData->temp[i] == 4800)) {
+        continue;
+      }
+      catId(&strn, (i + 1), STR_TEMP, json);
+      strn.n +=
+          strnCatFloat(&strn, tempAsFloat(TEMP_INTF_ONEWIRE, pData->temp[i]));
     }
-    catId(&strn, (i + 1), STR_TEMP, json);
-    strn.n +=
-        strnCatFloat(&strn, tempAsFloat(TEMP_INTF_ONEWIRE, pData->temp[i]));
   }
 
   /* Terminate with } for JSON and \r\n */
