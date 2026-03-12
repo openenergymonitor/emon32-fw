@@ -544,38 +544,39 @@ static void transmitData(const Emon32Dataset_t *pSrc, uint32_t *pPkt) {
     if (pConfig->baseCfg.logToSerial) {
       serialPuts(txBuffer);
     }
+    /* Always send CT1-6 */
+    *pPkt = 0x1u;
 
+    /* Only send temperature + pulse if found or active */
+    for (size_t t = 0; t < TEMP_MAX_ONEWIRE; t++) {
+      if (4800 != pSrc->temp[t]) {
+        *pPkt |= (1u << 1);
+        break;
+      }
+    }
+    for (size_t p = 0; p < NUM_OPA; p++) {
+      const uint8_t func    = pConfig->opaCfg[p].func;
+      const bool    isPulse = ('r' == func) || ('f' == func) || ('b' == func);
+      if (isPulse && pConfig->opaCfg[p].opaActive) {
+        *pPkt |= (1u << 1);
+        break;
+      }
+    }
+
+    /* Only send CT7-12 if any are active */
+    for (size_t i = (NUM_CT / 2); i < NUM_CT; i++) {
+      if (pConfig->ctCfg[i].ctActive) {
+        *pPkt |= (1u << 2);
+        break;
+      }
+    }
+
+    __disable_irq();
     if (sercomExtIntfEnabled()) {
-
-      /* Always send CT1-6 */
-      *pPkt = 0x1u;
-
-      /* Only send temperature + pulse if found or active */
-      for (size_t t = 0; t < TEMP_MAX_ONEWIRE; t++) {
-        if (4800 != pSrc->temp[t]) {
-          *pPkt |= (1u << 1);
-          break;
-        }
-      }
-      for (size_t p = 0; p < NUM_OPA; p++) {
-        const uint8_t func    = pConfig->opaCfg[p].func;
-        const bool    isPulse = ('r' == func) || ('f' == func) || ('b' == func);
-        if (isPulse && pConfig->opaCfg[p].opaActive) {
-          *pPkt |= (1u << 1);
-          break;
-        }
-      }
-
-      /* Only send CT7-12 if any are active */
-      for (size_t i = (NUM_CT / 2); i < NUM_CT; i++) {
-        if (pConfig->ctCfg[i].ctActive) {
-          *pPkt |= (1u << 2);
-          break;
-        }
-      }
-
       emon32EventSet(EVT_TX_RFM);
     }
+    __enable_irq();
+
   } else {
     serialPuts(txBuffer);
   }
@@ -786,6 +787,7 @@ int main(void) {
           tempReadEvt(&dataset, numTempSensors);
         } else {
           emon32EventClr(EVT_TEMP_READ);
+          emon32EventSet(EVT_PROCESS_DATASET);
         }
       }
 

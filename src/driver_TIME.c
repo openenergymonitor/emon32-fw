@@ -197,8 +197,8 @@ void timerSetup(void) {
    * Enable the interrupt for Compare Match, do not route to NVIC
    */
   PM->APBCMASK.reg |= TIMER_DELAY_APBCMASK;
-  GCLK->CLKCTRL.reg = GCLK_CLKCTRL_ID(TIMER_DELAY_GCLK_ID) |
-                      GCLK_CLKCTRL_GEN(3u) | GCLK_CLKCTRL_CLKEN;
+  GCLK->CLKCTRL.reg              = GCLK_CLKCTRL_ID(TIMER_DELAY_GCLK_ID) |
+                                   GCLK_CLKCTRL_GEN(3u) | GCLK_CLKCTRL_CLKEN;
   TIMER_DELAY->COUNT32.CTRLA.reg = TC_CTRLA_MODE_COUNT32 |
                                    TC_CTRLA_PRESCALER_DIV8 | TC_CTRLA_RUNSTDBY |
                                    TC_CTRLA_PRESCSYNC_RESYNC;

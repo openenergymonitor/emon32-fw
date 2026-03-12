@@ -77,7 +77,7 @@ static void adcCalibrate(void) {
   offset_inter[1] = qfp_float2int_z(qfp_fadd(
                         0.5f, qfp_fdiv(qfp_int2float(refScale34), gain_fp))) -
                     expScale34;
-  offset = (offset_inter[0] + offset_inter[1]) / 2;
+  offset          = (offset_inter[0] + offset_inter[1]) / 2;
 
   /* Registers are 12 bit, shift 16 bit offet intermediate offset 4. The gain
    * value is in Q1.11 format already.
@@ -120,7 +120,7 @@ static void adcConfigureDMAC(void) {
     dmacDesc[i]->SRCADDR.reg = (uint32_t)&ADC->RESULT;
     /* Capture a full sample set before interrupt to start downsampling */
     dmacDesc[i]->BTCNT.reg   = (VCT_TOTAL * OVERSAMPLING_RATIO);
-    dmacDesc[i]->BTCTRL.reg  = DMAC_BTCTRL_VALID
+    dmacDesc[i]->BTCTRL.reg = DMAC_BTCTRL_VALID
                               /* Raise interrupt on block transfer */
                               | DMAC_BTCTRL_BLOCKACT_INT |
                               DMAC_BTCTRL_BEATSIZE_HWORD | DMAC_BTCTRL_DSTINC |

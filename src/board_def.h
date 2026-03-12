@@ -129,9 +129,9 @@
 #define PIN_OPA1_PU 18u
 #define PIN_OPA2_PU 19u
 
-/* DISABLE_EXT_INTF */
-#define GRP_DISABLE_EXT GRP_PINB
-#define PIN_DISABLE_EXT 16u
+/* DISABLE_EXT_INTFn */
+#define GRP_DISABLE_EXTn GRP_PINB
+#define PIN_DISABLE_EXTn 16u
 
 /* ADC Pins */
 #define GRP_ADC_VMID   GRP_PINA

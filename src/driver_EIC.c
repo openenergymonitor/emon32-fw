@@ -21,18 +21,18 @@ void eicSetup(void) {
   GCLK->CLKCTRL.reg =
       GCLK_CLKCTRL_ID(EIC_GCLK_ID) | GCLK_CLKCTRL_GEN(3u) | GCLK_CLKCTRL_CLKEN;
 
-  /* EXTINT[0] is DISABLE_EXT_INTF */
-  portPinMux(GRP_DISABLE_EXT, PIN_DISABLE_EXT, PORT_PMUX_PMUXE_A);
-  EIC->CONFIG[0].reg = EIC_CONFIG_FILTEN0 | EIC_CONFIG_SENSE0_RISE;
+  /* EXTINT[0] is DISABLE_EXT_INTFn */
+  portPinMux(GRP_DISABLE_EXTn, PIN_DISABLE_EXTn, PORT_PMUX_PMUXE_A);
+  EIC->CONFIG[0].reg = EIC_CONFIG_FILTEN0 | EIC_CONFIG_SENSE0_FALL;
   EIC->INTENSET.reg  = EIC_INTENSET_EXTINT0;
 }
 
 void irq_handler_eic(void) {
   if (EIC->INTFLAG.reg & EIC_INTFLAG_EXTINT0) {
-    if (portPinValue(GRP_DISABLE_EXT, PIN_DISABLE_EXT)) {
+    EIC->INTFLAG.reg = EIC_INTFLAG_EXTINT0;
+    if (!portPinValue(GRP_DISABLE_EXTn, PIN_DISABLE_EXTn)) {
       /* Disable asynchronously so any onging transactions can complete */
       emon32EventSet(EVT_EXT_DISABLE);
     }
-    EIC->INTFLAG.reg = EIC_INTFLAG_EXTINT0;
   }
 }

@@ -248,6 +248,7 @@ static void rfmReset(void) {
   portPinDir(rst.grp, rst.pin, PIN_DIR_OUT);
   portPinDrv(rst.grp, rst.pin, PIN_DRV_SET);
   timerDelay_us(250u);
+  portPinDrv(rst.grp, rst.pin, PIN_DRV_CLR);
   portPinDir(rst.grp, rst.pin, PIN_DIR_IN);
   timerDelay_ms(6);
 }

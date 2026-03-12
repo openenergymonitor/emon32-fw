@@ -444,7 +444,7 @@ I2CM_Status_t i2cDataRead(Sercom *sercom, uint8_t *pData) {
  */
 
 void spiConfigureExt(void) {
-  extIntfEnabled = !portPinValue(GRP_DISABLE_EXT, PIN_DISABLE_EXT);
+  extIntfEnabled = portPinValue(GRP_DISABLE_EXTn, PIN_DISABLE_EXTn);
   spiExtPinsSetup(extIntfEnabled);
 }
 
