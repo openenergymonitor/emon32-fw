@@ -194,7 +194,7 @@ size_t dataPackSerial(const Emon32Dataset_t *pData, char *pDst, const size_t m,
   }
 
   /* When functioning as emonPi, don't send 1Wire/Pulse values */
-  if (!sercomExtIntfEnabled()) {
+  if (sercomExtIntfEnabled()) {
     for (size_t i = 0; i < NUM_OPA; i++) {
       if (json && !pChsActive->pulse[i]) {
         continue;
