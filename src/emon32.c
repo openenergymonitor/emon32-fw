@@ -389,20 +389,33 @@ void serialPuts(const char *s) {
 static void ssd1306Setup(void) {
 
   if (SSD1306_SUCCESS == ssd1306Init(SERCOM_I2CM_EXT)) {
-    VersionInfo_t vInfo  = configVersion();
-    uint32_t      offset = 0;
+    VersionInfo_t vInfo          = configVersion();
+    uint32_t      offset_rev     = 0;
+    uint32_t      offset_release = 0;
+
     for (size_t i = 0; i < strlen(vInfo.revision); i++) {
       if ('-' == vInfo.revision[i]) {
-        offset = 20;
+        offset_rev = 18;
+        break;
+      }
+    }
+    for (size_t i = 0; i < strlen(vInfo.release); i++) {
+      if ('-' == vInfo.release[i]) {
+        offset_release = 18;
+        break;
       }
     }
 
     ssd1306SetPosition((PosXY_t){.x = 44u, .y = 0u});
     ssd1306DrawString("emonPi3");
-    ssd1306SetPosition((PosXY_t){.x = 46u, .y = 1u});
+    ssd1306SetPosition((PosXY_t){.x = (46u - offset_rev), .y = 1u});
     ssd1306DrawString(vInfo.release);
-    ssd1306SetPosition((PosXY_t){.x = (44u - offset), .y = 2u});
+    ssd1306SetPosition((PosXY_t){.x = (44u - offset_release), .y = 2u});
     ssd1306DrawString(vInfo.revision);
+
+    ssd1306SetPosition((PosXY_t){.x = 35u, .y = 4u});
+    ssd1306DrawString("Starting...");
+
     ssd1306DisplayUpdate();
   }
 }
@@ -625,12 +638,7 @@ int main(void) {
   /* Pause to allow any external pins to settle */
   waitWithUSB(100);
   spiConfigureExt();
-
-  /* If the system is booted while it is connected to an active Pi, do not
-   * write to the OLED or setup the RFM module. */
-  if (sercomExtIntfEnabled()) {
-    ssd1306Setup();
-  }
+  ssd1306Setup();
 
   eicEnable();
   uartEnableTx(SERCOM_UART);
