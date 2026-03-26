@@ -56,18 +56,6 @@ def generate_build_info_c(configuration, cc=""):
 
     machine = f"{username()}@{platform.node()}"
 
-    maj, min, rev = 0, 0, 0
-    with open("./src/emon32.h", "r") as f:
-        for ln in f:
-            if "VERSION_FW" in ln:
-                if "MAJ" in ln:
-                    maj = ln.split()[-1].rstrip("u")
-                elif "MIN" in ln:
-                    min = ln.split()[-1].rstrip("u")
-                elif "REV" in ln:
-                    rev = ln.split()[-1].rstrip("u")
-    version = f"v{maj}.{min}.{rev}"
-
     build_info_string = (
         f"{revision} ({configuration}) on {date} with {compiler} by {machine}"
     )
@@ -78,7 +66,6 @@ def generate_build_info_c(configuration, cc=""):
 
     #include "emon32_build_info.h"
 
-    static const char version[] = "{version}";
     static const char compiler[] = "{compiler}";
     static const char revision[] = "{revision}";
     static const char date[] = "{date}";
@@ -88,7 +75,6 @@ def generate_build_info_c(configuration, cc=""):
 
     struct Emon32BuildInfo emon32_build_info() {{
         return (struct Emon32BuildInfo){{
-            .version = version,
             .revision = revision,
             .date = date,
             .compiler = compiler,
