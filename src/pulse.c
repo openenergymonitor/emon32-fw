@@ -9,7 +9,6 @@
 
 typedef enum PulseLvl_ { PULSE_LVL_LOW, PULSE_LVL_HIGH } PulseLvl_t;
 
-static uint8_t    pinValue[NUM_OPA];
 static uint32_t   pulseCount[NUM_OPA];
 static PulseCfg_t pulseCfg[NUM_OPA];
 static PulseLvl_t pulseLvlLast[NUM_OPA];
@@ -43,10 +42,8 @@ void pulseInit(const size_t index) {
     portPinCfg(GRP_OPA, pin, PORT_PINCFG_PULLEN, PIN_CFG_SET);
     portPinDrv(GRP_OPA, pin, PIN_DRV_CLR);
   }
-  pinValue[index] = (uint8_t)portPinValue(GRP_OPA, pin);
 
-  /* Use the first read value as the current state */
-  pulseLvlLast[index] = (PulseLvl_t)pinValue[index];
+  pulseLvlLast[index] = (uint8_t)portPinValue(GRP_OPA, pin);
 }
 
 void pulseSetCount(const size_t index, const uint32_t value) {
@@ -64,15 +61,10 @@ void pulseUpdate(void) {
       bool incrPulse = false;
       level          = pulseLvlLast[i];
 
-      pinValue[i] <<= 1;
-      pinValue[i] += (uint8_t)portPinValue(pulseCfg[i].grp, pulseCfg[i].pin);
-
-      /* Debounce for 8 ms */
-      if (0 == pinValue[i]) {
-        level = PULSE_LVL_LOW;
-      } else if (UINT8_MAX == pinValue[i]) {
-        level = PULSE_LVL_HIGH;
-      }
+      /* features/pulse_noshift - remove the internal 8 ms debounce */
+      level = (uint8_t)portPinValue(pulseCfg[i].grp, pulseCfg[i].pin)
+                  ? PULSE_LVL_HIGH
+                  : PULSE_LVL_LOW;
 
       switch (pulseCfg[i].edge) {
       case PULSE_EDGE_RISING:
