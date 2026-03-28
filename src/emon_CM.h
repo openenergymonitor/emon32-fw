@@ -59,8 +59,7 @@ typedef struct SampleSet_ {
 
 typedef struct GainOffset_ {
   bool    valid;
-  int16_t gain;
-  int16_t offset;
+  int32_t gain;
 } GainOffset_t;
 
 typedef struct VCfg_ {

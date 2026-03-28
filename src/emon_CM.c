@@ -84,12 +84,10 @@ typedef struct RawSampleSetUnpacked {
  * Function prototypes
  *************************************/
 
-static inline q15_t    __STRUNCATE(int32_t val) RAMFUNC;
-static q15_t           applyCorrection(q15_t smp) RAMFUNC;
-static float           calcRMS(const CalcRMS_t *pSrc) RAMFUNC;
-static uint32_t        rnext(void);
-static inline uint32_t rotl(const uint32_t x, const int k);
-static bool            zeroCrossingSW(q15_t smpV, uint32_t timeNow_us) RAMFUNC;
+static inline q15_t __STRUNCATE(int32_t val) RAMFUNC;
+static q15_t        applyCorrection(q15_t smp) RAMFUNC;
+static float        calcRMS(const CalcRMS_t *pSrc) RAMFUNC;
+static bool         zeroCrossingSW(q15_t smpV, uint32_t timeNow_us) RAMFUNC;
 
 static void    accumSwapClear(void);
 static int32_t floorf_(const float f);
@@ -277,72 +275,23 @@ volatile RawSampleSetPacked_t *ecmDataBuffer(void) { return adcActive; }
  * Functions
  *****************************************************************************/
 
-static inline uint32_t rotl(const uint32_t x, const int k) {
-  return (x << k) | (x >> (32 - k));
-}
-
-/* https://prng.di.unimi.it/xoroshiro64starstar.c */
-static uint32_t rnext(void) {
-  const uint32_t s0 = s[0];
-  uint32_t       s1 = s[1];
-
-  /* s0 and s1 cannot both be 0! Reseed using ADC values if so. */
-  if ((0 == s0) && (0 == s1)) {
-    s[0] = dspBuffer[0].smp[0];
-    s[1] = dspBuffer[1].smp[1];
-    return 0;
-  }
-
-  const uint32_t result = rotl(s0 * 0x9e3779bb, 5) * 5;
-  s1 ^= s0;
-  s[0] = rotl(s0, 26) ^ s1 ^ (s1 << 9);
-  s[1] = rotl(s1, 13);
-  return result;
-}
-
 static RAMFUNC q15_t applyCorrection(q15_t smp) {
-  static size_t   rused = 0;
-  static uint32_t r     = 0;
-
   if (ecmCfg.correction.valid) {
-    int32_t result = smp + ecmCfg.correction.offset;
-    result *= ecmCfg.correction.gain;
-    result >>= 11;
 
-    q15_t ret = (q15_t)result;
+    int32_t centred = (int32_t)smp - 2048u;
+    int64_t prod    = (int64_t)centred * (int64_t)ecmCfg.correction.gain;
 
-    /* If below threshold, increase magnitude by random [0,1]. If above
-     * threshold, decrease magnitude by random [0,1]. Significantly improves
-     * linearity of the ADC result. Applied after gain and offset correction to
-     * retain sampled shape. */
-    if (ecmCfg.dither && (0 != ret)) {
+    int32_t y = (int32_t)((prod + (1LL << 19)) >> 20);
 
-      if (0 == rused) {
-        r = rnext();
-      }
-
-      const bool neg = ret < 0;
-      int        b   = r & 0x1;
-
-      q15_t abs = ret;
-      if (neg) {
-        abs = -ret;
-        b   = -b;
-      }
-
-      if ((abs < 150) || (abs > 250)) {
-        r >>= 1;
-        rused = (rused + 1u) & (0x1f);
-      }
-
-      if (abs > 250) {
-        b = -b;
-      }
-
-      ret = ret + b;
+    if (y > 2047) {
+      y = 2047;
+    }
+    if (y < -2048) {
+      y = -2048;
     }
 
-    return ret;
+    return (q15_t)y;
+
   } else {
     return smp;
   }
