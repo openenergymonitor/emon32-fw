@@ -10,6 +10,14 @@
 
 #include "RFM69.h"
 
+#define RFM_POLL_INTERVAL_US       1000u
+#define RFM_MODE_READY_TIMEOUT_MS  25u
+#define RFM_TX_COMPLETE_TIMEOUT_MS 100u
+#define RFM_MAX_PACKET_LEN         66u
+#define RFM_BUFFER_SIZE            64u
+#define RFM_FIXED_PEER_ID          5u
+#define RFM_PACKET_HEADER_LEN      3u
+
 typedef struct RFMRx_ {
   uint16_t targetID;
   uint16_t senderID;
@@ -47,20 +55,20 @@ static void      rfmWriteReg(const uint8_t addr, const uint8_t data);
 static uint8_t   spiRx(void);
 static void      spiTx(const uint8_t b);
 
-static uint8_t       address       = 0;
-static bool          initDone      = false;
-static uint8_t       rfmBuffer[64] = {0};
-static int8_t        rfmMode       = 0;
-static RFMRx_t       rfmRx         = {0};
-static RFMTx_t       rfmTx         = {0};
-static RFMTxState_t  rfmTxState    = RFM_TX_IDLE;
-static uint8_t       rxData[64]    = {0};
-static volatile bool rxRdy         = false;
-static const Pin_t   rst           = {GRP_RFM_INTF, PIN_RFM_RST};
-static const Pin_t   sel           = {GRP_SERCOM_SPI, PIN_SPI_RFM_SS};
+static uint8_t       address                    = 0;
+static bool          initDone                   = false;
+static uint8_t       rfmBuffer[RFM_BUFFER_SIZE] = {0};
+static int8_t        rfmMode                    = 0;
+static RFMRx_t       rfmRx                      = {0};
+static RFMTx_t       rfmTx                      = {0};
+static RFMTxState_t  rfmTxState                 = RFM_TX_IDLE;
+static uint8_t       rxData[RFM_BUFFER_SIZE]    = {0};
+static volatile bool rxRdy                      = false;
+static const Pin_t   rst                        = {GRP_RFM_INTF, PIN_RFM_RST};
+static const Pin_t   sel = {GRP_SERCOM_SPI, PIN_SPI_RFM_SS};
 
 static bool rfmAckRecv(uint16_t fromId) {
-  if (timerMicrosDelta(rfmTx.tSPI_us) > 1000u) {
+  if (timerMicrosDelta(rfmTx.tSPI_us) > RFM_POLL_INTERVAL_US) {
     rfmTx.tSPI_us = timerMicros();
     if (rfmRxDone()) {
       return (fromId == rfmRx.senderID) && rfmRx.ackRecv;
@@ -72,7 +80,7 @@ static bool rfmAckRecv(uint16_t fromId) {
 static bool rfmCheckCSMA(void) {
 
   /* LPL send */
-  if (timerMicrosDelta(rfmTx.tSPI_us) > 1000u) {
+  if (timerMicrosDelta(rfmTx.tSPI_us) > RFM_POLL_INTERVAL_US) {
     rfmTx.tSPI_us = timerMicros();
 
     if (!rfmTxAvailable()) {
@@ -87,7 +95,7 @@ static bool rfmCheckCSMA(void) {
 }
 
 static bool rfmCheckSendComplete(void) {
-  if (timerMicrosDelta(rfmTx.tSPI_us) > 1000) {
+  if (timerMicrosDelta(rfmTx.tSPI_us) > RFM_POLL_INTERVAL_US) {
     rfmTx.tSPI_us = timerMicros();
     return (rfmReadReg(REG_IRQFLAGS2) & RFM_IRQFLAGS2_PACKETSENT);
   }
@@ -133,8 +141,8 @@ static void rfmPacketHandler(void) {
     spiTx(REG_FIFO & 0x7F);
     rfmRx.payloadLen = spiRx();
     /* Prevent any overflow */
-    if (rfmRx.payloadLen > 66) {
-      rfmRx.payloadLen = 66;
+    if (rfmRx.payloadLen > RFM_MAX_PACKET_LEN) {
+      rfmRx.payloadLen = RFM_MAX_PACKET_LEN;
     }
     rfmRx.targetID = spiRx();
     rfmRx.senderID = spiRx();
@@ -152,7 +160,7 @@ static void rfmPacketHandler(void) {
       return;
     }
 
-    rfmRx.dataLen = rfmRx.payloadLen - 3;
+    rfmRx.dataLen = rfmRx.payloadLen - RFM_PACKET_HEADER_LEN;
     rfmRx.ackRecv = ctl & RFM69_CTL_SENDACK;
     rfmRx.ackReq  = ctl & RFM69_CTL_REQACK;
 
@@ -288,14 +296,14 @@ static RFMSend_t rfmSendPacket(void) {
   uint32_t tStart = timerMillis();
   (void)rfmSetMode(RFM69_MODE_STANDBY); // Turn off Rx while filling FIFO
   while (0 == (rfmReadReg(REG_IRQFLAGS1) & RFM_IRQFLAGS1_MODEREADY)) {
-    if (timerMillisDelta(tStart) > 100u) {
+    if (timerMillisDelta(tStart) > RFM_TX_COMPLETE_TIMEOUT_MS) {
       return RFM_FUNCTIONAL_FAILURE;
     }
   }
   spiSelect(sel);
   spiTx(REG_FIFO | 0x80);
-  spiTx(rfmTx.n + 3);
-  spiTx(5u); // from OEM Tx
+  spiTx(rfmTx.n + RFM_PACKET_HEADER_LEN);
+  spiTx(RFM_FIXED_PEER_ID); // from OEM Tx
   spiTx((uint8_t)address);
   spiTx(RFM69_CTL_REQACK); // CTL byte, request acknowledgement.
   spiSendBuffer(SERCOM_SPI, rfmBuffer, rfmTx.n);
@@ -340,7 +348,7 @@ static bool rfmSetMode(RFMMode_t mode) {
   const uint32_t tStart = timerMillis();
   if (RFM69_MODE_SLEEP == rfmMode) {
     while ((rfmReadReg(REG_IRQFLAGS1) & RFM_IRQFLAGS1_MODEREADY) == 0) {
-      if (timerMillisDelta(tStart) > 25u) {
+      if (timerMillisDelta(tStart) > RFM_MODE_READY_TIMEOUT_MS) {
         return false;
       }
     }
@@ -401,7 +409,7 @@ bool rfmInit(const RFMOpt_t *pOpt) {
   /* Initialise RFM69 */
   while (0xAA != rfmReadReg(REG_SYNCVALUE1)) {
     rfmWriteReg(REG_SYNCVALUE1, 0xAAu);
-    if (timerMillisDelta(tStart) > 25u) {
+    if (timerMillisDelta(tStart) > RFM_MODE_READY_TIMEOUT_MS) {
       return false;
     }
   }
@@ -409,7 +417,7 @@ bool rfmInit(const RFMOpt_t *pOpt) {
   tStart = timerMillis();
   while (0x55u != rfmReadReg(REG_SYNCVALUE1)) {
     rfmWriteReg(REG_SYNCVALUE1, 0x55u);
-    if (timerMillisDelta(tStart) > 25u) {
+    if (timerMillisDelta(tStart) > RFM_MODE_READY_TIMEOUT_MS) {
       return false;
     }
   }
@@ -481,7 +489,7 @@ RFMTxState_t rfmTxAdvance(void) {
     }
     break;
   case RFM_TX_AWAIT_TX:
-    if (timerMillisDelta(rfmTx.tTimeout_ms) > 100u) {
+    if (timerMillisDelta(rfmTx.tTimeout_ms) > RFM_TX_COMPLETE_TIMEOUT_MS) {
       rfmTxState = RFM_TX_ABORT;
     } else if (rfmCheckSendComplete()) {
       (void)rfmSetMode(RFM69_MODE_STANDBY);
@@ -501,7 +509,7 @@ RFMTxState_t rfmTxAdvance(void) {
         rfmRxRestart();
       }
     } else {
-      if (rfmAckRecv(5u)) {
+      if (rfmAckRecv(RFM_FIXED_PEER_ID)) {
         rfmTxState = RFM_TX_IDLE;
       }
     }
