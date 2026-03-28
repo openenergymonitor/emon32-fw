@@ -61,7 +61,7 @@ static const Pin_t   rst           = {GRP_RFM_INTF, PIN_RFM_RST};
 static const Pin_t   sel           = {GRP_SERCOM_SPI, PIN_SPI_RFM_SS};
 
 static bool rfmAckRecv(uint16_t fromId) {
-  if (timerMicrosDelta(rfmTx.tSPI_us > 1000u)) {
+  if (timerMicrosDelta(rfmTx.tSPI_us) > 1000u) {
     rfmTx.tSPI_us = timerMicros();
     if (rfmRxDone()) {
       return (fromId == rfmRx.senderID) && rfmRx.ackRecv;

@@ -822,7 +822,7 @@ int main(void) {
         emon32EventClr(EVT_PROCESS_DATASET);
       }
 
-      if (EVT_TX_RFM) {
+      if (evtPending(EVT_TX_RFM)) {
         /* Progress Tx state machine */
         RFMTxState_t txState = rfmTxAdvance();
 
