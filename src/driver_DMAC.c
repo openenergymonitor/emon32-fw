@@ -1,7 +1,6 @@
 #include "driver_DMAC.h"
+#include "board_def.h"
 #include "emon32_samd.h"
-
-#include "emon32.h"
 
 static volatile DmacDescriptor dmacs[NUM_CHAN_DMA];
 static DmacDescriptor          dmacs_wb[NUM_CHAN_DMA];

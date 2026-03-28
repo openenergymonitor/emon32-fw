@@ -1,24 +1,13 @@
 #include <limits.h>
 #include <string.h>
 
-#ifndef HOSTED
-
 #include "driver_DMAC.h"
 #include "driver_SERCOM.h"
 #include "driver_TIME.h"
-#include "emon32_assert.h"
-
-#include "printf.h"
-
-#else
-
-#include "test_eeprom.h"
-
-#endif /* HOSTED */
-
-#include "driver_TIME.h"
 #include "eeprom.h"
 #include "emon32.h"
+#include "emon32_assert.h"
+#include "printf.h"
 
 /* Use WL_PKT_SIZE bytes for the wear limiting packet. This wastes some EEPROM
  * cells, but keeps everything page aligned for simplicity.

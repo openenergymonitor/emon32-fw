@@ -1,10 +1,10 @@
 #include "driver_ADC.h"
+#include "board_def.h"
 #include "driver_DMAC.h"
 #include "driver_PORT.h"
 #include "driver_SAMD.h"
 #include "emon32_samd.h"
 
-#include "emon32.h"
 #include "emon_CM.h"
 #include "qfplib-m0-full.h"
 

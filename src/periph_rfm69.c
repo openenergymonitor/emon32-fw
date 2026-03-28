@@ -5,7 +5,6 @@
 #include "board_def.h"
 #include "driver_SERCOM.h"
 #include "driver_TIME.h"
-#include "emon32.h"
 #include "emon32_samd.h"
 #include "periph_rfm69.h"
 
