@@ -153,7 +153,7 @@ static bool oneWireReset(const size_t opaIdx) {
   portPinDir(cfg[opaIdx].grp, cfg[opaIdx].pin, PIN_DIR_IN);
   timeStart = timerMicros();
   /* Ensure pull-up has brought up line */
-  while (timerMicrosDelta(timeStart) < cfg->t_wait_us)
+  while (timerMicrosDelta(timeStart) < cfg[opaIdx].t_wait_us)
     ;
 
   while (timerMicrosDelta(timeStart) < t_PDx) {
@@ -421,7 +421,7 @@ TempRead_t ds18b20ReadSample(const size_t dev) {
 
   /* Check for spurious 85°C reading. This could be caused by e.g. a power
    * glitch after the sample was requested. */
-  if ((0x0C == scratch.res_X) && (DS_T85DEG == tempRes.temp)) {
+  if ((0x0C == scratch.res_X) && (DS_T85DEG == scratch.temp)) {
     tempRes.status = TEMP_BAD_SENSOR;
     return tempRes;
   }
