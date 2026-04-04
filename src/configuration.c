@@ -835,10 +835,6 @@ static bool configureOPA(void) {
       serialPutsError("Invalid OPA period value.");
       return false;
     }
-    if (convU.val.u8 < 10u) {
-      serialPutsError("OPA period must be >= 10.");
-      return false;
-    }
 
     period = convU.val.u8;
   }
