@@ -297,9 +297,6 @@ static void evtKiloHertz(void) {
   uint32_t                 msDelta;
   static volatile uint32_t msLast = 0;
 
-  /* Update the pulse counters, looking on different edges */
-  pulseUpdate();
-
   /* Blink LED red for TX_INDICATE_T before going back to green */
   if (txBlink.txIndicate) {
     if (timerMillisDelta(txBlink.timeBlink) > TX_INDICATE_T) {
