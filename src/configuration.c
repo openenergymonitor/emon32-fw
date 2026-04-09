@@ -835,10 +835,6 @@ static bool configureOPA(void) {
       serialPutsError("Invalid OPA period value.");
       return false;
     }
-    if (convU.val.u8 < 10u) {
-      serialPutsError("OPA period must be >= 10.");
-      return false;
-    }
 
     period = convU.val.u8;
   }
@@ -1695,7 +1691,7 @@ void configProcessCmd(void) {
       "   - w : OPA active. w = 0: DISABLED, w = 1: ENABLED\r\n"
       "   - x : function select. x = [b,f,r]: pulse, x = o: OneWire.\r\n"
       "   - y : pull-up, only for pulse. y = 0: OFF, y = 1: ON\r\n"
-      "   - z : minimum time between pulses (ms, minimum 10), only for "
+      "   - z : minimum time between pulses (ms), only for "
       "pulse.\r\n"
       " - n<n>        : set node ID [1..60]\r\n"
       " - o<x>        : configure OneWire addressing\r\n"

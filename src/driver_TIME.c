@@ -3,6 +3,7 @@
 
 #include "driver_TIME.h"
 #include "emon32.h"
+#include "pulse.h"
 
 /*! @brief Common setup for 1 us resolution timer
  *  @param [in] delay : delay in us
@@ -432,6 +433,8 @@ void timerProcessPendingCallbacks(void) {
  */
 void irq_handler_sys_tick(void) {
   timeMillisCounter++;
+  /* Update the pulse counters, looking on different edges */
+  pulseUpdate();
   emon32EventSet(EVT_TICK_1kHz);
 }
 
