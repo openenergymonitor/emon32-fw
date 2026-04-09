@@ -104,8 +104,6 @@ static void swapPtr(void **pIn1, void **pIn2);
 
 static RawSampleSetUnpacked_t dspBuffer[DOWNSAMPLE_TAPS];
 
-static uint32_t s[2] = {0};
-
 /******************************************************************************
  * Accumulators
  *****************************************************************************/
@@ -132,11 +130,8 @@ static uint32_t t_ZClast = 0;
  *  @return Q15 truncated val
  */
 static RAMFUNC inline q15_t __STRUNCATE(int32_t val) {
-  int32_t roundUp = 0;
-  if (0 != (val & (1 << 14))) {
-    roundUp = 1;
-  }
-  return (q15_t)((val >> 15) + roundUp);
+  val += (1u << 15);
+  return (q15_t)(val >> 15);
 }
 
 /***** END FIXED POINT FUNCIONS *****/
@@ -144,16 +139,18 @@ static RAMFUNC inline q15_t __STRUNCATE(int32_t val) {
 static RAMFUNC float calcRMS(const CalcRMS_t *pSrc) {
   const uint64_t numSamplesSqr = usqr64(pSrc->numSamples);
   const float    vcal          = pSrc->cal;
-
-  const uint32_t deltasSqr = (uint32_t)(pSrc->sDelta * pSrc->sDelta);
+  const uint64_t deltasSqr     = ssqr64(pSrc->sDelta);
 
   const float offsetCorr =
-      qfp_fdiv(qfp_uint2float(deltasSqr), qfp_uint642float(numSamplesSqr));
+      qfp_fdiv(qfp_uint642float(deltasSqr), qfp_uint642float(numSamplesSqr));
 
   float rms =
       qfp_fdiv(qfp_uint642float(pSrc->sSqr), qfp_uint2float(pSrc->numSamples));
 
   rms = qfp_fsub(rms, offsetCorr);
+  if (rms < 0.0f) {
+    rms = 0.0f;
+  }
   rms = qfp_fsqrt(rms);
   rms = qfp_fmul(vcal, rms);
 
@@ -245,9 +242,6 @@ void ecmConfigInit(void) {
     datasetProc.CT[i].wattHour = ecmCfg.ctCfg[i].wattHourInit;
   }
 
-  s[0] = ecmCfg.s0;
-  s[1] = ecmCfg.s1;
-
   initDone = true;
 }
 
@@ -276,12 +270,10 @@ volatile RawSampleSetPacked_t *ecmDataBuffer(void) { return adcActive; }
  *****************************************************************************/
 
 static RAMFUNC q15_t applyCorrection(q15_t smp) {
+  smp = smp - 2048;
   if (ecmCfg.correction.valid) {
-
-    int32_t centred = (int32_t)smp - 2048u;
-    int64_t prod    = (int64_t)centred * (int64_t)ecmCfg.correction.gain;
-
-    int32_t y = (int32_t)((prod + (1LL << 19)) >> 20);
+    int64_t prod = (int64_t)smp * (int64_t)ecmCfg.correction.gain;
+    int32_t y    = (int32_t)((prod + (1LL << 19)) >> 20);
 
     if (y > 2047) {
       y = 2047;
@@ -546,13 +538,14 @@ RAMFUNC void ecmFilterSample(SampleSet_t *pDst) {
                                 : channelActive[mapLogCT[ch - NUM_V] + NUM_V];
 
     if (active) {
-      int32_t intRes = coeffMid * dspBuffer[idxMid].smp[ch];
+      int32_t intRes = (int32_t)coeffMid * (int32_t)dspBuffer[idxMid].smp[ch];
 
       for (size_t fir = 0; fir < (COEFF_UNIQUE_NUM - 1); fir++) {
-        const q15_t coeff = firCoeffs[fir];
-        intRes += coeff * (dspBuffer[idxSmp[fir][0]].smp[ch] +
-                           dspBuffer[idxSmp[fir][1]].smp[ch]);
+        const int32_t coeff = (int32_t)firCoeffs[fir];
+        intRes += coeff * ((int32_t)dspBuffer[idxSmp[fir][0]].smp[ch] +
+                           (int32_t)dspBuffer[idxSmp[fir][1]].smp[ch]);
       }
+      /* result is in Q26 format, input in Q11, FIR is Q15 */
       result = __STRUNCATE(intRes);
 
     } else {
@@ -803,8 +796,8 @@ RAMFUNC ECMDataset_t *ecmProcessSet(void) {
           (qfp_fmul(qfp_int642float(accumProcessing->processCT[idxCT].sumPB[0]),
                     ecmCfg.ctCfg[idxCT].phaseY[0])));
 
-      int32_t vi_offset =
-          rms.sDelta * accumProcessing->processV[idxV1].sumV_deltas;
+      int64_t vi_offset = (int64_t)rms.sDelta *
+                          (int64_t)accumProcessing->processV[idxV1].sumV_deltas;
 
       float powerNow;
       if (useAssumedV) {
@@ -812,7 +805,7 @@ RAMFUNC ECMDataset_t *ecmProcessSet(void) {
       } else {
         powerNow = qfp_fdiv(sumEnergy, qfp_uint2float(numSamples));
         powerNow =
-            qfp_fsub(powerNow, qfp_fdiv(qfp_int2float(vi_offset),
+            qfp_fsub(powerNow, qfp_fdiv(qfp_int642float(vi_offset),
                                         qfp_uint642float(numSamplesSqr)));
         powerNow = qfp_fmul(powerNow,
                             qfp_fmul(rms.cal, ecmCfg.vCfg[idxV1].voltageCal));
@@ -827,10 +820,11 @@ RAMFUNC ECMDataset_t *ecmProcessSet(void) {
                 qfp_int642float(accumProcessing->processCT[idxCT].sumPB[1]),
                 ecmCfg.ctCfg[idxCT].phaseY[1])));
 
-        vi_offset = rms.sDelta * accumProcessing->processV[idxV2].sumV_deltas;
+        vi_offset       = (int64_t)rms.sDelta *
+                          (int64_t)accumProcessing->processV[idxV2].sumV_deltas;
         float powerNow2 = qfp_fdiv(sumEnergy, qfp_uint2float(numSamples));
         powerNow2 =
-            qfp_fsub(powerNow2, qfp_fdiv(qfp_int2float(vi_offset),
+            qfp_fsub(powerNow2, qfp_fdiv(qfp_int642float(vi_offset),
                                          qfp_uint642float(numSamplesSqr)));
         powerNow2 = qfp_fmul(powerNow2,
                              qfp_fmul(rms.cal, ecmCfg.vCfg[idxV2].voltageCal));
