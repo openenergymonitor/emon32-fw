@@ -137,24 +137,18 @@ static RAMFUNC inline q15_t __STRUNCATE(int32_t val) {
 /***** END FIXED POINT FUNCIONS *****/
 
 static RAMFUNC float calcRMS(const CalcRMS_t *pSrc) {
-  const uint64_t numSamplesSqr = usqr64(pSrc->numSamples);
-  const float    vcal          = pSrc->cal;
-  const uint64_t deltasSqr     = ssqr64(pSrc->sDelta);
+  const double numSamples = qfp_uint2double(pSrc->numSamples);
+  const double meanSqr    = qfp_ddiv(qfp_uint642double(pSrc->sSqr), numSamples);
+  const double mean       = qfp_ddiv(qfp_int2double(pSrc->sDelta), numSamples);
+  double       rms        = qfp_dsub(meanSqr, qfp_dmul(mean, mean));
 
-  const float offsetCorr =
-      qfp_fdiv(qfp_uint642float(deltasSqr), qfp_uint642float(numSamplesSqr));
-
-  float rms =
-      qfp_fdiv(qfp_uint642float(pSrc->sSqr), qfp_uint2float(pSrc->numSamples));
-
-  rms = qfp_fsub(rms, offsetCorr);
-  if (rms < 0.0f) {
-    rms = 0.0f;
+  if (rms < 0.0) {
+    rms = 0.0;
   }
-  rms = qfp_fsqrt(rms);
-  rms = qfp_fmul(vcal, rms);
+  rms = qfp_dsqrt(rms);
+  rms = qfp_dmul(qfp_float2double(pSrc->cal), rms);
 
-  return rms;
+  return qfp_double2float(rms);
 }
 
 /*! @brief Swap pointers to buffers */
