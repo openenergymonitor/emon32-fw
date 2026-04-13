@@ -200,7 +200,7 @@ int main(int argc, char *argv[]) {
   }
 
   for (size_t i = NUM_V; i < VCT_TOTAL; i++) {
-    currentToWave(0.02, 100, 0, &wave[i]);
+    currentToWave(2.0, 100, 0, &wave[i]);
   }
 
   pEcmCfg = ecmConfigGet();
@@ -404,7 +404,7 @@ int main(int argc, char *argv[]) {
 static void currentToWave(double IRMS, int scaleCT, double phase, wave_t *w) {
   const double iPk   = 333.0 / 512 * sqrt(2);
   double       scale = IRMS / (double)scaleCT;
-  w->offset          = 50;
+  w->offset          = 0;
   w->omega           = 2 * M_PI * MAINS_FREQ;
   w->phi             = M_PI * phase / 180;
   w->s               = iPk * scale;

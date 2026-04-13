@@ -27,7 +27,7 @@
 #define OVERSAMPLING_RATIO 2u
 
 #define ADC_VREF     1.024f
-#define ADC_RES_BITS 12
+#define ADC_RES_BITS 12u
 #define CAL_V        8.0087f
 #define CAL_CT       3.006f
 

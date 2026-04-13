@@ -264,7 +264,7 @@ volatile RawSampleSetPacked_t *ecmDataBuffer(void) { return adcActive; }
  *****************************************************************************/
 
 static RAMFUNC q15_t applyCorrection(q15_t smp) {
-  smp = smp - 2048;
+  smp = smp - (1u << (ADC_RES_BITS - 1u));
   if (ecmCfg.correction.valid) {
     int64_t prod = (int64_t)smp * (int64_t)ecmCfg.correction.gain;
     int32_t y    = (int32_t)((prod + (1LL << 19)) >> 20);
