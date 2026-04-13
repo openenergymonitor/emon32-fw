@@ -34,8 +34,8 @@ typedef struct TempRead_ {
   int16_t      temp;
 } TempRead_t;
 
-/*! @brief Populate the table of OneWire devices
- *  @return pointer to the address table
+/*! @brief Get the table of OneWire device addresses.
+ *  @return pointer to the address table.
  */
 uint64_t *tempAddress1WGet(void);
 

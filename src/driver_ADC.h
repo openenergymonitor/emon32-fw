@@ -6,12 +6,7 @@
 /*! @brief Get the gain correction value
  *  @return gain correction value
  */
-int16_t adcCorrectionGain(void);
-
-/*! @brief Get the offset correction value
- *  @return offset correction value
- */
-int16_t adcCorrectionOffset(void);
+int32_t adcCorrectionGain(void);
 
 /*! @brief Indicates if the correction values are valid
  *  @return true if valid, false otherwise

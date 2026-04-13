@@ -30,6 +30,24 @@ int qfp_float2int_z(float a) { return (int)a; }
 
 int qfp_float2int(float a) { return (int)a; }
 
+float qfp_double2float(double a) { return (float)a; }
+
+double qfp_float2double(float a) { return (double)a; }
+
+double qfp_int2double(int32_t a) { return (double)a; }
+
+double qfp_uint2double(uint32_t a) { return (double)a; }
+
+double qfp_uint642double(uint64_t a) { return (double)a; }
+
+double qfp_ddiv(double a, double b) { return a / b; }
+
+double qfp_dmul(double a, double b) { return a * b; }
+
+double qfp_dsqrt(double a) { return sqrt(a); }
+
+double qfp_dsub(double a, double b) { return a - b; }
+
 /* Reference C implementations for asm_math functions */
 uint64_t usqr64(uint32_t x) { return (uint64_t)x * x; }
 

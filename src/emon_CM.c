@@ -84,12 +84,10 @@ typedef struct RawSampleSetUnpacked {
  * Function prototypes
  *************************************/
 
-static inline q15_t    __STRUNCATE(int32_t val) RAMFUNC;
-static q15_t           applyCorrection(q15_t smp) RAMFUNC;
-static float           calcRMS(const CalcRMS_t *pSrc) RAMFUNC;
-static uint32_t        rnext(void);
-static inline uint32_t rotl(const uint32_t x, const int k);
-static bool            zeroCrossingSW(q15_t smpV, uint32_t timeNow_us) RAMFUNC;
+static inline q15_t __STRUNCATE(int32_t val) RAMFUNC;
+static q15_t        applyCorrection(q15_t smp) RAMFUNC;
+static float        calcRMS(const CalcRMS_t *pSrc) RAMFUNC;
+static bool         zeroCrossingSW(q15_t smpV, uint32_t timeNow_us) RAMFUNC;
 
 static void    accumSwapClear(void);
 static int32_t floorf_(const float f);
@@ -105,8 +103,6 @@ static void swapPtr(void **pIn1, void **pIn2);
  *****************************************************************************/
 
 static RawSampleSetUnpacked_t dspBuffer[DOWNSAMPLE_TAPS];
-
-static uint32_t s[2] = {0};
 
 /******************************************************************************
  * Accumulators
@@ -134,32 +130,25 @@ static uint32_t t_ZClast = 0;
  *  @return Q15 truncated val
  */
 static RAMFUNC inline q15_t __STRUNCATE(int32_t val) {
-  int32_t roundUp = 0;
-  if (0 != (val & (1 << 14))) {
-    roundUp = 1;
-  }
-  return (q15_t)((val >> 15) + roundUp);
+  val += (1u << 15);
+  return (q15_t)(val >> 15);
 }
 
 /***** END FIXED POINT FUNCIONS *****/
 
 static RAMFUNC float calcRMS(const CalcRMS_t *pSrc) {
-  const uint64_t numSamplesSqr = usqr64(pSrc->numSamples);
-  const float    vcal          = pSrc->cal;
+  const double numSamples = qfp_uint2double(pSrc->numSamples);
+  const double meanSqr    = qfp_ddiv(qfp_uint642double(pSrc->sSqr), numSamples);
+  const double mean       = qfp_ddiv(qfp_int2double(pSrc->sDelta), numSamples);
+  double       rms        = qfp_dsub(meanSqr, qfp_dmul(mean, mean));
 
-  const uint32_t deltasSqr = (uint32_t)(pSrc->sDelta * pSrc->sDelta);
+  if (rms < 0.0) {
+    rms = 0.0;
+  }
+  rms = qfp_dsqrt(rms);
+  rms = qfp_dmul(qfp_float2double(pSrc->cal), rms);
 
-  const float offsetCorr =
-      qfp_fdiv(qfp_uint2float(deltasSqr), qfp_uint642float(numSamplesSqr));
-
-  float rms =
-      qfp_fdiv(qfp_uint642float(pSrc->sSqr), qfp_uint2float(pSrc->numSamples));
-
-  rms = qfp_fsub(rms, offsetCorr);
-  rms = qfp_fsqrt(rms);
-  rms = qfp_fmul(vcal, rms);
-
-  return rms;
+  return qfp_double2float(rms);
 }
 
 /*! @brief Swap pointers to buffers */
@@ -247,9 +236,6 @@ void ecmConfigInit(void) {
     datasetProc.CT[i].wattHour = ecmCfg.ctCfg[i].wattHourInit;
   }
 
-  s[0] = ecmCfg.s0;
-  s[1] = ecmCfg.s1;
-
   initDone = true;
 }
 
@@ -277,72 +263,21 @@ volatile RawSampleSetPacked_t *ecmDataBuffer(void) { return adcActive; }
  * Functions
  *****************************************************************************/
 
-static inline uint32_t rotl(const uint32_t x, const int k) {
-  return (x << k) | (x >> (32 - k));
-}
-
-/* https://prng.di.unimi.it/xoroshiro64starstar.c */
-static uint32_t rnext(void) {
-  const uint32_t s0 = s[0];
-  uint32_t       s1 = s[1];
-
-  /* s0 and s1 cannot both be 0! Reseed using ADC values if so. */
-  if ((0 == s0) && (0 == s1)) {
-    s[0] = dspBuffer[0].smp[0];
-    s[1] = dspBuffer[1].smp[1];
-    return 0;
-  }
-
-  const uint32_t result = rotl(s0 * 0x9e3779bb, 5) * 5;
-  s1 ^= s0;
-  s[0] = rotl(s0, 26) ^ s1 ^ (s1 << 9);
-  s[1] = rotl(s1, 13);
-  return result;
-}
-
 static RAMFUNC q15_t applyCorrection(q15_t smp) {
-  static size_t   rused = 0;
-  static uint32_t r     = 0;
-
+  smp = smp - (1u << (ADC_RES_BITS - 1u));
   if (ecmCfg.correction.valid) {
-    int32_t result = smp + ecmCfg.correction.offset;
-    result *= ecmCfg.correction.gain;
-    result >>= 11;
+    int64_t prod = (int64_t)smp * (int64_t)ecmCfg.correction.gain;
+    int32_t y    = (int32_t)((prod + (1LL << 19)) >> 20);
 
-    q15_t ret = (q15_t)result;
-
-    /* If below threshold, increase magnitude by random [0,1]. If above
-     * threshold, decrease magnitude by random [0,1]. Significantly improves
-     * linearity of the ADC result. Applied after gain and offset correction to
-     * retain sampled shape. */
-    if (ecmCfg.dither && (0 != ret)) {
-
-      if (0 == rused) {
-        r = rnext();
-      }
-
-      const bool neg = ret < 0;
-      int        b   = r & 0x1;
-
-      q15_t abs = ret;
-      if (neg) {
-        abs = -ret;
-        b   = -b;
-      }
-
-      if ((abs < 150) || (abs > 250)) {
-        r >>= 1;
-        rused = (rused + 1u) & (0x1f);
-      }
-
-      if (abs > 250) {
-        b = -b;
-      }
-
-      ret = ret + b;
+    if (y > 2047) {
+      y = 2047;
+    }
+    if (y < -2048) {
+      y = -2048;
     }
 
-    return ret;
+    return (q15_t)y;
+
   } else {
     return smp;
   }
@@ -597,13 +532,14 @@ RAMFUNC void ecmFilterSample(SampleSet_t *pDst) {
                                 : channelActive[mapLogCT[ch - NUM_V] + NUM_V];
 
     if (active) {
-      int32_t intRes = coeffMid * dspBuffer[idxMid].smp[ch];
+      int32_t intRes = (int32_t)coeffMid * (int32_t)dspBuffer[idxMid].smp[ch];
 
       for (size_t fir = 0; fir < (COEFF_UNIQUE_NUM - 1); fir++) {
-        const q15_t coeff = firCoeffs[fir];
-        intRes += coeff * (dspBuffer[idxSmp[fir][0]].smp[ch] +
-                           dspBuffer[idxSmp[fir][1]].smp[ch]);
+        const int32_t coeff = (int32_t)firCoeffs[fir];
+        intRes += coeff * ((int32_t)dspBuffer[idxSmp[fir][0]].smp[ch] +
+                           (int32_t)dspBuffer[idxSmp[fir][1]].smp[ch]);
       }
+      /* result is in Q26 format, input in Q11, FIR is Q15 */
       result = __STRUNCATE(intRes);
 
     } else {
@@ -854,8 +790,8 @@ RAMFUNC ECMDataset_t *ecmProcessSet(void) {
           (qfp_fmul(qfp_int642float(accumProcessing->processCT[idxCT].sumPB[0]),
                     ecmCfg.ctCfg[idxCT].phaseY[0])));
 
-      int32_t vi_offset =
-          rms.sDelta * accumProcessing->processV[idxV1].sumV_deltas;
+      int64_t vi_offset = (int64_t)rms.sDelta *
+                          (int64_t)accumProcessing->processV[idxV1].sumV_deltas;
 
       float powerNow;
       if (useAssumedV) {
@@ -863,7 +799,7 @@ RAMFUNC ECMDataset_t *ecmProcessSet(void) {
       } else {
         powerNow = qfp_fdiv(sumEnergy, qfp_uint2float(numSamples));
         powerNow =
-            qfp_fsub(powerNow, qfp_fdiv(qfp_int2float(vi_offset),
+            qfp_fsub(powerNow, qfp_fdiv(qfp_int642float(vi_offset),
                                         qfp_uint642float(numSamplesSqr)));
         powerNow = qfp_fmul(powerNow,
                             qfp_fmul(rms.cal, ecmCfg.vCfg[idxV1].voltageCal));
@@ -878,10 +814,11 @@ RAMFUNC ECMDataset_t *ecmProcessSet(void) {
                 qfp_int642float(accumProcessing->processCT[idxCT].sumPB[1]),
                 ecmCfg.ctCfg[idxCT].phaseY[1])));
 
-        vi_offset = rms.sDelta * accumProcessing->processV[idxV2].sumV_deltas;
+        vi_offset       = (int64_t)rms.sDelta *
+                          (int64_t)accumProcessing->processV[idxV2].sumV_deltas;
         float powerNow2 = qfp_fdiv(sumEnergy, qfp_uint2float(numSamples));
         powerNow2 =
-            qfp_fsub(powerNow2, qfp_fdiv(qfp_int2float(vi_offset),
+            qfp_fsub(powerNow2, qfp_fdiv(qfp_int642float(vi_offset),
                                          qfp_uint642float(numSamplesSqr)));
         powerNow2 = qfp_fmul(powerNow2,
                              qfp_fmul(rms.cal, ecmCfg.vCfg[idxV2].voltageCal));

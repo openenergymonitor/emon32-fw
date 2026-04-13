@@ -40,7 +40,7 @@ typedef int64_t q63_t;
 
 /* SingleSampleSet_t contains a single set of V + CT ADC samples */
 typedef struct __attribute__((__packed__)) SingleSampleSet_ {
-  q15_t smp[VCT_TOTAL];
+  uint16_t smp[VCT_TOTAL];
 } SingleRawSampleSet_t;
 
 /* RawSampleSetPacked_t contains a set of single sample sets. This allows the
@@ -59,8 +59,7 @@ typedef struct SampleSet_ {
 
 typedef struct GainOffset_ {
   bool    valid;
-  int16_t gain;
-  int16_t offset;
+  int32_t gain;
 } GainOffset_t;
 
 typedef struct VCfg_ {

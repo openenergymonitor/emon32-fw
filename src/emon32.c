@@ -230,9 +230,8 @@ void ecmConfigure(void) {
   ecmCfg->s1     = getUniqueID(1u);
 
   if (adcCorrectionValid()) {
-    ecmCfg->correction.valid  = true;
-    ecmCfg->correction.gain   = adcCorrectionGain();
-    ecmCfg->correction.offset = adcCorrectionOffset();
+    ecmCfg->correction.valid = true;
+    ecmCfg->correction.gain  = adcCorrectionGain();
   } else {
     ecmCfg->correction.valid = false;
   }
