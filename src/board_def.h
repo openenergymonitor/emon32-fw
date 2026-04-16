@@ -28,8 +28,8 @@
 
 #define ADC_VREF     1.024f
 #define ADC_RES_BITS 12u
-#define CAL_V        8.0087f
-#define CAL_CT       3.006f
+#define CAL_V        8.0480f /* Account for input loadings and filters */
+#define CAL_CT       3.0067f
 
 /* OneWire/Pulse setup */
 #define NUM_OPA 3u
