@@ -6,9 +6,7 @@ When combined with an emonVs voltage sensor and CT sensors it provides a fully i
 
 Throughout the documentation, if there are steps and options specific to either the emonPi3 or emonTx6 these will be specifically described.
 
-The emonPi3 and emonTx6 share the same firmware. Most users will not need to compile their own firmware.
-
-The emonPi3 and emonTx6 are fully open source, and you can find the hardware files [here](https://github.com/openenergymonitor/emon32).
+The emonPi3 and emonTx6 are fully open source, with both the [hardware](https://github.com/openenergymonitor/emon32) and the [firmware](https://github.com/openenergymonitor/emon32-fw) available.
 
 ## Key features
 
@@ -22,12 +20,20 @@ The emonPi3 and emonTx6 are fully open source, and you can find the hardware fil
 - 40pin Raspberry Pi GPIO header
 - Wall-mount aluminium enclosure
 
-## Key Components
+## Selecting the emonPi3 or the emonTx6
 
-- Microcontroller: [Microchip ATSAMD21J17](https://www.microchip.com/en-us/product/atsamd21j17)
-- Precision voltage reference: [Microchip MCP1501](https://www.microchip.com/en-us/product/MCP1501)
-- Radio module: [RFM69CW](https://www.hoperf.com/modules/rf_transceiver/RFM69CW.html) @ 433.92 MHz
+The emonPi3 and emonTx6 share a common hardware design and the same firmware.
 
-## Accuracy
+The emonPi3 is fitted with a Raspberry Pi running emonCMS to handle the energy monitoring data, connected external sensors, and other OpenEnergyMonitor products such as additional emonTx units and emonTH sensors. The radio module operates as a receiver in the emonPi3.
 
-The emonPi3 builds on the same improvements as the emonPi2. The precision voltage reference is used continuously as the ADC reference, rather than for calibration and the ADC is pseudo-differential offering improved performance.
+The emonTx6 sends data using any of the following:
+
+- An RFM69 radio module, typically to an OpenEnergyMonitor base.
+- Serial through the USB-C port.serial.
+- WiFi using an [emonWiFi adapter](https://github.com/openenergymonitor/emonwifi).
+
+The following are the common options:
+
+- Setting up a new OpenEnergyMonitor system: **emonPi3**
+- Expanding an existing OpenEnergyMonitorSystem: **emonTx6**
+- Use without the radio module (e.g. Home Assistant, MQTT): **emonTx6** with emonWiFi expander
