@@ -1,15 +1,13 @@
 #include "driver_ADC.h"
+#include "board_def.h"
 #include "driver_DMAC.h"
 #include "driver_PORT.h"
 #include "driver_SAMD.h"
 #include "emon32_samd.h"
 
-#include "emon32.h"
 #include "emon_CM.h"
-#include "qfplib-m0-full.h"
 
-static int16_t correctionGain;
-static int16_t correctionOffset;
+static int32_t correctionGain;
 static bool    correctionValid;
 
 static void    adcCalibrate(void);
@@ -20,28 +18,11 @@ static void    adcSync(void);
 /*! @brief Calculate coarse gain and offset corrections. Only available when
  * using SAMD21 with sufficient ADC pins. */
 static void adcCalibrate(void) {
-  /* Expected ADC values for 1/4 and 3/4 scale, /2 for differential */
-  const int32_t refScale14 = -16383 / 2;
-  const int32_t refScale34 = 16382 / 2;
 
-  /* Real values from ADC conversion */
-  int16_t expScale14;
-  int16_t expScale34;
-
-  /* Calibration values */
-  int32_t offset_inter[2];
-  int32_t offset;
-
-  float   gain_fp;
-  int32_t gain;
-
-  /* Set up ADC for maximum sampling length and averaging. This results in a
-   * 16 bit signed value in RESULT.
-   */
+  /* Set up ADC for maximum sampling length and averaging */
   ADC->SAMPCTRL.reg = 0x1Fu;
-  ADC->AVGCTRL.reg  = ADC_AVGCTRL_SAMPLENUM_1024;
-  ADC->CTRLB.reg =
-      ADC_CTRLB_PRESCALER_DIV4 | ADC_CTRLB_DIFFMODE | ADC_CTRLB_RESSEL_16BIT;
+  ADC->AVGCTRL.reg  = ADC_AVGCTRL_SAMPLENUM_1024 | ADC_AVGCTRL_ADJRES(0x4u);
+  ADC->CTRLB.reg    = ADC_CTRLB_PRESCALER_DIV4 | ADC_CTRLB_RESSEL_16BIT;
   adcSync();
 
   /* Read 1/4 and 3/4 scale readings. The 1/4 scale is read twice as the first
@@ -50,45 +31,21 @@ static void adcCalibrate(void) {
   ADC->CTRLA.bit.ENABLE = 1;
   adcSync();
 
-  expScale14 = adcCalibrateSmp(AIN_VCAL_L);
-  expScale14 = adcCalibrateSmp(AIN_VCAL_L);
-  expScale34 = adcCalibrateSmp(AIN_VCAL_H);
+  /* First sample after reset is undefined */
+  (void)adcCalibrateSmp(AIN_VCAL_L);
+  uint16_t expScale14 = adcCalibrateSmp(AIN_VCAL_L);
+  uint16_t expScale34 = adcCalibrateSmp(AIN_VCAL_H);
 
   ADC->CTRLA.bit.ENABLE = 0;
   ADC->AVGCTRL.reg      = 0;
   adcSync();
 
-  /* The corrected value is:
-   * (Conversion + -OFFSET) * GAINCORR
-   * Solve two equations in two unknowns for OFFSETCORR and GAINCORR.
-   *  : G = (y0 - y1) / (y0' - y1') [y' is the actual conversion value]
-   *  : C = y' - y / G
-   * OFFSETCORR is a 12bit signed value (33.1.18 Offset Correction).
-   * GAINCORR is 1 unsigned bit + 11 fractional bits (33.8.17 Gain Correction)
-   *  : 1/2 < GAINCORR < 2.
-   */
-  gain_fp = qfp_fdiv(qfp_int2float((refScale14 - refScale34)),
-                     qfp_int2float((expScale14 - expScale34)));
-  gain    = qfp_float2fix(gain_fp, 11);
-
-  offset_inter[0] = qfp_float2int_z(qfp_fadd(
-                        0.5f, qfp_fdiv(qfp_int2float(refScale14), gain_fp))) -
-                    expScale14;
-  offset_inter[1] = qfp_float2int_z(qfp_fadd(
-                        0.5f, qfp_fdiv(qfp_int2float(refScale34), gain_fp))) -
-                    expScale34;
-  offset = (offset_inter[0] + offset_inter[1]) / 2;
-
-  /* Registers are 12 bit, shift 16 bit offet intermediate offset 4. The gain
-   * value is in Q1.11 format already.
-   */
-  correctionOffset = (int16_t)offset >> 4;
-  correctionGain   = (int16_t)gain;
-  correctionValid  = true;
+  const int32_t D = (int32_t)expScale34 - (int32_t)expScale14;
+  correctionGain  = (int32_t)((((int64_t)2048u << 20) + (D / 2)) / D);
 }
 
 static int16_t adcCalibrateSmp(const uint32_t pin) {
-  ADC->INPUTCTRL.reg = ADC_INPUTCTRL_MUXNEG_PIN0 | pin;
+  ADC->INPUTCTRL.reg = ADC_INPUTCTRL_MUXNEG_GND | pin;
   ADC->INTFLAG.reg   = ADC_INTFLAG_RESRDY;
   ADC->SWTRIG.reg    = ADC_SWTRIG_START;
   while (0 == (ADC->INTFLAG.reg & ADC_INTFLAG_RESRDY))
@@ -120,7 +77,7 @@ static void adcConfigureDMAC(void) {
     dmacDesc[i]->SRCADDR.reg = (uint32_t)&ADC->RESULT;
     /* Capture a full sample set before interrupt to start downsampling */
     dmacDesc[i]->BTCNT.reg   = (VCT_TOTAL * OVERSAMPLING_RATIO);
-    dmacDesc[i]->BTCTRL.reg  = DMAC_BTCTRL_VALID
+    dmacDesc[i]->BTCTRL.reg = DMAC_BTCTRL_VALID
                               /* Raise interrupt on block transfer */
                               | DMAC_BTCTRL_BLOCKACT_INT |
                               DMAC_BTCTRL_BEATSIZE_HWORD | DMAC_BTCTRL_DSTINC |
@@ -135,8 +92,7 @@ static void adcConfigureDMAC(void) {
   dmacDesc[1]->DESCADDR.reg = (uint32_t)dmacDesc[0];
 }
 
-int16_t adcCorrectionGain(void) { return correctionGain; }
-int16_t adcCorrectionOffset(void) { return correctionOffset; }
+int32_t adcCorrectionGain(void) { return correctionGain; }
 bool    adcCorrectionValid(void) { return correctionValid; }
 
 void adcDMACStart(void) {
@@ -179,8 +135,7 @@ void adcSetup(void) {
   /* Differential mode, /4 prescale of F_PERIPH. Requires synchronisation after
    * write (33.6.15).
    */
-  ADC->CTRLB.reg =
-      ADC_CTRLB_PRESCALER_DIV4 | ADC_CTRLB_DIFFMODE | ADC_CTRLB_RESSEL_12BIT;
+  ADC->CTRLB.reg = ADC_CTRLB_PRESCALER_DIV4 | ADC_CTRLB_RESSEL_12BIT;
   adcSync();
 
   /* Conversion time is 3.5 us (7 ADC cycles @ 2 MHz), target 12 us total
@@ -191,7 +146,7 @@ void adcSetup(void) {
 
   /* Input control - requires synchronisation (33.6.15) */
   ADC->INPUTCTRL.reg = ADC_INPUTCTRL_MUXPOS_PIN2 |
-                       ADC_INPUTCTRL_MUXNEG_PIN0
+                       ADC_INPUTCTRL_MUXNEG_GND
                        /* INPUTSCAN is number of channels - 1 */
                        | ADC_INPUTCTRL_INPUTSCAN(VCT_TOTAL - 1u);
   adcSync();

@@ -98,7 +98,7 @@
 // Support for the long long integral types (with the ll, z and t length modifiers for specifiers
 // %d,%i,%o,%x,%X,%u, and with the %p specifier). Note: 'L' (long double) is not supported.
 #ifndef PRINTF_SUPPORT_LONG_LONG
-#define PRINTF_SUPPORT_LONG_LONG 1
+#define PRINTF_SUPPORT_LONG_LONG 0
 #endif
 
 // The number of terms in a Taylor series expansion of log_10(x) to

@@ -11,10 +11,11 @@
  */
 #define F_CORE      48000000ul
 #define F_PERIPH    8000000ul
-#define F_TIMER_ADC F_PERIPH / 8
-#define F_TIMER2    F_PERIPH / 8
+#define F_TIMER_ADC (F_PERIPH / 8)
 
-#define BOOTPROT_SAMD 0x2 /* 8KB bootloader protection, Table 22-2 */
+#define BOOTPROT_SAMD  0x2  /* 8KB bootloader protection, Table 22-2 */
+#define EMON32_WDT_EW  0xAu /* 8K early warning cycles */
+#define EMON32_WDT_PER 0xBu /* 16K watchdog cycles */
 
 #define NUM_V              3
 #define NUM_CT             12
@@ -26,9 +27,9 @@
 #define OVERSAMPLING_RATIO 2u
 
 #define ADC_VREF     1.024f
-#define ADC_RES_BITS 11
-#define CAL_V        8.16f
-#define CAL_CT       3.027f
+#define ADC_RES_BITS 12u
+#define CAL_V        8.0480f /* Account for input loadings and filters */
+#define CAL_CT       3.0067f
 
 /* OneWire/Pulse setup */
 #define NUM_OPA 3u
@@ -122,15 +123,15 @@
 
 /* OneWire/Pulse interface */
 #define GRP_OPA     GRP_PINA
-#define PIN_OPA1    16
-#define PIN_OPA2    17
-#define PIN_OPA3    9
-#define PIN_OPA1_PU 18
-#define PIN_OPA2_PU 19
+#define PIN_OPA1    16u
+#define PIN_OPA2    17u
+#define PIN_OPA3    9u
+#define PIN_OPA1_PU 18u
+#define PIN_OPA2_PU 19u
 
-/* DISABLE_EXT_INTF */
-#define GRP_DISABLE_EXT GRP_PINB
-#define PIN_DISABLE_EXT 16u
+/* DISABLE_EXT_INTFn */
+#define GRP_DISABLE_EXTn GRP_PINB
+#define PIN_DISABLE_EXTn 16u
 
 /* ADC Pins */
 #define GRP_ADC_VMID   GRP_PINA
@@ -206,8 +207,8 @@
 #define PIN_RFM_IRQ     14u
 #define PMUX_RFM_IRQ    PORT_PMUX_PMUXE_A
 #define PIN_RFM_RST     15u
-#define RFM_RETRIES     4
-#define RFM_TIMEOUT     30
+#define RFM_RETRIES     4u
+#define RFM_TIMEOUT_ACK 30u
 
 /* I2C related defines */
 #define GRP_SERCOM_I2C_INT GRP_PINB

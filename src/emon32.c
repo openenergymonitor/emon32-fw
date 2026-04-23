@@ -13,6 +13,7 @@
 #include "driver_SERCOM.h"
 #include "driver_TIME.h"
 #include "driver_USB.h"
+#include "driver_WDT.h"
 
 #include "configuration.h"
 #include "dataPack.h"
@@ -35,13 +36,6 @@ typedef struct EPAccum_ {
   int32_t  E; /* Energy */
   uint32_t P; /* Pulse */
 } EPAccum_t;
-
-typedef struct TransmitOpt_ {
-  bool    json;      /* Use JSON format */
-  bool    useRFM;    /* Use wireless */
-  bool    logSerial; /* Log to serial */
-  uint8_t node;      /*  Node ID */
-} TransmitOpt_t;
 
 typedef struct TxBlink_ {
   bool     txIndicate; /* Tx in progress */
@@ -69,7 +63,6 @@ static void cumulativeProcess(Emon32Cumulative_t    *pPkt,
                               const Emon32Dataset_t *pData,
                               const uint32_t         epDeltaStore);
 static void datasetAddPulse(Emon32Dataset_t *pDst);
-static void ecmConfigure(void);
 static void ecmDmaCallback(void);
 static void evtKiloHertz(void);
 static bool evtPending(EVTSRC_t evt);
@@ -80,10 +73,9 @@ static void ssd1306Setup(void);
 static void tempReadEvt(Emon32Dataset_t *pData, const uint32_t numT);
 static uint32_t tempSetup(Emon32Dataset_t *pData);
 static void     totalEnergy(const Emon32Dataset_t *pData, EPAccum_t *pAcc);
-static void transmitData(const Emon32Dataset_t *pSrc, const TransmitOpt_t *pOpt,
-                         char *txBuffer);
-static void ucSetup(void);
-static void waitWithUSB(uint32_t t_ms);
+static void     transmitData(const Emon32Dataset_t *pSrc, uint32_t *pPkt);
+static void     ucSetup(void);
+static void     waitWithUSB(uint32_t t_ms);
 
 /*************************************
  * Functions
@@ -117,6 +109,7 @@ static void cumulativeNVMLoad(Emon32Cumulative_t *pPkt,
   for (size_t idxPulse = 0; idxPulse < NUM_OPA; idxPulse++) {
     uint32_t pulse = eepromOK ? pPkt->pulseCnt[idxPulse] : 0;
 
+    pulseSetCount(idxPulse, pulse);
     pData->pulseCnt[idxPulse] = pulse;
     totalP += pulse;
   }
@@ -201,7 +194,6 @@ static void cumulativeProcess(Emon32Cumulative_t    *pPkt,
  *  @param [out] pDst : pointer to the data struct
  */
 static void datasetAddPulse(Emon32Dataset_t *pDst) {
-  EMON32_ASSERT(pDst);
   for (size_t i = 0; i < NUM_OPA; i++) {
     pDst->pulseCnt[i] = pulseGetCount(i);
   }
@@ -218,13 +210,8 @@ void debugPuts(const char *s) {
   }
 }
 
-/*! @brief Configure the continuous energy monitoring system
- *  @param [in] pCfg : pointer to the configuration struct
- */
+/*! @brief Configure the continuous energy monitoring system */
 void ecmConfigure(void) {
-  /* Makes the continuous monitoring setup agnostic to the data strcuture
-   * used for storage, and avoids any awkward alignment from packing.
-   */
 
   extern const uint8_t ainRemap[NUM_CT];
 
@@ -238,10 +225,13 @@ void ecmConfigure(void) {
   ecmCfg->timeMicros    = &timerMicros;
   ecmCfg->timeMicrosDelta = &timerMicrosDelta;
 
+  ecmCfg->dither = true;
+  ecmCfg->s0     = getUniqueID(0);
+  ecmCfg->s1     = getUniqueID(1u);
+
   if (adcCorrectionValid()) {
-    ecmCfg->correction.valid  = true;
-    ecmCfg->correction.gain   = adcCorrectionGain();
-    ecmCfg->correction.offset = adcCorrectionOffset();
+    ecmCfg->correction.valid = true;
+    ecmCfg->correction.gain  = adcCorrectionGain();
   } else {
     ecmCfg->correction.valid = false;
   }
@@ -306,9 +296,6 @@ static void evtKiloHertz(void) {
   uint32_t                 msDelta;
   static volatile uint32_t msLast = 0;
 
-  /* Update the pulse counters, looking on different edges */
-  pulseUpdate();
-
   /* Blink LED red for TX_INDICATE_T before going back to green */
   if (txBlink.txIndicate) {
     if (timerMillisDelta(txBlink.timeBlink) > TX_INDICATE_T) {
@@ -336,14 +323,12 @@ static void evtKiloHertz(void) {
 }
 
 /*! @brief Check if an event source is active
- *  @param [in] : event source to check
+ *  @param [in] evt : event source to check
  *  @return true if pending, false otherwise
  */
 static bool evtPending(EVTSRC_t evt) { return (evtPend & (1u << evt)) != 0; }
 
-/*! @brief Configure any pulse counter interfaces
- *  @param [in] pCfg : pointer to the configuration struct
- */
+/*! @brief Configure any pulse counter interfaces */
 static void pulseConfigure(void) {
 
   uint8_t pinsPulse[][NUM_OPA] = {
@@ -351,8 +336,6 @@ static void pulseConfigure(void) {
 
   for (size_t i = 0; i < NUM_OPA; i++) {
     PulseCfg_t *pulseCfg = pulseGetCfg(i);
-
-    EMON32_ASSERT(pulseCfg);
 
     if (('o' != pConfig->opaCfg[i].func) && (pConfig->opaCfg[i].opaActive)) {
       pulseCfg->edge    = (PulseEdge_t)pConfig->opaCfg[i].func;
@@ -402,20 +385,33 @@ void serialPuts(const char *s) {
 static void ssd1306Setup(void) {
 
   if (SSD1306_SUCCESS == ssd1306Init(SERCOM_I2CM_EXT)) {
-    VersionInfo_t vInfo  = configVersion();
-    uint32_t      offset = 0;
+    VersionInfo_t vInfo          = configVersion();
+    uint32_t      offset_rev     = 0;
+    uint32_t      offset_release = 0;
+
     for (size_t i = 0; i < strlen(vInfo.revision); i++) {
       if ('-' == vInfo.revision[i]) {
-        offset = 20;
+        offset_rev = 18;
+        break;
+      }
+    }
+    for (size_t i = 0; i < strlen(vInfo.release); i++) {
+      if ('-' == vInfo.release[i]) {
+        offset_release = 18;
+        break;
       }
     }
 
     ssd1306SetPosition((PosXY_t){.x = 44u, .y = 0u});
     ssd1306DrawString("emonPi3");
-    ssd1306SetPosition((PosXY_t){.x = 46u, .y = 1u});
-    ssd1306DrawString(vInfo.version);
-    ssd1306SetPosition((PosXY_t){.x = (44u - offset), .y = 2u});
+    ssd1306SetPosition((PosXY_t){.x = (46u - offset_rev), .y = 1u});
+    ssd1306DrawString(vInfo.release);
+    ssd1306SetPosition((PosXY_t){.x = (44u - offset_release), .y = 2u});
     ssd1306DrawString(vInfo.revision);
+
+    ssd1306SetPosition((PosXY_t){.x = 35u, .y = 4u});
+    ssd1306DrawString("Starting...");
+
     ssd1306DisplayUpdate();
   }
 }
@@ -473,7 +469,7 @@ static uint32_t tempSetup(Emon32Dataset_t *pData) {
   uint32_t       numTempSensors = 0;
   DS18B20_conf_t dsCfg          = {0};
   dsCfg.grp                     = GRP_OPA;
-  dsCfg.t_wait_us               = 5;
+  dsCfg.t_wait_us               = 5u;
 
   tempInitClear();
 
@@ -487,7 +483,7 @@ static uint32_t tempSetup(Emon32Dataset_t *pData) {
       portPinCfg(GRP_OPA, opaPins[i], PORT_PINCFG_PULLEN, PIN_CFG_CLR);
       portPinDrv(GRP_OPA, opaPins[i], PIN_DRV_CLR);
 
-      if (pConfig->opaCfg[i].opaActive) {
+      if (pConfig->opaCfg[i].opaActive && sercomExtIntfEnabled()) {
         dsCfg.opaIdx = i;
         dsCfg.pin    = opaPins[i];
         dsCfg.pinPU  = opaPUs[i];
@@ -530,10 +526,10 @@ static void totalEnergy(const Emon32Dataset_t *pData, EPAccum_t *pAcc) {
   }
 }
 
-static void transmitData(const Emon32Dataset_t *pSrc, const TransmitOpt_t *pOpt,
-                         char *txBuffer) {
+static void transmitData(const Emon32Dataset_t *pSrc, uint32_t *pPkt) {
 
-  CHActive_t chsActive;
+  char       txBuffer[TX_BUFFER_W] = {0};
+  CHActive_t chsActive             = {false};
 
   for (size_t i = 0; i < NUM_V; i++) {
     chsActive.V[i] = pConfig->voltageCfg[i].vActive;
@@ -549,65 +545,46 @@ static void transmitData(const Emon32Dataset_t *pSrc, const TransmitOpt_t *pOpt,
     chsActive.pulse[i] = pConfig->opaCfg[i].opaActive && isPulse;
   }
 
-  (void)dataPackSerial(pSrc, txBuffer, TX_BUFFER_W, pOpt->json, &chsActive);
+  (void)dataPackSerial(pSrc, txBuffer, TX_BUFFER_W, pConfig->baseCfg.useJson,
+                       &chsActive);
 
-  if (pOpt->useRFM) {
+  if (pConfig->dataTxCfg.useRFM) {
 
-    if (pOpt->logSerial) {
+    if (pConfig->baseCfg.logToSerial) {
       serialPuts(txBuffer);
     }
+    /* Always send CT1-6 */
+    *pPkt = 0x1u;
 
-    if (sercomExtIntfEnabled()) {
-      uint8_t   retryCount    = 0;
-      RFMSend_t rfmResult     = RFM_FAILED;
-      bool      sendTempPulse = false;
-      bool      sendCT7_12    = false;
-
-      /* Only send temperature + pulse if found or active */
-      for (size_t t = 0; t < TEMP_MAX_ONEWIRE; t++) {
-        if (4800 != pSrc->temp[t]) {
-          sendTempPulse = true;
-          break;
-        }
-      }
-      for (size_t p = 0; p < NUM_OPA; p++) {
-        const uint8_t func    = pConfig->opaCfg[p].func;
-        const bool    isPulse = ('r' == func) || ('f' == func) || ('b' == func);
-        if (isPulse && pConfig->opaCfg[p].opaActive) {
-          sendTempPulse = true;
-          break;
-        }
-      }
-
-      /* Only send CT7-12 if any are active */
-      for (size_t i = (NUM_CT / 2); i < (NUM_CT / 2); i++) {
-        if (pConfig->ctCfg[i].ctActive) {
-          sendCT7_12 = true;
-          break;
-        }
-      }
-
-      rfmSetAddress(pOpt->node);
-
-      uint8_t nPacked = dataPackPacked(pSrc, rfmGetBuffer(), PACKED_CT1_6);
-      rfmResult       = rfmSendBuffer(nPacked, RFM_RETRIES, &retryCount);
-
-      if ((RFM_SUCCESS == rfmResult) && sendTempPulse) {
-        rfmSetAddress(pOpt->node + 1u);
-
-        retryCount = 0;
-        nPacked    = dataPackPacked(pSrc, rfmGetBuffer(), PACKED_TEMP_PULSE);
-        rfmResult  = rfmSendBuffer(nPacked, RFM_RETRIES, &retryCount);
-      }
-
-      if ((RFM_SUCCESS == rfmResult) && sendCT7_12) {
-        rfmSetAddress(pOpt->node + 2u);
-
-        retryCount = 0;
-        nPacked    = dataPackPacked(pSrc, rfmGetBuffer(), PACKED_CT7_12);
-        rfmResult  = rfmSendBuffer(nPacked, RFM_RETRIES, &retryCount);
+    /* Only send temperature + pulse if found or active */
+    for (size_t t = 0; t < TEMP_MAX_ONEWIRE; t++) {
+      if (4800 != pSrc->temp[t]) {
+        *pPkt |= (1u << 1);
+        break;
       }
     }
+    for (size_t p = 0; p < NUM_OPA; p++) {
+      const uint8_t func    = pConfig->opaCfg[p].func;
+      const bool    isPulse = ('r' == func) || ('f' == func) || ('b' == func);
+      if (isPulse && pConfig->opaCfg[p].opaActive) {
+        *pPkt |= (1u << 1);
+        break;
+      }
+    }
+
+    /* Only send CT7-12 if any are active */
+    for (size_t i = (NUM_CT / 2); i < NUM_CT; i++) {
+      if (pConfig->ctCfg[i].ctActive) {
+        *pPkt |= (1u << 2);
+        break;
+      }
+    }
+
+    __disable_irq();
+    if (sercomExtIntfEnabled()) {
+      emon32EventSet(EVT_TX_RFM);
+    }
+    __enable_irq();
 
   } else {
     serialPuts(txBuffer);
@@ -628,6 +605,7 @@ static void ucSetup(void) {
   adcSetup();
   evsysSetup();
   usbSetup();
+  wdtSetup();
 }
 
 static void waitWithUSB(uint32_t t_ms) {
@@ -644,10 +622,11 @@ static void waitWithUSB(uint32_t t_ms) {
 
 int main(void) {
 
-  Emon32Dataset_t    dataset               = {0};
-  uint32_t           numTempSensors        = 0;
-  Emon32Cumulative_t nvmCumulative         = {0};
-  char               txBuffer[TX_BUFFER_W] = {0};
+  Emon32Dataset_t    dataset            = {0};
+  uint32_t           numTempSensors     = 0;
+  uint32_t           numTempSensorsLast = 0;
+  Emon32Cumulative_t nvmCumulative      = {0};
+  uint32_t           rfmPkts            = 0;
 
   ucSetup();
   uiLedColour(LED_RED);
@@ -655,12 +634,7 @@ int main(void) {
   /* Pause to allow any external pins to settle */
   waitWithUSB(100);
   spiConfigureExt();
-
-  /* If the system is booted while it is connected to an active Pi, do not
-   * write to the OLED or setup the RFM module. */
-  if (sercomExtIntfEnabled()) {
-    ssd1306Setup();
-  }
+  ssd1306Setup();
 
   eicEnable();
   uartEnableTx(SERCOM_UART);
@@ -681,7 +655,8 @@ int main(void) {
 
   /* Set up pulse and temperature sensors, if present. */
   pulseConfigure();
-  numTempSensors = tempSetup(&dataset);
+  numTempSensors     = tempSetup(&dataset);
+  numTempSensorsLast = numTempSensors;
 
   /* Wait 1s to allow USB to enumerate as serial. Not always possible, but
    * gives the possibility. The board information can be accessed through the
@@ -695,6 +670,7 @@ int main(void) {
   ecmFlush();
   adcDMACStart();
   uartEnableRx(SERCOM_UART, SERCOM_UART_INTERACTIVE_IRQn);
+  wdtEnable();
 
   if (configUnsavedChanges()) {
     uiLedColour(LED_YELLOW);
@@ -717,6 +693,7 @@ int main(void) {
 
       /* 1 ms timer flag */
       if (evtPending(EVT_TICK_1kHz)) {
+        wdtFeed();
         tud_task();
         usbCDCTask();
 
@@ -773,7 +750,7 @@ int main(void) {
        * the last temperature sample, start a temperature sample as well.
        */
       if (evtPending(EVT_ECM_TRIG)) {
-        if (numTempSensors > 0) {
+        if (sercomExtIntfEnabled() && (numTempSensors > 0)) {
           for (size_t i = 0; i < NUM_OPA; i++) {
             if (('o' == pConfig->opaCfg[i].func) &&
                 pConfig->opaCfg[i].opaActive) {
@@ -787,7 +764,7 @@ int main(void) {
 
       /* Trigger a temperature sample 1 s before the report is due. */
       if (evtPending(EVT_ECM_PEND_1S)) {
-        if (numTempSensors > 0) {
+        if (sercomExtIntfEnabled() && (numTempSensors > 0)) {
           for (size_t i = 0; i < NUM_OPA; i++) {
             if (('o' == pConfig->opaCfg[i].func) &&
                 pConfig->opaCfg[i].opaActive) {
@@ -810,23 +787,23 @@ int main(void) {
        * through the configured interface.
        */
       if (evtPending(EVT_TEMP_READ)) {
-        tempReadEvt(&dataset, numTempSensors);
+        if (sercomExtIntfEnabled()) {
+          tempReadEvt(&dataset, numTempSensors);
+        } else {
+          emon32EventClr(EVT_TEMP_READ);
+          emon32EventSet(EVT_PROCESS_DATASET);
+        }
       }
 
       /* Report period elapsed; generate, pack, and send through the
        * configured channels.
        */
       if (evtPending(EVT_PROCESS_DATASET)) {
-        TransmitOpt_t opt;
-        opt.useRFM    = pConfig->dataTxCfg.useRFM;
-        opt.logSerial = pConfig->baseCfg.logToSerial;
-        opt.node      = pConfig->baseCfg.nodeID;
-        opt.json      = pConfig->baseCfg.useJson;
 
         dataset.msgNum++;
         dataset.pECM = ecmProcessSet();
         datasetAddPulse(&dataset);
-        transmitData(&dataset, &opt, txBuffer);
+        transmitData(&dataset, &rfmPkts);
 
         /* If the energy used since the last storage is greater than the
          * configured energy delta then save the accumulated energy to NVM.
@@ -841,25 +818,61 @@ int main(void) {
         emon32EventClr(EVT_PROCESS_DATASET);
       }
 
-      /* Configuration:
-       *   - Process command
-       *   - Change (set PROG LED)
-       *   - Save (clear PROG LED)
-       */
+      if (evtPending(EVT_TX_RFM)) {
+        /* Progress Tx state machine */
+        RFMTxState_t txState = rfmTxAdvance();
+
+        if (RFM_TX_IDLE == txState) {
+          bool          sendPkt = false;
+          uint8_t       nodeID  = pConfig->baseCfg.nodeID;
+          PackedRange_t range   = PACKED_CT1_6;
+          uint32_t      mask    = 0x1u;
+
+          if (0 == rfmPkts) {
+            /* All packets sent */
+            emon32EventClr(EVT_TX_RFM);
+          } else if (rfmPkts & 0x1u) {
+            sendPkt = true;
+          } else if (rfmPkts & (1u << 1)) {
+            sendPkt = true;
+            nodeID += 1u;
+            range = PACKED_TEMP_PULSE;
+            mask  = (1u << 1);
+          } else if (rfmPkts & (1u << 2)) {
+            sendPkt = true;
+            nodeID += 2u;
+            range = PACKED_CT7_12;
+            mask  = (1u << 2);
+          }
+
+          if (sendPkt) {
+            rfmSetAddress(nodeID);
+            (void)rfmSendBuffer(dataPackPacked(&dataset, rfmGetBuffer(), range),
+                                RFM_RETRIES);
+            rfmPkts &= ~mask;
+          }
+
+        } else if (RFM_TX_ABORT == txState) {
+          /* RFM module blocked, reset and reconfigure */
+          rfmConfigure();
+          emon32EventClr(EVT_TX_RFM);
+        }
+      }
+
       if (evtPending(EVT_PROCESS_CMD)) {
         configProcessCmd();
         emon32EventClr(EVT_PROCESS_CMD);
       }
+
       if (evtPending(EVT_OPA_INIT)) {
         pulseConfigure();
         numTempSensors = tempSetup(&dataset);
+        if (numTempSensorsLast != numTempSensors) {
+          printf_("> Found %lu OneWire temperature sensor%s.\r\n",
+                  numTempSensors, (1u == numTempSensors ? "" : "s"));
+          numTempSensorsLast = numTempSensors;
+        }
         emon32EventClr(EVT_OPA_INIT);
-      }
-      if (evtPending(EVT_CONFIG_CHANGED)) {
-        emon32EventClr(EVT_CONFIG_CHANGED);
-      }
-      if (evtPending(EVT_CONFIG_SAVED)) {
-        emon32EventClr(EVT_CONFIG_SAVED);
       }
     }
 

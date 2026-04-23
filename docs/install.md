@@ -86,6 +86,8 @@ With 6 CT sensor cables and often more cable than you need, it's easy for an ins
 
 ## emonPi3 and emonTx6 Installation
 
+- If you are using the [emonWiFi](https://github.com/openenergymonitor/emonwifi) expander board configure this and plug it into the emonTx6 **before** continuing.
+
 - The emonPi3 can be wall mounted using the wall mounting kit supplied. Installation on its side, with the aluminium side plates on the top and bottom can help reduce risk of things falling onto the sockets and can make for an easier installation in terms of CT sensor routing.
 
 - Plug in the CT sensors. Note which CT sensor is plugged into each input on the emonPi3 as each input needs to have the correct calibration applied.
@@ -98,7 +100,7 @@ With 6 CT sensor cables and often more cable than you need, it's easy for an ins
 If you have the Raspberry Pi 4 variant of the emonPi3 the Raspberry Pi Ethernet socket is on the same side as the CT sensors, avoid plugging the emonVs RJ45 cable into the Ethernet socket and vice versa.
 ```
 
-## emonPi3 Only Further Steps
+## emonPi3 Further Steps
 
 ### Startup and display menu
 

@@ -11,23 +11,19 @@ _Static_assert((sizeof(bool) == 1), "bool must be 1 byte");
  * Common configurable options
  *********************************/
 
-#define NUM_CT_ACTIVE_DEF  6      /* Onboard CTs only */
-#define DELTA_EP_STORE_DEF 200u   /* Threshold, in Wh, to store to NVM */
-#define NODE_ID_DEF        17u    /* Node ID for reports */
-#define GROUP_ID_DEF       210u   /* Group ID default for OEM */
-#define MAINS_FREQ_DEF     50u    /* Mains frequency */
-#define REPORT_TIME_DEF    9.8f   /* Report time, in seconds */
-#define ASSUMED_VRMS_DEF   0      /* Assumed voltage, used if no AC sense */
+#define NUM_CT_ACTIVE_DEF  6    /* Onboard CTs only */
+#define DELTA_EP_STORE_DEF 200u /* Threshold, in Wh, to store to NVM */
+#define NODE_ID_DEF        17u  /* Node ID for reports */
+#define GROUP_ID_DEF       210u /* Group ID default for OEM */
+#define MAINS_FREQ_DEF     50u  /* Mains frequency */
+#define REPORT_TIME_DEF    9.8f /* Report time, in seconds */
+#define ASSUMED_VRMS_DEF   0    /* Assumed voltage, used if no AC sense */
+#define CT_LEAD_DEF        1.5f /* CT lead angle */
+#define PULSE_BLANK_DEF    25u  /* Minimum time between pulses (ms) */
+
 #define PERF_ENABLED       0u     /* Performance tracing */
 #define TX_INDICATE_T      250u   /* Transmission indication time (ms) */
 #define CONFIRM_TIMEOUT_MS 30000u /* Confirmation timeout (ms) */
-
-/*********************************
- * Firmware version
- *********************************/
-#define VERSION_FW_MAJ 0u
-#define VERSION_FW_MIN 99u
-#define VERSION_FW_REV 0u
 
 /*********************************
  * Remaining
@@ -88,10 +84,9 @@ typedef enum EVTSRC_ {
   EVT_TICK_1kHz       = 1u,
   EVT_ECHO            = 2u,
   EVT_ECM_SET_CMPL    = 8u,
+  EVT_TX_RFM          = 9u,
   EVT_OPA_INIT        = 14u,
   EVT_TEMP_READ       = 15u,
-  EVT_CONFIG_CHANGED  = 16u,
-  EVT_CONFIG_SAVED    = 17u,
   EVT_PROCESS_CMD     = 19u,
   EVT_PROCESS_DATASET = 20u,
   EVT_STORE_ACCUM     = 21u,
@@ -106,8 +101,11 @@ typedef enum EVTSRC_ {
  */
 void debugPuts(const char *s);
 
+/*! @brief Configure the continuous energy monitoring system */
+void ecmConfigure(void);
+
 /*! @brief Clear a pending event/interrupt flag after the task has been handled
- *  @param [in] Event source in enum
+ *  @param [in] evt : event source in enum
  */
 void emon32EventClr(const EVTSRC_t evt);
 

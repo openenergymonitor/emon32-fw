@@ -34,8 +34,8 @@ typedef struct TempRead_ {
   int16_t      temp;
 } TempRead_t;
 
-/*! @brief Populate the table of OneWire devices
- *  @return pointer to the address table
+/*! @brief Get the table of OneWire device addresses.
+ *  @return pointer to the address table.
  */
 uint64_t *tempAddress1WGet(void);
 
@@ -57,11 +57,13 @@ void tempInitClear(void);
 uint32_t tempInitSensors(const TEMP_INTF_t intf, const void *pParams);
 
 /*! @brief Generate a mapping of physical to logical sensors
+ *  @param [in] intf : interface type
  *  @param [in] pAddr : pointer to array of logical sensors
  */
 void tempMapDevices(const TEMP_INTF_t intf, const void *pAddr);
 
 /*! @brief Get the map index for this sensor
+ *  @param [in] intf : interface type
  *  @param [in] dev : physical device index
  *  @return logical device index
  */

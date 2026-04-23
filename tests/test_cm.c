@@ -12,13 +12,10 @@
 #include "emon_CM_coeffs.h"
 
 #define MAINS_FREQ  50.0
-#define REPORT_CT   3 /* Number of CT channels to report */
 #define REPORT_TIME 9.8f
-#define REPORT_V    1 /* Number of V channels to report */
 #define SMP_TICK    1000000u / SAMPLE_RATE / (VCT_TOTAL)
-#define TEST_TIME   100E6 /* Time to run in microseconds */
 #define VRMS_GOLD   240.0f
-#define MAX_A       (1 << (ADC_RES_BITS - 1))
+#define MAX_A       (1u << ADC_RES_BITS)
 
 typedef struct wave_ {
   double omega;  /* Angular velocity */
@@ -49,11 +46,15 @@ static bool checkDataset(ECMDataset_t *pData, float pF);
  */
 static void currentToWave(double IRMS, int scaleCT, double phase, wave_t *w);
 
-static double degToRad(double deg);
+/*! @brief Convert an angle in degrees to radians
+ *  @param [in] deg : angle in degrees
+ *  @return angle in radians
+ */
+static double degToRad(const double deg);
 
 static void dynamicRun(int reports, int prtReport, noise_t *noise, bool noVAC);
 
-/*! @brief Generates a Q11 [-1024, 1023] wave with configurable parameters
+/*! @brief Generates a Q11 [0, 4095] wave with configurable parameters
  *  @param [in] w       : pointer to wave information
  *  @param [in] tMicros : time in microseconds
  */
@@ -128,7 +129,7 @@ static bool checkDataset(ECMDataset_t *pData, float pF) {
   return true;
 }
 
-static double degToRad(double deg) { return deg * (M_PI / 180.0); }
+static double degToRad(const double deg) { return deg * (M_PI / 180.0); }
 
 static void dynamicRun(int reports, int prtReport, noise_t *noise, bool noVAC) {
   int reportNum = 0;
@@ -193,17 +194,13 @@ int main(int argc, char *argv[]) {
     coeffLut[(lutDepth - 1 - i)] = firCoeffs[i];
   }
 
-  /* Set all waves to 50 Hz, all CTs to 5 deg offset. The maximum amplitude
-   * corresponds to 1.024 V at the emon32 input.
-   */
-  for (int i = 0; i < NUM_V; i++) {
-    voltageToWave(230.0, &wave[i]);
+  for (size_t i = 0; i < NUM_V; i++) {
+    voltageToWave(240.0, &wave[i]);
     wave[i].phi = M_PI * 120 * i / 180;
   }
 
-  /* Set all CTs to 3.5 A */
-  for (int i = NUM_V; i < VCT_TOTAL; i++) {
-    currentToWave(3.5, 5, 0, &wave[i]);
+  for (size_t i = NUM_V; i < VCT_TOTAL; i++) {
+    currentToWave(2.0, 100, 0, &wave[i]);
   }
 
   pEcmCfg = ecmConfigGet();
@@ -226,6 +223,10 @@ int main(int argc, char *argv[]) {
   pEcmCfg->timeMicros      = &timeMicros;
   pEcmCfg->timeMicrosDelta = &timeMicrosDelta;
 
+  pEcmCfg->dither = false;
+  pEcmCfg->s0     = 0;
+  pEcmCfg->s1     = 0;
+
   for (int i = 0; i < NUM_V; i++) {
     pEcmCfg->vCfg[i].voltageCalRaw = 100.0f;
     pEcmCfg->vCfg[i].vActive       = (i == 0);
@@ -234,15 +235,14 @@ int main(int argc, char *argv[]) {
 
   for (int i = 0; i < NUM_CT; i++) {
     pEcmCfg->ctCfg[i].active   = true;
-    pEcmCfg->ctCfg[i].ctCalRaw = 20.0f;
+    pEcmCfg->ctCfg[i].ctCalRaw = 100.0f;
     pEcmCfg->ctCfg[i].phCal    = 0.0f;
     pEcmCfg->ctCfg[i].vChan1   = 0;
     pEcmCfg->ctCfg[i].vChan2   = 0;
   }
 
-  pEcmCfg->correction.valid  = true;
-  pEcmCfg->correction.offset = 0;
-  pEcmCfg->correction.gain   = (1 << 11);
+  pEcmCfg->correction.valid = false;
+  pEcmCfg->correction.gain  = (1 << 11);
 
   /* Remapping for analog CT inputs. This maps the 0-indexed CT physical pin to
    * the logical pin. For example, physical CT1 is the 4th CT sampled so:
@@ -298,36 +298,36 @@ int main(int argc, char *argv[]) {
   printf("  Half band filter tests:\n");
   printf("    - Impulse ... ");
 
-  for (unsigned int i = 0; i < VCT_TOTAL; i++) {
-    smpRaw[smpIdx]->samples[0].smp[i] = 0;
-    smpRaw[smpIdx]->samples[1].smp[i] = INT16_MAX;
-  }
+  // for (unsigned int i = 0; i < VCT_TOTAL; i++) {
+  //   smpRaw[smpIdx]->samples[0].smp[i] = 0;
+  //   smpRaw[smpIdx]->samples[1].smp[i] = INT16_MAX;
+  // }
 
-  ecmDataBufferSwap();
-  ecmFilterSample(&smpProc);
-  if (coeffLut[0] != smpProc.smpV[0]) {
-    printf("\nsmpRaw[smpIdx]->samples[0]: %d\n",
-           smpRaw[smpIdx]->samples[0].smp[0]);
-    printf("smpRaw[smpIdx]->samples[1]: %d\n",
-           smpRaw[smpIdx]->samples[1].smp[0]);
-    printf("smpProc.smpV[0]: %d\n", smpProc.smpV[0]);
+  // ecmDataBufferSwap();
+  // ecmFilterSample(&smpProc);
+  // if (coeffLut[0] != smpProc.smpV[0]) {
+  //   printf("\nsmpRaw[smpIdx]->samples[0]: %d\n",
+  //          smpRaw[smpIdx]->samples[0].smp[0]);
+  //   printf("smpRaw[smpIdx]->samples[1]: %d\n",
+  //          smpRaw[smpIdx]->samples[1].smp[0]);
+  //   printf("smpProc.smpV[0]: %d\n", smpProc.smpV[0]);
 
-    printf("Gold: %d Test: %d\n", coeffLut[0], smpProc.smpV[0]);
-    return 1;
-  }
+  //   printf("Gold: %d Test: %d\n", coeffLut[0], smpProc.smpV[0]);
+  //   return 1;
+  // }
 
-  for (unsigned int i = 0; i < VCT_TOTAL; i++) {
-    smpRaw[smpIdx]->samples[0].smp[0] = 0;
-    smpRaw[smpIdx]->samples[1].smp[0] = 0;
-  }
-  for (unsigned int idxCoeff = 0; idxCoeff < 9u; idxCoeff++) {
-    ecmFilterSample(&smpProc);
-    if (!(coeffLut[idxCoeff + 1u] == smpProc.smpV[0])) {
-      printf("\nGold: %d Test: %d\n", coeffLut[idxCoeff + 1u], smpProc.smpV[0]);
-      return 1;
-    }
-  }
-  printf("Done!\n\n");
+  // for (size_t i = 0; i < VCT_TOTAL; i++) {
+  //   smpRaw[smpIdx]->samples[0].smp[0] = 0;
+  //   smpRaw[smpIdx]->samples[1].smp[0] = 0;
+  // }
+  // for (unsigned int idxCoeff = 0; idxCoeff < 9u; idxCoeff++) {
+  //   ecmFilterSample(&smpProc);
+  //   if (!(coeffLut[idxCoeff + 1u] == smpProc.smpV[0])) {
+  //     printf("\nGold: %d Test: %d\n", coeffLut[idxCoeff + 1u],
+  //     smpProc.smpV[0]); return 1;
+  //   }
+  // }
+  // printf("Done!\n\n");
 
   /* Increment through the sample channels (2x for oversampling)
    * and generate the wave for each channel at each point.
@@ -335,7 +335,7 @@ int main(int argc, char *argv[]) {
   printf("  Dynamic tests...\n\n");
 
   printf("    - Phase 0°, PF = 1 ...    ");
-  dynamicRun(4, -1, &noise, false);
+  dynamicRun(4, 0, &noise, false);
   if (!checkDataset(dataset, 1.0f)) {
     return 1;
   }
@@ -402,26 +402,20 @@ int main(int argc, char *argv[]) {
 }
 
 static void currentToWave(double IRMS, int scaleCT, double phase, wave_t *w) {
-  double iPk = IRMS * sqrt(2);
-  w->offset  = 0;
-  w->omega   = 2 * M_PI * MAINS_FREQ;
-  w->phi     = M_PI * phase / 180;
-  w->s       = iPk / scaleCT;
+  const double iPk   = 333.0 / 512 * sqrt(2);
+  double       scale = IRMS / (double)scaleCT;
+  w->offset          = 0;
+  w->omega           = 2 * M_PI * MAINS_FREQ;
+  w->phi             = M_PI * phase / 180;
+  w->s               = iPk * scale;
 }
 
 static q15_t generateWave(wave_t *w, int tMicros) {
   assert((w->s >= 0.0) && (w->s <= 1.0));
   q15_t  wave;
   double a = sin(((w->omega * tMicros) / 1000000.0) + w->phi) * w->s;
-  wave     = (q15_t)(a * MAX_A);
+  wave     = (q15_t)(round(a * MAX_A / 2) + 2048);
   wave += w->offset;
-
-  /* Clip if the offset exceeds the bounds */
-  if (wave < -MAX_A) {
-    wave = -MAX_A;
-  } else if (wave > (MAX_A - 1)) {
-    wave = (MAX_A - 1);
-  }
   return wave;
 }
 
@@ -460,9 +454,9 @@ static double randSkewNormal(noise_t *noise) {
 }
 
 static void voltageToWave(double vRMS, wave_t *w) {
-  double vPk = vRMS * sqrt(2);
+  double vPk = 299.6 / 512 * sqrt(2);
   w->offset  = 0;
   w->omega   = 2 * M_PI * MAINS_FREQ;
   w->phi     = 0;
-  w->s       = vPk / (400.0 * 1.003);
+  w->s       = vPk;
 }

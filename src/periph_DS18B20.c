@@ -1,4 +1,5 @@
 #include <stddef.h>
+#include <string.h>
 
 #include "emon32_samd.h"
 
@@ -33,6 +34,7 @@ _Static_assert(9 == sizeof(Scratch_t), "Scratch_t is not 9 bytes.");
 static DS18B20_conf_t cfg[NUM_OPA];
 
 /* Device address table */
+static uint32_t numFound                       = 0;
 static uint64_t devTableAddr[TEMP_MAX_ONEWIRE] = {0};
 static uint8_t  devTableOpa[TEMP_MAX_ONEWIRE]  = {0};
 static uint8_t  devRemap[TEMP_MAX_ONEWIRE]     = {0};
@@ -49,13 +51,13 @@ static void oneWireWriteBit(uint8_t bit, const size_t opaIdx);
 static void oneWireWriteBytes(const void *pSrc, const uint8_t n,
                               const size_t opaIdx);
 
-uint64_t ROM_NO                = 0;
-int32_t  lastDiscrepancy       = 0;
-int32_t  lastFamilyDiscrepancy = 0;
-int32_t  lastDeviceFlag        = 0;
+static uint64_t ROM_NO                = 0;
+static int32_t  lastDiscrepancy       = 0;
+static int32_t  lastFamilyDiscrepancy = 0;
+static bool     lastDeviceFlag        = false;
 
 static uint8_t calcCRC8(const uint8_t crc, const uint8_t value) {
-  const uint8_t dscrc_table[] = {
+  static const uint8_t dscrc_table[] = {
       0,   94,  188, 226, 97,  63,  221, 131, 194, 156, 126, 32,  163, 253, 31,
       65,  157, 195, 33,  127, 252, 162, 64,  30,  95,  1,   227, 189, 62,  96,
       130, 220, 35,  125, 159, 193, 66,  28,  254, 160, 225, 191, 93,  3,   128,
@@ -84,8 +86,8 @@ static uint8_t calcCRC8(const uint8_t crc, const uint8_t value) {
 static bool oneWireFirst(const size_t opaIdx) {
   /* Reset the search state */
   lastDiscrepancy       = 0;
-  lastDeviceFlag        = 0;
   lastFamilyDiscrepancy = 0;
+  lastDeviceFlag        = false;
 
   return oneWireSearch(opaIdx);
 }
@@ -128,47 +130,63 @@ static void oneWireReadBytes(void *pDst, const uint8_t n, const size_t opaIdx) {
 }
 
 static bool oneWireReset(const size_t opaIdx) {
-  /* t_RSTL (min) = 480 us
-   * t_RSTH (min) = 480 us
+  /* t_RSTL (min) >= 480 us
+   * t_RSTH (min) >= 480 us
    * t_PDHIGH (max) = 60 us
    * t_PDLOW (max) = 240 us
    */
 
-  bool     presence  = 0;
-  uint32_t timeStart = 0;
-
-  portPinDir(cfg[opaIdx].grp, cfg[opaIdx].pin, PIN_DIR_OUT);
-
-  timerDelay_us(500u);
-  portPinDir(cfg[opaIdx].grp, cfg[opaIdx].pin, PIN_DIR_IN);
-  /* Wait 75 us to ensure t_PDHIGH has elapsed, then wait the full t_RSTH
-   * time +25 us slack to complete the reset sequence.
-   */
-  timerDelay_us(75u);
+  static const uint32_t t_RSTx    = 500u;
+  static const uint32_t t_PDx     = 300u;
+  bool                  presence  = false;
+  uint32_t              timeStart = timerMicros();
 
   timeStart = timerMicros();
-  while (timerMicrosDelta(timeStart) < 425u) {
-    /* Latch presence if found */
-    if (0 == presence) {
-      presence = !portPinValue(cfg[opaIdx].grp, cfg[opaIdx].pin);
+  portPinDir(cfg[opaIdx].grp, cfg[opaIdx].pin, PIN_DIR_OUT);
+
+  /* t_RSTL */
+  while (timerMicrosDelta(timeStart) < t_RSTx)
+    ;
+
+  /* Protect PDHIGH and PDLOW timing */
+  __disable_irq();
+  portPinDir(cfg[opaIdx].grp, cfg[opaIdx].pin, PIN_DIR_IN);
+  timeStart = timerMicros();
+  /* Ensure pull-up has brought up line */
+  while (timerMicrosDelta(timeStart) < cfg[opaIdx].t_wait_us)
+    ;
+
+  while (timerMicrosDelta(timeStart) < t_PDx) {
+    presence = (bool)!portPinValue(cfg[opaIdx].grp, cfg[opaIdx].pin);
+    if (presence) {
+      break;
     }
   }
+
+  /* Need to ensure at least t_RSTH has elapsed before continuing but can allow
+   * interrupts to be handled again as t_RSTH has no maximum */
+  const uint32_t t_RSTH_residual = t_RSTx - timerMicrosDelta(timeStart);
+  timeStart                      = timerMicros();
+  __enable_irq();
+
+  while (timerMicrosDelta(timeStart) < t_RSTH_residual)
+    ;
 
   return presence;
 }
 
 static bool oneWireSearch(const size_t opaIdx) {
   /* Initialise for search */
-  const uint8_t CMD_SEARCH_ROM  = 0xF0u;
-  uint8_t       searchDirection = 0;
-  int32_t       idBitNumber     = 1;
-  int32_t       lastZero        = 0;
-  uint8_t       romByteMask     = 1;
-  bool          searchResult    = false;
-  uint8_t       idBit           = 0;
-  uint8_t       cmpidBit        = 0;
-  uint8_t       crc8            = 0;
-  uint8_t      *romBuffer       = (uint8_t *)&ROM_NO;
+  static const uint8_t CMD_SEARCH_ROM  = 0xF0u;
+  uint8_t              searchDirection = 0;
+  int32_t              idBitNumber     = 1;
+  int32_t              lastZero        = 0;
+  uint8_t              romByteMask     = 1;
+  bool                 searchResult    = false;
+  uint8_t              idBit           = 0;
+  uint8_t              cmpidBit        = 0;
+  uint8_t              crc8            = 0;
+  uint8_t             *romBuffer       = (uint8_t *)&ROM_NO;
 
   /* If the last call was not the last one... */
   if (!lastDeviceFlag) {
@@ -176,8 +194,8 @@ static bool oneWireSearch(const size_t opaIdx) {
     if (!oneWireReset(opaIdx)) {
       /* Reset the search */
       lastDiscrepancy       = 0;
-      lastDeviceFlag        = 0;
       lastFamilyDiscrepancy = 0;
+      lastDeviceFlag        = false;
       return 0;
     }
 
@@ -242,7 +260,7 @@ static bool oneWireSearch(const size_t opaIdx) {
 
     /* Check for last device */
     if (0 == lastDiscrepancy) {
-      lastDeviceFlag = 1;
+      lastDeviceFlag = true;
     }
   }
 
@@ -282,12 +300,17 @@ static void oneWireWriteBytes(const void *pSrc, const uint8_t n,
   }
 }
 
+void ds18b20AddressClr(void) {
+  numFound = 0;
+  memset(devTableAddr, 0, sizeof(devTableAddr));
+}
+
 uint64_t *ds18b20AddressGet(void) { return devTableAddr; }
 
 uint32_t ds18b20InitSensors(const DS18B20_conf_t *pCfg) {
   EMON32_ASSERT(pCfg);
 
-  const uint8_t DS18B_FAMILY_CODE = 0x28;
+  static const uint8_t DS18B_FAMILY_CODE = 0x28;
 
   uint8_t  opaIdx       = pCfg->opaIdx;
   uint32_t deviceCount  = 0;
@@ -299,24 +322,30 @@ uint32_t ds18b20InitSensors(const DS18B20_conf_t *pCfg) {
   /* If not overridden, default to 5 us pull low */
   cfg[opaIdx].t_wait_us = pCfg->t_wait_us ? pCfg->t_wait_us : 5u;
 
-  /* Enable the hard pull up, and search for devices */
+  /* Enable pull up, allow time to pull the line up, then search for devices */
   portPinDrv(cfg[opaIdx].grp, cfg[opaIdx].pinPU, PIN_DRV_SET);
   portPinDir(cfg[opaIdx].grp, cfg[opaIdx].pinPU, PIN_DIR_OUT);
   portPinDrv(cfg[opaIdx].grp, cfg[opaIdx].pin, PIN_DRV_CLR);
+
+  const uint32_t tStart = timerMillis();
+  while (timerMillisDelta(tStart) < 10u)
+    ;
+
   searchResult = oneWireFirst(opaIdx);
 
-  while (searchResult && (deviceCount < TEMP_MAX_ONEWIRE)) {
+  while (searchResult && ((deviceCount + numFound) < TEMP_MAX_ONEWIRE)) {
 
     /* Only count DS18B20 devices. */
     if (DS18B_FAMILY_CODE == (uint8_t)ROM_NO) {
-      devTableAddr[deviceCount] = ROM_NO;
-      devTableOpa[deviceCount]  = opaIdx;
+      devTableAddr[(deviceCount + numFound)] = ROM_NO;
+      devTableOpa[(deviceCount + numFound)]  = opaIdx;
       deviceCount++;
     }
 
     searchResult = oneWireNext(opaIdx);
   }
 
+  numFound += deviceCount;
   return deviceCount;
 }
 
@@ -338,9 +367,9 @@ void ds18b20MapSensors(const uint64_t *pAddr) {
 uint8_t ds18b20MapToLogical(const size_t dev) { return devRemap[dev]; }
 
 bool ds18b20StartSample(const size_t opaIdx) {
-  const uint8_t CMD_SKIP_ROM  = 0xCC;
-  const uint8_t CMD_CONVERT_T = 0x44;
-  const uint8_t cmds[2]       = {CMD_SKIP_ROM, CMD_CONVERT_T};
+  static const uint8_t CMD_SKIP_ROM  = 0xCC;
+  static const uint8_t CMD_CONVERT_T = 0x44;
+  static const uint8_t cmds[2]       = {CMD_SKIP_ROM, CMD_CONVERT_T};
 
   /* Check for presence pulse before continuing */
   if (!oneWireReset(opaIdx)) {
@@ -352,11 +381,11 @@ bool ds18b20StartSample(const size_t opaIdx) {
 }
 
 TempRead_t ds18b20ReadSample(const size_t dev) {
-  const uint8_t CMD_MATCH_ROM    = 0x55;
-  const uint8_t CMD_READ_SCRATCH = 0xBE;
-  const int16_t DS_T85DEG        = 1360;
-  const int16_t DS_TNEG55DEG     = -880;
-  const int16_t DS_T125DEG       = 2000;
+  static const uint8_t CMD_MATCH_ROM    = 0x55;
+  static const uint8_t CMD_READ_SCRATCH = 0xBE;
+  static const int16_t DS_T85DEG        = 1360;
+  static const int16_t DS_TNEG55DEG     = -880;
+  static const int16_t DS_T125DEG       = 2000;
 
   const uint64_t *addrDev  = &devTableAddr[dev];
   Scratch_t       scratch  = {0};
@@ -392,7 +421,7 @@ TempRead_t ds18b20ReadSample(const size_t dev) {
 
   /* Check for spurious 85°C reading. This could be caused by e.g. a power
    * glitch after the sample was requested. */
-  if ((0x0C == scratch.res_X) && (DS_T85DEG == tempRes.temp)) {
+  if ((0x0C == scratch.res_X) && (DS_T85DEG == scratch.temp)) {
     tempRes.status = TEMP_BAD_SENSOR;
     return tempRes;
   }

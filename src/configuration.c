@@ -3,7 +3,6 @@
 
 #include "emon32_assert.h"
 
-#include "driver_PORT.h"
 #include "driver_SERCOM.h"
 #include "driver_TIME.h"
 
@@ -30,7 +29,8 @@ typedef enum {
   CONFIRM_BOOTLOADER,
   CONFIRM_ZERO_ACCUM,
   CONFIRM_ZERO_ACCUM_INDIVIDUAL,
-  CONFIRM_NVM_OVERWRITE
+  CONFIRM_NVM_OVERWRITE,
+  CONFIRM_RESET
   /* CONFIRM_RESTORE_DEFAULTS - Removed pending OEM decision on restore defaults
      confirmation */
 } ConfirmState_t;
@@ -61,12 +61,17 @@ static bool     configureGroupID(void);
 static bool     configureJSON(void);
 static bool     configureLineFrequency(void);
 static bool     configure1WAddr(void);
+static bool     configure1WAddrClear(void);
 static void     configure1WFind(void);
 static bool     configure1WFreeze(void);
 static void     configure1WList(void);
+static void     configure1WListSaved(void);
+static bool     configure1WRemap(void);
 static bool     configure1WSave(void);
 static bool     configureOPA(void);
 static bool     configureNodeID(void);
+static void     configureReconfigureAll(void);
+static void     configureRestore(void);
 static bool     configureRFEnable(void);
 static bool     configureRF433(void);
 static bool     configureRFPower(void);
@@ -89,9 +94,8 @@ static void     printSettingsHR(void);
 static void     printSettingsKV(void);
 static void     printUptime(void);
 static void     putFloat(float val, const size_t flt_len);
-/* static char     waitForChar(void); - Removed, NVM corruption now auto-loads
- * defaults */
-/* static bool     restoreDefaults(void); - Removed pending OEM decision */
+static void     saveToNVM(void);
+static void     resetRequest(void);
 static void     zeroAccumulators(void);
 
 /*************************************
@@ -156,10 +160,10 @@ static void configDefault(void) {
     config.voltageCfg[idxV].phase      = 0.0f;
   }
 
-  /* 4.2 degree shift @ 50 Hz. Initialize ALL slots including reserved. */
+  /* Initialize ALL slots including reserved. */
   for (size_t idxCT = 0u; idxCT < (NUM_CT + CT_RES); idxCT++) {
     config.ctCfg[idxCT].ctCal    = 100.0f;
-    config.ctCfg[idxCT].phase    = 3.2f;
+    config.ctCfg[idxCT].phase    = CT_LEAD_DEF;
     config.ctCfg[idxCT].vChan1   = 0;
     config.ctCfg[idxCT].vChan2   = 0;
     config.ctCfg[idxCT].ctActive = (idxCT < NUM_CT_ACTIVE_DEF);
@@ -190,15 +194,13 @@ static void configDefault(void) {
    */
   config.opaCfg[2].func      = 'r';
   config.opaCfg[2].opaActive = false;
-  config.opaCfg[2].period    = 100;
+  config.opaCfg[2].period    = PULSE_BLANK_DEF;
   config.opaCfg[2].puEn      = false;
 
   config.crc16_ccitt = calcCRC16_ccitt(&config, (sizeof(config) - 2u));
 }
 
-/*! @brief Write the configuration values to index 0, and zero the
- *         accumulator space to.
- */
+/*! @brief Write the configuration values to index 0, and clear accumulators */
 static void configInitialiseNVM(void) {
 
   serialPuts("  - Initialising NVM... ");
@@ -250,7 +252,8 @@ static bool configureAnalog(void) {
     }
   }
 
-  if ((0 == posCalib) || (0 == posActive) || (0 == posPhase)) {
+  /* All or no parameters must be specified */
+  if ((0 == posCalib) ^ (0 == posActive) ^ (0 == posPhase)) {
     serialPutsError("Missing required parameters.");
     return false;
   }
@@ -271,6 +274,30 @@ static bool configureAnalog(void) {
 
   ch = convU.val.u32;
 
+  convU = utilAtoui(inBuffer + posActive, ITOA_BASE10);
+  if (!convU.valid || (convU.val.u32 > 1u)) {
+    serialPutsError("Invalid active value (valid: 0 or 1).");
+    return false;
+  }
+  active = (bool)convU.val.u8;
+
+  ecmCfg = ecmConfigGet();
+
+  /* Exit early if just activating or deactivating */
+  if (0 == posCalib) {
+    if (ch < NUM_V) {
+      ecmCfg->vCfg[ch].vActive      = active;
+      config.voltageCfg[ch].vActive = active;
+      printSettingV(ch);
+    } else {
+      ecmCfg->ctCfg[ch - NUM_V].active  = active;
+      config.ctCfg[ch - NUM_V].ctActive = active;
+      printSettingCT(ch - NUM_V);
+    }
+    ecmConfigChannel(ch);
+    return true;
+  }
+
   /* CT requires at least V1 */
   if (ch >= NUM_V) {
     if (0 == posV1) {
@@ -278,22 +305,6 @@ static bool configureAnalog(void) {
       return false;
     }
   }
-
-  ecmCfg = ecmConfigGet();
-  EMON32_ASSERT(ecmCfg);
-
-  convU = utilAtoui(inBuffer + posActive, ITOA_BASE10);
-  if (!convU.valid) {
-    serialPutsError("Invalid active value (valid: 0 or 1).");
-    return false;
-  }
-
-  if (convU.val.u32 > 1) {
-    serialPutsError("Invalid active value (valid: 0 or 1).");
-    return false;
-  }
-
-  active = (bool)convU.val.u8;
 
   convF = utilAtof(inBuffer + posCalib);
   if (!convF.valid) {
@@ -415,8 +426,7 @@ static void configureBackup(void) {
   printf_("\"revision\":%ld,", getBoardRevision());
   printf_("\"serial\":\"0x%02lx%02lx%02lx%02lx\",", getUniqueID(0),
           getUniqueID(1), getUniqueID(2), getUniqueID(3));
-  printf_("\"fw\":\"%d.%d.%d\"},", VERSION_FW_MAJ, VERSION_FW_MIN,
-          VERSION_FW_REV);
+  printf_("\"fw\":\"%s\"},", emon32_build_info().release);
 
   /* {board_config} dict */
   utilFtoa(strBuf, config.baseCfg.reportTime);
@@ -544,25 +554,69 @@ static bool configureLineFrequency(void) {
 
 static bool configure1WAddr(void) {
   char c1 = *(inBuffer + 1);
-  if ('f' == c1) {
+  switch (c1) {
+  case 'c':
+    return configure1WAddrClear();
+    break;
+  case 'f':
     configure1WFind();
     return false;
-  } else if ('l' == c1) {
+  case 'l':
     configure1WList();
     return false;
-  } else if ('s' == c1) {
+  case 'h':
     configure1WFreeze();
     return true;
-  } else {
+  case 'n':
+    configure1WListSaved();
+    return false;
+  case 'r':
+    return configure1WRemap();
+  default:
     return configure1WSave();
   }
+
+  return false;
 }
 
-static void configure1WFind(void) { emon32EventSet(EVT_OPA_INIT); }
+static bool configure1WAddrClear(void) {
+
+  /* Clear _all_ saved addresses */
+  if ('a' == inBuffer[2]) {
+    memset(&config.oneWireAddr.addr, 0, sizeof(config.oneWireAddr.addr));
+    serialPuts("> Cleared all saved 1-Wire addresses.\r\n");
+    emon32EventSet(EVT_OPA_INIT);
+    return true;
+  }
+
+  ConvUint_t convU = utilAtoui(inBuffer + 2, ITOA_BASE10);
+  if (!convU.valid) {
+    serialPutsError("Invalid 1-Wire channel value.");
+    return false;
+  }
+
+  if ((convU.val.u32 < 1) || (convU.val.u32 > (TEMP_MAX_ONEWIRE))) {
+    printfError("1-Wire channel out of range (valid: 1-%d).", TEMP_MAX_ONEWIRE);
+    return false;
+  }
+
+  size_t ch = convU.val.u32 - 1u;
+  memset(&config.oneWireAddr.addr[ch], 0, sizeof(*config.oneWireAddr.addr));
+  printf_("> Cleared saved 1-Wire address for channel %u\r\n", (ch + 1u));
+
+  emon32EventSet(EVT_OPA_INIT);
+  return true;
+}
+
+static void configure1WFind(void) {
+  serialPuts("> Searching for 1-Wire devices...\r\n");
+  emon32EventSet(EVT_OPA_INIT);
+}
 
 static bool configure1WFreeze(void) {
   uint64_t *pAddrDev = tempAddress1WGet();
   memcpy(&config.oneWireAddr, pAddrDev, sizeof(config.oneWireAddr));
+  serialPuts("> 1-Wire addresses saved to config.\r\n");
   return true;
 }
 
@@ -577,17 +631,76 @@ static void configure1WList(void) {
       printf_("%d [->%d] ", (i + 1),
               (tempMapToLogical(TEMP_INTF_ONEWIRE, i) + 1));
       for (size_t j = 0; j < 8; j++) {
-        printf_("%x%s", (uint8_t)((pAddr[i] >> (8 * j)) & 0xFF),
+        printf_("%02x%s", (uint8_t)((pAddr[i] >> (8 * j)) & 0xFF),
                 ((j == 7) ? "\r\n" : " "));
       }
     }
   }
+  serialPuts("[end]\r\n]");
+}
+
+static void configure1WListSaved(void) {
+  for (size_t i = 0; i < TEMP_MAX_ONEWIRE; i++) {
+    uint64_t as; /* Ensure 8byte alignment */
+    memcpy(&as, &config.oneWireAddr.addr[i], sizeof(as));
+    printf_("[%u] ", i + 1u);
+    for (size_t j = 0; j < 8; j++) {
+      printf_("%02x%s", (uint8_t)((as >> (8 * j)) & 0xFF),
+              ((j == 7) ? "\r\n" : " "));
+    }
+  }
+  serialPuts("[end]\r\n");
+}
+
+static bool configure1WRemap(void) {
+  if (2u != inBufferTok()) {
+    serialPutsError("1-Wire remap requires two parameters.");
+    return false;
+  }
+
+  ConvUint_t convU = utilAtoui(inBuffer + 3, ITOA_BASE10);
+  if (!convU.valid) {
+    serialPutsError("Invalid 1-Wire channel value.");
+    return false;
+  }
+
+  if ((convU.val.u32 < 1) || (convU.val.u32 > (TEMP_MAX_ONEWIRE))) {
+    printfError("1-Wire channel out of range (valid: 1-%d).", TEMP_MAX_ONEWIRE);
+    return false;
+  }
+  const size_t ch = convU.val.u32 - 1u;
+
+  convU = utilAtoui(inBuffer + 5, ITOA_BASE10);
+  if (!convU.valid) {
+    serialPutsError("Invalid 1-Wire remap channel value.");
+    return false;
+  }
+
+  if ((convU.val.u32 < 1) || (convU.val.u32 > (TEMP_MAX_ONEWIRE))) {
+    printfError("1-Wire remap channel out of range (valid: 1-%d).",
+                TEMP_MAX_ONEWIRE);
+    return false;
+  }
+  const size_t chRemap = convU.val.u32 - 1u;
+
+  const uint64_t *pAddr = tempAddress1WGet();
+  const uint64_t  ar    = pAddr[ch];
+
+  memcpy(&config.oneWireAddr.addr[chRemap], &ar, sizeof(ar));
+
+  printf_("> 1W_addr%d = ", (chRemap + 1));
+  for (size_t i = 0; i < 8; i++) {
+    printf_("%02x%s", (uint8_t)((ar >> (8 * i)) & 0xFF),
+            ((i == 7) ? "\r\n" : " "));
+  }
+
+  return true;
 }
 
 static bool configure1WSave(void) {
   size_t ch;
 
-  if (8 != inBufferTok()) {
+  if (8u != inBufferTok()) {
     serialPutsError("1-Wire save requires 8 address bytes.");
     return false;
   }
@@ -634,6 +747,11 @@ static bool configure1WSave(void) {
 
   config.oneWireAddr.addr[ch] = addr;
 
+  printf_("> 1W_addr%d = ", (ch + 1));
+  for (size_t i = 0; i < 8; i++) {
+    printf_("%02x%s", (uint8_t)((addr >> (8 * i)) & 0xFF),
+            ((i == 7) ? "\r\n" : " "));
+  }
   return true;
 }
 
@@ -647,11 +765,11 @@ static bool configureOPA(void) {
    *      y[7] -> pull up enabled
    *      z[9] -> NULL: hysteresis
    */
-  const int32_t posCh     = 1;
-  const int32_t posActive = 3;
-  const int32_t posFunc   = 5;
-  const int32_t posPu     = 7;
-  const int32_t posPeriod = 9;
+  static const int32_t posCh     = 1;
+  static const int32_t posActive = 3;
+  static const int32_t posFunc   = 5;
+  static const int32_t posPu     = 7;
+  static const int32_t posPeriod = 9;
 
   ConvUint_t convU;
   uint8_t    ch     = 0;
@@ -678,20 +796,15 @@ static bool configureOPA(void) {
 
   /* Check if the channel is active or inactive */
   convU = utilAtoui(inBuffer + posActive, ITOA_BASE10);
-  if (!convU.valid) {
-    serialPutsError("Invalid OPA active value.");
-    return false;
-  }
-
-  if (convU.val.u32 > 1) {
+  if ((!convU.valid) || (convU.val.u32 > 1u)) {
     serialPutsError("Invalid OPA active value.");
     return false;
   }
 
   active = (bool)convU.val.u8;
 
-  if (!active) {
-    config.opaCfg[ch].opaActive = false;
+  if (!active || ('\0' == inBuffer[posFunc])) {
+    config.opaCfg[ch].opaActive = active;
     printSettingOPA(ch);
     return true;
   }
@@ -711,16 +824,10 @@ static bool configureOPA(void) {
 
   if (isPulse) {
     convU = utilAtoui((inBuffer + posPu), ITOA_BASE10);
-    if (!convU.valid) {
+    if (!convU.valid || (convU.val.u32 > 1u)) {
       serialPutsError("Invalid OPA pull-up value.");
       return false;
     }
-
-    if (convU.val.u32 > 1) {
-      serialPutsError("Invalid OPA pull-up value.");
-      return false;
-    }
-
     pu = (bool)convU.val.u8;
 
     convU = utilAtoui((inBuffer + posPeriod), ITOA_BASE10);
@@ -728,11 +835,12 @@ static bool configureOPA(void) {
       serialPutsError("Invalid OPA period value.");
       return false;
     }
+
     period = convU.val.u8;
   }
 
   /* OPA3 can only be a pulse or analog input */
-  if ((2 == ch) && !isPulse) {
+  if ((2u == ch) && !isPulse) {
     serialPutsError("OPA3 only supports pulse input.");
     return false;
   }
@@ -771,6 +879,34 @@ static bool configureNodeID(void) {
   printf_("rfNode = %d\r\n", config.baseCfg.nodeID);
 
   return true;
+}
+
+static void configureReconfigureAll(void) {
+  rfmSetFrequency(config.dataTxCfg.rfmFreq);
+  rfmSetPowerLevel(config.dataTxCfg.rfmPwr);
+
+  config.baseCfg.reportCycles =
+      configTimeToCycles(config.baseCfg.reportTime, config.baseCfg.mainsFreq);
+  ecmConfigure();
+  ecmFlush();
+
+  emon32EventSet(EVT_OPA_INIT);
+}
+
+static void configureRestore(void) {
+  if ('\0' == inBuffer[1]) {
+    configDefault();
+    configureReconfigureAll();
+
+    serialPuts("> Restored default values.\r\n");
+    unsavedChange = true;
+  } else if ('s' == inBuffer[1]) {
+    (void)configLoadFromNVM();
+    configureReconfigureAll();
+
+    serialPuts("> Restored values from NVM.\r\n");
+    unsavedChange = false;
+  }
 }
 
 static bool configureRFEnable(void) {
@@ -902,8 +1038,8 @@ static char *getLastReset(void) {
 
 uint32_t getUniqueID(const size_t idx) {
   /* Section 10.3.3 Serial Number */
-  const uint32_t id_addr_lut[4] = {0x0080A00C, 0x0080A040, 0x0080A044,
-                                   0x0080A048};
+  static const uint32_t id_addr_lut[4] = {0x0080A00C, 0x0080A040, 0x0080A044,
+                                          0x0080A048};
   return *(volatile uint32_t *)id_addr_lut[idx];
 }
 
@@ -1025,7 +1161,7 @@ static void printAccumulators(void) {
 
   for (size_t i = 0; i < NUM_CT; i++) {
     int32_t wh = eepromOK ? cumulative.wattHour[i] : 0;
-    printf_("  E%u = %lu Wh\r\n", (i + 1), wh);
+    printf_("  E%u = %ld Wh\r\n", (i + 1), wh);
   }
   for (size_t i = 0; i < NUM_OPA; i++) {
     uint32_t pulse = eepromOK ? cumulative.pulseCnt[i] : 0;
@@ -1059,7 +1195,7 @@ static void printSettingsHR(void) {
   if (config.dataTxCfg.useRFM) {
     serialPuts("RFM69, ");
     printSettingRFFreq();
-    printf_(" MHz @ %ddb\r\n", (-18 + config.dataTxCfg.rfmPwr));
+    printf_(" MHz @ %ddBm\r\n", (-18 + config.dataTxCfg.rfmPwr));
     printf_("  - Data group:            %d\r\n", config.baseCfg.dataGrp);
     printf_("  - Node ID:               %d\r\n", config.baseCfg.nodeID);
   } else {
@@ -1127,8 +1263,7 @@ static void printSettingsHR(void) {
 static void printSettingsKV(void) {
   serialPuts("hardware = emonPi3\r\n");
   printf_("hardware_rev = %lu\r\n", getBoardRevision());
-  printf_("version = %d.%d.%d\r\n", VERSION_FW_MAJ, VERSION_FW_MIN,
-          VERSION_FW_REV);
+  printf_("version = %s\r\n", emon32_build_info().release);
   printf_("commit = %s\r\n", emon32_build_info().revision);
   printf_("assumedV = %d\r\n", config.baseCfg.assumedVrms);
   for (size_t i = 0; i < NUM_V; i++) {
@@ -1170,6 +1305,30 @@ static void printUptime(void) {
   printf_("%lud %luh %lum %lus\r\n", tDays, tHours, tMinutes, tSeconds);
 }
 
+static void resetRequest(void) {
+  serialPuts(
+      "> Reset system? All unsaved changes will be lost. 'y' to proceed.\r\n");
+  __disable_irq();
+  confirmStartTime_ms = timerMillis();
+  confirmState        = CONFIRM_RESET;
+  __enable_irq();
+}
+
+static void saveToNVM(void) {
+  /* Save to NVM config space after recalculating CRC */
+  if (unsavedChange) {
+    config.crc16_ccitt = calcCRC16_ccitt(&config, (sizeof(config) - 2));
+
+    serialPuts("> Saving configuration to NVM... ");
+    eepromInitConfig(&config, sizeof(config));
+    serialPuts("Done!\r\n");
+
+    unsavedChange = false;
+  } else {
+    serialPuts("> No changes to save.\r\n");
+  }
+}
+
 /*! @brief Check if waiting for confirmation and handle if yes
  *  @param [in] c : character received
  *  @return true if character was handled as confirmation, false otherwise
@@ -1193,14 +1352,26 @@ bool configHandleConfirmation(const uint8_t c) {
  *  @param [in] c : character received ('y' or 'n' expected)
  */
 static void handleConfirmation(char c) {
-  volatile uint32_t *p_blsm;
-  const uint32_t     blsm_key = 0xF01669EF;
+  volatile uint32_t    *p_blsm;
+  static const uint32_t blsm_key = 0xF01669EF;
 
   switch (confirmState) {
   case CONFIRM_BOOTLOADER:
     if ('y' == c) {
       p_blsm  = (volatile uint32_t *)(HMCRAMC0_ADDR + HMCRAMC0_SIZE - 4);
       *p_blsm = blsm_key;
+      NVIC_SystemReset();
+    } else {
+      serialPuts("    - Cancelled.\r\n");
+    }
+    __disable_irq();
+    confirmState        = CONFIRM_IDLE;
+    confirmStartTime_ms = 0;
+    __enable_irq();
+    break;
+
+  case CONFIRM_RESET:
+    if ('y' == c) {
       NVIC_SystemReset();
     } else {
       serialPuts("    - Cancelled.\r\n");
@@ -1282,7 +1453,7 @@ static void handleConfirmation(char c) {
      *     serialPuts("    - Restored default values.\r\n");
      *     unsavedChange = true;
      *     resetReq      = true;
-     *     emon32EventSet(EVT_CONFIG_CHANGED);
+     *
      *   } else {
      *     serialPuts("    - Cancelled.\r\n");
      *   }
@@ -1432,7 +1603,11 @@ void configCmdChar(const uint8_t c) {
 }
 
 void configFirmwareBoardInfo(void) {
-  serialPuts("==== emonPi3 | emonTx6 ====\r\n\r\n");
+  serialPuts("                           ▄▄▄▄▄▄▄  ▄▄▄▄▄▄▄ \r\n");
+  serialPuts("                           ▀▀▀▀████ ▀▀▀▀████\r\n");
+  serialPuts("▄█▀█▄ ███▄███▄ ▄███▄ ████▄   ▄▄██▀     ▄██▀ \r\n");
+  serialPuts("██▄█▀ ██ ██ ██ ██ ██ ██ ██     ███▄  ▄███▄▄▄\r\n");
+  serialPuts("▀█▄▄▄ ██ ██ ██ ▀███▀ ██ ██ ███████▀ ████████\r\n\r\n");
 
   serialPuts("> Board:\r\n");
   printf_("  - emonPi3/emonTx6 (arch. rev. %lu)\r\n", getBoardRevision());
@@ -1444,8 +1619,7 @@ void configFirmwareBoardInfo(void) {
   serialPuts("\r\n");
 
   serialPuts("> Firmware:\r\n");
-  printf_("  - Version:    %d.%d.%d\r\n", VERSION_FW_MAJ, VERSION_FW_MIN,
-          VERSION_FW_REV);
+  printf_("  - Version:    %s\r\n", emon32_build_info().release);
   serialPuts("  - Build:      ");
   serialPuts(emon32_build_info_string());
   serialPuts("\r\n\r\n");
@@ -1491,7 +1665,7 @@ void configProcessCmd(void) {
   bool     termFound = false;
 
   /* Help text - serves as documentation interally as well */
-  const char helpText[] =
+  static const char helpText[] =
       "\r\n"
       "emon32 information and configuration commands\r\n\r\n"
       " - ?           : show this text again\r\n"
@@ -1508,24 +1682,31 @@ void configProcessCmd(void) {
       "   - a:        : channel active. a = 0: DISABLED, a = 1: ENABLED\r\n"
       "   - y.y       : V/CT calibration constant\r\n"
       "   - z.z       : V/CT phase calibration value\r\n"
-      "   - v1        : voltage 1\r\n"
-      "   - v2        : voltage 2 (optional)\r\n"
+      "   - v1        : voltage 1 (for CT only)\r\n"
+      "   - v2        : voltage 2 (for CT only, optional)\r\n"
       " - l           : list settings\r\n"
       " - lh          : list settings and accumulators (human readable)\r\n"
       " - m<v> <w> <x> <y> <z> : Configure OPA1-3 for OneWire or Pulse\r\n"
       "   - v : OPA index. [1-3]\r\n"
       "   - w : OPA active. w = 0: DISABLED, w = 1: ENABLED\r\n"
       "   - x : function select. x = [b,f,r]: pulse, x = o: OneWire.\r\n"
-      "   - y : pull-up. y = 0: OFF, y = 1: ON\r\n"
-      "   - z : minimum period (ms). Ignored if x = 0\r\n"
+      "   - y : pull-up, only for pulse. y = 0: OFF, y = 1: ON\r\n"
+      "   - z : minimum time between pulses (ms), only for "
+      "pulse.\r\n"
       " - n<n>        : set node ID [1..60]\r\n"
       " - o<x>        : configure OneWire addressing\r\n"
+      "   - x = ca  : clear all saved OneWire addresses\r\n"
+      "   - x = c<n>: clear saved address for channel n\r\n"
       "   - x = f   : reset and find OneWire devices\r\n"
+      "   - x = h   : hold found addresses (overrides manually set values)\r\n"
       "   - x = l   : list current addresses\r\n"
-      "   - x = s   : save current addresses\r\n"
-      "   - x = <n> : save address to index n\r\n"
+      "   - x = n   : list all saved addresses\r\n"
+      "   - x = r <a> <b> : remap found sensor <a> to index <b>\r\n"
+      "   - x = <n> : move address to index <n>\r\n"
       " - p<n>        : set the RF power level\r\n"
+      " - q           : reset system (requires confirmation)\r\n"
       " - r           : restore defaults\r\n"
+      " - rs          : restore saved settings from NVM\r\n"
       " - s           : save settings to NVM\r\n"
       " - t           : trigger report on next cycle\r\n"
       " - u           : store current accumulator values to NVM\r\n"
@@ -1559,7 +1740,6 @@ void configProcessCmd(void) {
   case 'a':
     if (configureAssumed()) {
       unsavedChange = true;
-      emon32EventSet(EVT_CONFIG_CHANGED);
     }
     break;
   case 'b':
@@ -1568,13 +1748,11 @@ void configProcessCmd(void) {
   case 'c':
     if (configureSerialLog()) {
       unsavedChange = true;
-      emon32EventSet(EVT_CONFIG_CHANGED);
     }
     break;
   case 'd':
     if (configureDatalog()) {
       unsavedChange = true;
-      emon32EventSet(EVT_CONFIG_CHANGED);
     }
     break;
   case 'e':
@@ -1587,26 +1765,22 @@ void configProcessCmd(void) {
      */
     if (configureLineFrequency()) {
       unsavedChange = true;
-      emon32EventSet(EVT_CONFIG_CHANGED);
     }
     break;
   case 'g':
     if (configureGroupID()) {
       rfmSetGroupID(config.baseCfg.dataGrp);
       unsavedChange = true;
-      emon32EventSet(EVT_CONFIG_CHANGED);
     }
     break;
   case 'j':
     if (configureJSON()) {
       unsavedChange = true;
-      emon32EventSet(EVT_CONFIG_CHANGED);
     }
     break;
   case 'k':
     if (configureAnalog()) {
       unsavedChange = true;
-      emon32EventSet(EVT_CONFIG_CHANGED);
     }
     break;
   case 'l':
@@ -1616,21 +1790,18 @@ void configProcessCmd(void) {
     if (configureOPA()) {
       unsavedChange = true;
       emon32EventSet(EVT_OPA_INIT);
-      emon32EventSet(EVT_CONFIG_CHANGED);
     }
     break;
   case 'o':
     if (configure1WAddr()) {
       unsavedChange = true;
       emon32EventSet(EVT_OPA_INIT);
-      emon32EventSet(EVT_CONFIG_CHANGED);
     }
     break;
   case 'n':
     /* Set the node ID */
     if (configureNodeID()) {
       unsavedChange = true;
-      emon32EventSet(EVT_CONFIG_CHANGED);
     }
     break;
   case 'p':
@@ -1638,29 +1809,16 @@ void configProcessCmd(void) {
     if (configureRFPower()) {
       rfmSetPowerLevel(config.dataTxCfg.rfmPwr);
       unsavedChange = true;
-      emon32EventSet(EVT_CONFIG_CHANGED);
     }
     break;
+  case 'q':
+    resetRequest();
+    break;
   case 'r':
-    configDefault();
-
-    serialPuts("> Restored default values.\r\n");
-
-    unsavedChange = true;
-    emon32EventSet(EVT_CONFIG_CHANGED);
+    configureRestore();
     break;
   case 's':
-    /* Save to EEPROM config space after recalculating CRC and indicate if a
-     * reset is required.
-     */
-    config.crc16_ccitt = calcCRC16_ccitt(&config, (sizeof(config) - 2));
-
-    serialPuts("> Saving configuration to NVM... ");
-    eepromInitConfig(&config, sizeof(config));
-    serialPuts("Done!\r\n");
-
-    unsavedChange = false;
-    emon32EventSet(EVT_CONFIG_SAVED);
+    saveToNVM();
     break;
   case 't':
     emon32EventSet(EVT_ECM_TRIG);
@@ -1674,7 +1832,6 @@ void configProcessCmd(void) {
   case 'w':
     if (configureRFEnable()) {
       unsavedChange = true;
-      emon32EventSet(EVT_CONFIG_CHANGED);
     }
     break;
 
@@ -1682,7 +1839,6 @@ void configProcessCmd(void) {
     if (configureRF433()) {
       rfmSetFrequency(config.dataTxCfg.rfmFreq);
       unsavedChange = true;
-      emon32EventSet(EVT_CONFIG_CHANGED);
     }
     break;
   case 'z':
@@ -1702,7 +1858,7 @@ uint16_t configTimeToCycles(const float time, const uint32_t mainsFreq) {
 
 VersionInfo_t configVersion(void) {
   struct Emon32BuildInfo binfo = emon32_build_info();
-  return (VersionInfo_t){.version = binfo.version, .revision = binfo.revision};
+  return (VersionInfo_t){.release = binfo.release, .revision = binfo.revision};
 }
 
 /* =======================

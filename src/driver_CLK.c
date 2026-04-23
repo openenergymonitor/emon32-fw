@@ -44,6 +44,9 @@ void clkSetup(void) {
   while (!(SYSCTRL->PCLKSR.reg & SYSCTRL_PCLKSR_B33SRDY))
     ;
 
+  /* Ensure the bootloader is protected, enabled if not */
+  checkBootProtection();
+
   /* Boost OSC8M to 8 MHz from initial 1 MHz */
   SYSCTRL->OSC8M.bit.PRESC = SYSCTRL_OSC8M_PRESC_0_Val;
 

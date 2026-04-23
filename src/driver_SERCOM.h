@@ -109,6 +109,7 @@ void spiSendBuffer(Sercom *sercom, const void *pSrc, size_t n);
 uint8_t spiSendByte(Sercom *sercom, const uint8_t b);
 
 /*! @brief Enable the UART instance for Rx
+ *  @param [in] sercom : SERCOM instance
  *  @param [in] irqn : interrupt number
  */
 void uartEnableRx(Sercom *sercom, const uint32_t irqn);

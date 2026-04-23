@@ -15,7 +15,7 @@ Issues can be reported:
 
 Please include as much information as possible (run the `v` command on the serial link), including at least:
 
-- The emon32 hardware that you using and the emon32-fw version (run the 'v' command on the serial link)
+- The emon32 hardware that you are using and the emon32-fw version (run the 'v' command on the serial link)
 - All settings (run the `l` command on the serial link)
 - A full description, including a reproduction if possible, of the issue
 
@@ -49,7 +49,7 @@ The following default values are set out of the box.
 | REPORT_TIME_DEF     | 9.8       | Time between reports in seconds           |
 | NUM_CT_ACTIVE_DEF   | 6         | Only onboard CT sensors in use            |
 
-OPA1 is configured as a pulse input and OPA2 is configured as a OneWire input.
+By default, OPA1 and OPA2 are enabled and configured as OneWire interfaces. OPA3 is disabled and configured as a pulse input.
 
 ### Version information
 
@@ -143,7 +143,7 @@ The Script requires that `picocom` is installed to provide the connection to put
 
 ### Compiling
 
-Compiling the firmware requires the the [Arm gcc toolchain](https://developer.arm.com/Tools%20and%20Software/GNU%20Toolchain) (may be available as a package in your distribution). The Makefile is for a Cortex-M0+ based microcontrollers, specifically the Microchip ATSAMD21J17 ([datasheet](https://www.microchip.com/en-us/product/ATSAMD21J17), [errata](https://ww1.microchip.com/downloads/en/DeviceDoc/SAMD21-%20Family-Silicon-%20Errata-and-DataSheet-Clarification-DS80000760C.pdf)).
+Compiling the firmware requires the [Arm gcc toolchain](https://developer.arm.com/Tools%20and%20Software/GNU%20Toolchain) (may be available as a package in your distribution). The Makefile is for a Cortex-M0+ based microcontrollers, specifically the Microchip ATSAMD21J17 ([datasheet](https://www.microchip.com/en-us/product/ATSAMD21J17), [errata](https://ww1.microchip.com/downloads/en/DeviceDoc/SAMD21-%20Family-Silicon-%20Errata-and-DataSheet-Clarification-DS80000760C.pdf)).
 
 `sudo apt install gcc-arm-none-eabi`
 
@@ -186,7 +186,7 @@ If, for whatever reason, the bootloader is corrupted it can be flashed back to t
 ### Helper scripts
 
 > [!NOTE]
-> A Python virtual environment shoulde be setup by running `python3 -m venv venv && source venv/bin/activate && pip3 install -r requirements.txt` in `./scripts/`.
+> A Python virtual environment should be setup by running `python3 -m venv venv && source venv/bin/activate && pip3 install -r requirements.txt` in `./scripts/`.
 
 - `a2l.sh`: converts a hex address to a file line. Usage: `a2l.sh <address>`
 - `elf-size.sh`: this script decomposes the built `.elf` file into functions with their sizes.
@@ -207,7 +207,7 @@ Below is a list of the compile time options, grouped by location. The value for 
 
 ### Digital filter
 
-The base configuration has an oversampling factor of 2X to ease the anti-aliasing requirments. Samples are then low pass filtered and reduced to _f/2_ with a half band filter. Filter coefficients can be generated using the **filter.py** script (_./scripts/filter.py_). This generates a header file (`emon_CM_coeffs.h`) which can be copied to the `<emon32-fw>/src/` folder for use.
+The base configuration has an oversampling factor of 2X to ease the anti-aliasing requirements. Samples are then low pass filtered and reduced to _f/2_ with a half band filter. Filter coefficients can be generated using the **filter.py** script (_./scripts/filter.py_). This generates a header file (`emon_CM_coeffs.h`) which can be copied to the `<emon32-fw>/src/` folder for use.
 
 > [!NOTE]
 > It is recommended to use an odd number of taps, as the filter can be made symmetric in this manner.

@@ -79,21 +79,21 @@ void portSetup(void) {
                PIN_CFG_SET);
   }
 
-  /* GPIO inputs - all inputs currently need pull ups, so default enable */
+  /* GPIO inputs */
   for (size_t i = 0; pinsGPIO_In[i][0] != 0xFF; i++) {
-    if (GRP_OPA == pinsGPIO_In[i][0]) {
-      uint8_t p = pinsGPIO_In[i][1];
-      if ((PIN_OPA1 == p) || (PIN_OPA2 == p) || (PIN_OPA1_PU == p) ||
-          (PIN_OPA2_PU == p)) {
-        input(pinsGPIO_In[i][0], pinsGPIO_In[i][1], false);
-      }
+    uint8_t p = pinsGPIO_In[i][1];
+
+    if (GRP_OPA == pinsGPIO_In[i][0] &&
+        ((PIN_OPA1 == p) || (PIN_OPA2 == p) || (PIN_OPA3 == p) ||
+         (PIN_OPA1_PU == p) || (PIN_OPA2_PU == p))) {
+      input(pinsGPIO_In[i][0], pinsGPIO_In[i][1], false);
+    } else if (GRP_RFM_INTF == pinsGPIO_In[i][0] &&
+               PIN_RFM_RST == pinsGPIO_In[i][1]) {
+      input(GRP_RFM_INTF, PIN_RFM_RST, false);
     } else {
       input(pinsGPIO_In[i][0], pinsGPIO_In[i][1], true);
     }
   }
-
-  /* External interface disable is idle low, invert pull */
-  input(GRP_DISABLE_EXT, PIN_DISABLE_EXT, false);
 
   /* Unused pins: input, pull down (Table 23-2) */
   for (size_t i = 0; pinsUnused[i][0] != 0xFF; i++) {

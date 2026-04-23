@@ -1,3 +1,5 @@
+#include <string.h>
+
 #include "board_def.h"
 #include "emon32_samd.h"
 
@@ -5,8 +7,6 @@
 #include "driver_PORT.h"
 #include "driver_USB.h"
 #include "tusb_config.h"
-
-#include <string.h>
 
 bool usbCDCIsConnected(void) { return tud_cdc_connected(); }
 

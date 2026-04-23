@@ -13,7 +13,7 @@ typedef struct PulseCfg_ {
   PulseEdge_t edge;    /* Edge or edges to detect */
   uint8_t     grp;     /* GPIO group */
   uint8_t     pin;     /* GPIO pin */
-  uint32_t    periods; /* Blank period */
+  uint32_t    periods; /* Blank period (ms) */
   bool        active;  /* Channel active  */
   bool        puEn;    /* Pull up enabled */
 } PulseCfg_t;
@@ -34,7 +34,7 @@ void pulseUpdate(void);
 
 /*! @brief Sets the pulse count value
  *  @param [in] index : pulse count index to set
- *  @param [in] pulseCount : the value to set
+ *  @param [in] value : the value to set
  */
 void pulseSetCount(const size_t index, const uint32_t value);
 
