@@ -1,6 +1,8 @@
 ##############################################################################
 BUILD = build
 BIN = emon32
+BL_UF2_COMBINED_BIN = combined-uf2-$(BIN)
+BL_UART_COMBINED_BIN = combined-sam_ba-$(BIN)
 OUT = bin
 ##############################################################################
 .PHONY: all directory clean size
@@ -68,7 +70,12 @@ endif
 
 VERSION_INFO := $(shell python3 ./scripts/version_info.py)
 
-all: directory $(BUILD)/$(BIN).elf $(BUILD)/$(BIN).hex $(BUILD)/$(BIN).bin $(BUILD)/$(BIN).uf2 size
+all: directory \
+  $(BUILD)/$(BIN).elf $(BUILD)/$(BIN).hex \
+  $(BUILD)/$(BIN).bin $(BUILD)/$(BIN).uf2 \
+  $(BUILD)/$(BL_UART_COMBINED_BIN).bin $(BUILD)/$(BL_UF2_COMBINED_BIN).bin \
+  $(BUILD)/$(BL_UART_COMBINED_BIN).elf $(BUILD)/$(BL_UF2_COMBINED_BIN).elf \
+  size
 
 $(BUILD)/$(BIN).elf: $(OBJS)
 	@echo LD $@
@@ -89,6 +96,33 @@ $(BUILD)/$(BIN).uf2: $(BUILD)/$(BIN).bin
 	@echo BIN_TO_UF2 $@
 	@python3 ./scripts/bin_to_uf2.py $(BUILD)/$(BIN).bin $(BUILD)/$(BIN).uf2
 	@[ -f $@ ] && cp $@ $(OUT)/$(VERSION_INFO).uf2 || true
+
+$(BUILD)/$(BL_UART_COMBINED_BIN).bin: $(BUILD)/$(BIN).bin
+	@python3 ./scripts/combine_bl_app.py \
+	./bin/bootloaders/sam_ba-bootloader-emonPi3.bin \
+	$(BUILD)/$(BIN).bin
+	@[ -f $@ ] && cp $@ $(OUT)/combined-sam_ba-$(VERSION_INFO).bin || true
+
+$(BUILD)/$(BL_UF2_COMBINED_BIN).bin: $(BUILD)/$(BIN).bin
+	@python3 ./scripts/combine_bl_app.py \
+	./bin/bootloaders/uf2-bootloader-emonPi3-v3.16.0.bin \
+	$(BUILD)/$(BIN).bin
+	@[ -f $@ ] && cp $@ $(OUT)/combined-uf2-$(VERSION_INFO).bin || true
+
+$(BUILD)/$(BL_UART_COMBINED_BIN).elf: $(BUILD)/$(BL_UART_COMBINED_BIN).bin
+	@$(OBJCOPY) -I binary -O elf32-littlearm -B arm \
+    --rename-section .data=.text,contents,alloc,load,readonly,code \
+    --change-section-address .data=0 \
+    $^ $@
+	@[ -f $@ ] && cp $@ $(OUT)/combined-sam_ba-$(VERSION_INFO).elf || true
+	@[ -f $@ ] && cp $@ $(OUT)/bootloaders/flash-combined-uartboot-and-firmware/bl_serial-emon32.elf || true
+
+$(BUILD)/$(BL_UF2_COMBINED_BIN).elf: $(BUILD)/$(BL_UF2_COMBINED_BIN).bin
+	@$(OBJCOPY) -I binary -O elf32-littlearm -B arm \
+    --rename-section .data=.text,contents,alloc,load,readonly,code \
+    --change-section-address .data=0 \
+    $^ $@
+	@[ -f $@ ] && cp $@ $(OUT)/combined-uf2-$(VERSION_INFO).elf || true
 
 $(BUILD)/qfplib-m0-full.o:
 	@echo AS $@
@@ -114,5 +148,8 @@ clean:
 	@echo clean
 	@-rm -rf $(BUILD)
 	@-rm -f $(OUT)/emon32*
+	@-rm -f $(OUT)/combined*
+	@-rm -f $(OUT)/bootloaders/flash-combined-uartboot-and-firmware/*.elf
+
 
 -include $(wildcard $(BUILD)/*.d)

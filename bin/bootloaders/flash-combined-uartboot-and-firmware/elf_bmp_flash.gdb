@@ -1,5 +1,5 @@
 # 1. Specify the ELF file first so GDB has the "exec file" context
-file bl_serial-emon32-v1.0.elf
+file bl_serial-emon32.elf
 
 # 2. Connect to the hardware
 target extended-remote /dev/ttyACM0
