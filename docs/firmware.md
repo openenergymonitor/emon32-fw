@@ -6,6 +6,10 @@ Most users do not need to compile their own firmware. Pre-built firmware can be 
 
 ## Updating firmware
 
+```{tip}
+Updating the firmware does not overwrite saved settings.
+```
+
 ### emonPi3
 
 #### Web Interface

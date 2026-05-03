@@ -1,6 +1,6 @@
 # emonPi3 and emonTx6 Installation Guide
 
-The following guide covers installation of the [emonPi3 and emonTx6 6x input energy monitor](overview.md).
+The following guide covers installation of the [emonPi3 and emonTx6 6x CT input energy monitor](overview.md).
 
 <iframe width="560" height="315" src="https://www.youtube.com/embed/XAJV5zDJF_4?si=5aG4XxaeXYWK0_xQ" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
 
@@ -208,3 +208,27 @@ CT calibration is usually pre-configured in the shop as part of the order proces
 **With feeds created, explore the data using the graph view.** Navigate to `Setup > Feeds` and click on a feed of interest to open the graph view. Click on the drop down time selector near the title and select the last hour. Click and drag to zoom further to see the new data coming in.
 
 **Try creating an EmonCMS App.** Click on the Apps tab. From the Available Apps list select 'My Electric' and click 'Create', Select a power feed for 'use' and cumulative kWh energy feed for 'use_kwh' and then click 'Launch App'. After a few days this will start to show a daily bar graph of consumption alongside the real-time power graph and totals. There are a wide variety of different app's to choose from depending on the application.
+
+## Calibration
+
+The emonPi3 or emonTx6 can be calibrated against known voltage and current references using the [configuration interface](configuration.md). There is a calibration value for each input channel, allowing systematic errors to be removed.
+
+### Voltage Calibration
+
+The calibration for voltage is configured as a percentage. A calibration value of `100.0` corresponds to 240 V. This value is then scaled to match the calibration value. Example calculations when the calibration input is 240.0 V are shown below.
+
+- Measured 242.0 V, set voltage calibration value to 240/242 = `0.992`.
+- Measured 239.0 V, set voltage calibration value to 240/239 = `1.004`.
+
+### Current Calibration
+
+The calibration for current is configured as the maximum rated current of the CT. Calibration values of `100.0` and 50.0 represent the nominal output of 100 A and 50 A CTs respectively. Example calculations are shown below.
+
+- For a 100 A CT with a 50 A calibration input. Measured 51.0 A, set calibration value to 50/51 * 100 = `98.039`.
+- For a 50 A CT with a 10 A calibration input. Measured 9.96 A, set calibration value to 10/9.96 * 50 = `50.201`.
+
+### Energy Calibration
+
+You can also calibrate against your supplier's meter. We recommend adjusting the current calibration to match this. This calibration is strictly only applicable for a CT measuring the same current as the meter itself. The calibration should be taken over a long period of time, for example over a whole day, to reduce rounding errors when using a pulse meter. Example calculation is shown below for a 100 A CT.
+
+- Meter reading 3.000 kWh. Measured 2.996 kWh, set current calibration value to 3/2.996 * 100 = `100.134`.
