@@ -44,6 +44,13 @@ typedef enum {
   RCAUSE_POR   = 0x01
 } RCAUSE_t;
 
+/* SAM-BA bootloader has "uino" at word aligned address 0xCA8 (part of
+ * "Arduino"). This is a little fragile as it assumes that the bootloader will
+ * not change - I don't intend to change, but need to be aware as the offset
+ * is likely to change for different bootloader or compiler. */
+#define BL_SERIAL_MAGIC_ADDR 0x00000CA8u
+#define BL_SERIAL_MAGIC_WORD 0x6F6E6975u
+
 /*************************************
  * Prototypes
  *************************************/
@@ -94,8 +101,9 @@ static void     printSettingsHR(void);
 static void     printSettingsKV(void);
 static void     printUptime(void);
 static void     putFloat(float val, const size_t flt_len);
-static void     saveToNVM(void);
+static uint32_t readWordAtAddress(uintptr_t address);
 static void     resetRequest(void);
+static void     saveToNVM(void);
 static void     zeroAccumulators(void);
 
 /*************************************
@@ -1265,6 +1273,10 @@ static void printSettingsKV(void) {
   printf_("hardware_rev = %lu\r\n", getBoardRevision());
   printf_("version = %s\r\n", emon32_build_info().release);
   printf_("commit = %s\r\n", emon32_build_info().revision);
+  printf_("bootloader = %s\r\n",
+          (readWordAtAddress(BL_SERIAL_MAGIC_ADDR) == BL_SERIAL_MAGIC_WORD)
+              ? "uart"
+              : "usb");
   printf_("assumedV = %d\r\n", config.baseCfg.assumedVrms);
   for (size_t i = 0; i < NUM_V; i++) {
     printSettingV(i);
@@ -1303,6 +1315,15 @@ static void printUptime(void) {
   tHours   = tHours % 24;
 
   printf_("%lud %luh %lum %lus\r\n", tDays, tHours, tMinutes, tSeconds);
+}
+
+static uint32_t readWordAtAddress(uintptr_t address) {
+  uint32_t value;
+
+  /* Read from an absolute flash address without provoking GCC's bounds check */
+  __asm__ volatile("ldr %0, [%1]" : "=r"(value) : "r"(address) : "memory");
+
+  return value;
 }
 
 static void resetRequest(void) {
@@ -1619,6 +1640,10 @@ void configFirmwareBoardInfo(void) {
   serialPuts("\r\n");
 
   serialPuts("> Firmware:\r\n");
+  printf_("  - Bootloader: %s\r\n",
+          (readWordAtAddress(BL_SERIAL_MAGIC_ADDR) == BL_SERIAL_MAGIC_WORD)
+              ? "UART (.bin)"
+              : "USB (.uf2)");
   printf_("  - Version:    %s\r\n", emon32_build_info().release);
   serialPuts("  - Build:      ");
   serialPuts(emon32_build_info_string());
