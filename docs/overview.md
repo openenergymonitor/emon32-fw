@@ -19,6 +19,7 @@ The emonPi3 and emonTx6 are fully open source, with both the [hardware](https://
 - ISM band 433.92 MHz radio transceiver
 - 40pin Raspberry Pi GPIO header
 - Wall-mount aluminium enclosure
+- Fully supported in [ESPHome](https://esphome.io/components/sensor/emontx/) for [Home Assistant](https://www.home-assistant.io/) integration
 
 ## Selecting the emonPi3 or the emonTx6
 
@@ -36,4 +37,4 @@ The following are the common options:
 
 - Setting up a new OpenEnergyMonitor system: **emonPi3**
 - Expanding an existing OpenEnergyMonitorSystem: **emonTx6**
-- Use without the radio module (e.g. Home Assistant, MQTT): **emonTx6** with emonWiFi expander
+- Use without the radio module (e.g. Home Assistant, MQTT): **emonTx6** with [emonWiFi](https://github.com/openenergymonitor/emonwifi) expander
