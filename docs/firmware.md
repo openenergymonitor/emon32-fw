@@ -82,7 +82,7 @@ When configured as an emonPi3, the bootloader is accessed through the internal s
 3. Enter 'e' and then press Enter.
 4. You will be prompted to reboot to enter the bootloader. Any unsaved configuration changes at this point will be lost. Press 'y' to continue, or any other key to cancel.
 5. The emonTx6's LED will slowly pulse red and a drive called `EMONBOOT` will appear in the file manager.
-6. Drag and drop `bin/bootloaders/bootloader-change-uart.uf2` to `EMONBOOT`.
+6. Drag and drop `bin/bootloaders/change-bootloader-uart.uf2` to `EMONBOOT`.
 7. You can now upload the firmware as described above, skipping steps 1-4 as it will already be in the bootloader.
 
 ## Development
