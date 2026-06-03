@@ -39,4 +39,5 @@ const uint8_t pinsADC[][2] = {
 /* Remapping for analog CT inputs. This maps the 0-indexed CT physical pin to
  * the logical pin. For example, physical CT1 is the 4th CT sampled so:
  * ainRemap[0] = 3. */
-const uint8_t ainRemap[NUM_CT] = {3, 4, 7, 1, 2, 11, 5, 6, 8, 9, 10, 0};
+const uint8_t ainRemap[NUM_CT + NUM_AIN] = {3, 4, 7, 1,  2, 11, 5,
+                                            6, 8, 9, 10, 0, 12};
