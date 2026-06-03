@@ -1,3 +1,7 @@
+---
+github_url: "https://github.com/openenergymonitor/emonpi3/blob/main/docs/overview.md"
+---
+
 # Overview
 
 The emonPi3 and emonTx6 are an upgrade of the existing OpenEnergyMonitor emonPi2 and emonTx5, sharing the same PCB profile and the same inputs for up to six Current Transformer (CT) sensors. The emonPi3 and emonTx6 focus on upgrading the microcontroller at the heart of the system, which provides an improved ADC, integrates more peripherals, and greatly increased compute performance.

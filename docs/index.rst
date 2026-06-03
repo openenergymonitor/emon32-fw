@@ -1,5 +1,5 @@
 emonPi3 and emonTx6 User Guide
-===
+==================
 
 .. toctree::
    :maxdepth: 2
