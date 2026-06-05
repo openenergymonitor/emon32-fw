@@ -831,6 +831,18 @@ static bool configureOPA(void) {
     return false;
   }
 
+  /* OPA1,2 can only be pulse or OneWire */
+  if ((ch < 2u) && isAnalog) {
+    printfError("OPA%d only supports pulse and OneWire.", ch + 1u);
+    return false;
+  }
+
+  /* OPA3 can only be a pulse or analog input */
+  if ((2u == ch) && isOneWire) {
+    serialPutsError("OPA3 only supports pulse and analog input.");
+    return false;
+  }
+
   if (isPulse) {
     convU = utilAtoui((inBuffer + posPu), ITOA_BASE10);
     if (!convU.valid || (convU.val.u32 > 1u)) {
@@ -855,38 +867,17 @@ static bool configureOPA(void) {
         emon32EventSet(EVT_SMP_CFG_START);
       }
     }
-  }
 
-  /* OPA1,2 can only be pulse or OneWire */
-  if ((ch < 2u) && isAnalog) {
-    printfError("OPA%d only supports pulse and OneWire.", ch + 1u);
-  }
-
-  /* OPA3 can only be a pulse or analog input */
-  if ((2u == ch) && isOneWire) {
-    serialPutsError("OPA3 only supports pulse and analog input.");
-    return false;
+    config.opaCfg[ch].period = period;
+    config.opaCfg[ch].puEn   = pu;
   }
 
   if (isAnalog) {
-    config.opaCfg[ch].func = 'a';
-    printSettingOPA(ch);
     emon32EventSet(EVT_SMP_CFG_START);
-    return true;
   }
 
-  if (isOneWire) {
-    config.opaCfg[ch].func = 'o';
-    printSettingOPA(ch);
-    return true;
-  }
-
-  config.opaCfg[ch].func   = func;
-  config.opaCfg[ch].period = period;
-  config.opaCfg[ch].puEn   = pu;
-
+  config.opaCfg[ch].func = func;
   printSettingOPA(ch);
-
   return true;
 }
 
