@@ -21,7 +21,7 @@ The easiest way to update the emonPi3's firmware is to use the firmware upload t
 
 #### Command Line
 
-To update the emonPi3 using the command line, you can use the [BOSSA](https://github.com/shumatech/BOSSA) application. The following steps are taken:
+To update the emonPi3 using the command line, you can use the [BOSSA](https://github.com/shumatech/BOSSA) application. The exact port name will depend on your system, `/dev/ttyS0` is the port for the Raspberry Pi. The following steps are taken:
 
 1. Open a serial connection using, for example, `minicom` to `/dev/ttyS0` (`minicom -D /dev/ttyS0 -b 115200`)
 2. Enter 'e' and then press Enter.
