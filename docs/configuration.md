@@ -50,3 +50,65 @@ The following table details the available commands and their function.
 | **w\<n>** | RF module active<br>- `w0`: Disable RF<br>- `w1`: Enable RF |
 | **x\<n>** | 433 MHz RF frequency compatibility<br>- `x0`: 433.92 MHz (standard)<br>- `x1`: 433.00 MHz (legacy compatibility) |
 | **z** | Zero energy/pulse accumulators (reset Wh/pulse counters)<br>- `z`: Zero all accumulators (E1-E12, pulse1-3) with confirmation<br>- `ze1` to `ze12`: Zero individual energy accumulator (e.g., `ze3` zeros E3 only)<br>- `zp1` to `zp2`: Zero individual pulse accumulator (e.g., `zp1` zeros pulse1 only)<br>All commands require 'y' confirmation |
+
+## EmonHub Node Decoder Configuration
+
+The emonTx6 transmits data via RF that needs to be decoded by EmonHub. The node decoder configuration defines how the raw data packets are interpreted. Configuration depends on whether the emonTx6 is operating in single-phase or three-phase mode.
+
+### Single-Phase Mode
+
+When only voltage channel V1 is active, the emonTx6 operates in single-phase mode and transmits a single voltage reading along with power and energy data.
+
+The decoder configuration for node 20 (main CT1-6 channels) in single-phase mode is:
+
+```
+[[20]]
+nodename = emonTx6_20
+[[[rx]]]
+names =     MSG, Vrms, P1, P2, P3, P4, P5, P6, E1, E2, E3, E4, E5, E6
+datacodes = L, h, h, h, h, h, h, h, l, l, l, l, l, l
+scales =    1.0, 0.01, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0
+units =     n, V, W, W, W, W, W, W, Wh, Wh, Wh, Wh, Wh, Wh
+```
+
+**Data fields:**
+- `MSG`: Message counter
+- `Vrms`: Single RMS voltage (scaled by 0.01)
+- `P1-P6`: Real power for CT channels 1-6 (watts)
+- `E1-E6`: Energy accumulator for CT channels 1-6 (watt-hours)
+
+### Three-Phase Mode
+
+When all three voltage channels (V1, V2, V3) are active on the emonTx6, it operates in three-phase mode and transmits three-phase voltage readings along with power and energy data.
+
+The decoder configuration for node 20 (main CT1-6 channels) in three-phase mode is:
+
+```
+[[20]]
+nodename = emonTx6_20
+[[[rx]]]
+names =     MSG, Vrms1, Vrms2, Vrms3, P1, P2, P3, P4, P5, P6, E1, E2, E3, E4, E5, E6
+datacodes = L, h, h, h, h, h, h, h, h, h, l, l, l, l, l, l
+scales =    1.0, 0.01, 0.01, 0.01, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0
+units =     n, V, V, V, W, W, W, W, W, W, Wh, Wh, Wh, Wh, Wh, Wh
+```
+
+**Data fields:**
+- `MSG`: Message counter
+- `Vrms1, Vrms2, Vrms3`: Three-phase RMS voltages (scaled by 0.01)
+- `P1-P6`: Real power for CT channels 1-6 (watts)
+- `E1-E6`: Energy accumulator for CT channels 1-6 (watt-hours)
+
+### Additional Nodes
+
+Both single-phase and three-phase modes use additional nodes for supplementary data:
+
+- **Node N+1**: Temperature and pulse data (node 21 if N=20)
+- **Node N+2**: Extended CT channels 7-12 (node 22 if N=20)
+
+### Configuration Steps
+
+1. Determine your emonTx6's operating mode by checking which voltage channels are active (use the `l` command in serial configuration).
+2. Select the appropriate decoder configuration above (single-phase or three-phase).
+3. Adjust the node number `[[20]]` to match your emonTx6's configured node ID.
+4. Add the configuration to your `emonhub.conf` file in the appropriate section.
