@@ -63,7 +63,7 @@ typedef struct CTAccumulator_ {
 typedef struct Accumulator_ {
   VAccumulator_t  processV[NUM_V * 2]; /* Additional space for 3-phase L-L */
   CTAccumulator_t processCT[NUM_CT];
-  int32_t         analog[NUM_AIN];
+  uint32_t        analog[NUM_AIN];
   uint32_t        numSamples;
   uint32_t        cycles;
   uint32_t        tStart_us;
@@ -90,14 +90,15 @@ static q15_t        applyCorrection(q15_t smp) RAMFUNC;
 static float        calcRMS(const CalcRMS_t *pSrc) RAMFUNC;
 static bool         zeroCrossingSW(q15_t smpV, uint32_t timeNow_us) RAMFUNC;
 
-static void    accumSwapClear(void);
-static int32_t floorf_(const float f);
-static float   calibrationAmplitude(float cal, bool isV);
+static void  accumSwapClear(void);
+static float calibrationAmplitude(float cal, bool isV);
 static void calibrationPhase(CTCfg_t *pCfgCT, const VCfg_t *pCfgV, size_t idxCT,
                              bool vChan2);
-static void configChannelV(size_t ch);
 static void configChannelCT(size_t ch);
-static void swapPtr(void **pIn1, void **pIn2);
+static void configChannelV(size_t ch);
+static int32_t  floorf_(const float f);
+static void     swapPtr(void **pIn1, void **pIn2);
+static uint32_t UDivRound(const uint32_t n, const uint32_t d);
 
 /******************************************************************************
  * Pre-processing
@@ -157,6 +158,21 @@ static void swapPtr(void **pIn1, void **pIn2) {
   void *tmp = *pIn1;
   *pIn1     = *pIn2;
   *pIn2     = tmp;
+}
+
+static uint32_t UDivRound(const uint32_t n, const uint32_t d) {
+  /* Round with even biasing */
+  uint32_t q = n / d;
+  uint32_t r = n % d;
+
+  /* fraction > 0.5 */
+  const bool fgh = r > (d >> 1);
+  /* fraction == 0.5 and ODD */
+  const bool rho = (r == (d >> 1)) && (q & 1u) && !(d & 1u);
+  if (fgh || rho) {
+    q++;
+  }
+  return q;
 }
 
 /******************************************************************************
@@ -556,7 +572,8 @@ RAMFUNC void ecmFilterSample(SampleSet_t *pDst) {
       /* Map the logical input to the CT channel */
       pDst->smpCT[mapLogCT[ch - NUM_V]] = result;
     } else {
-      pDst->smpAnalog[0] = result;
+      /* Analog inputs are d.c. coupled, remove offset */
+      pDst->smpAnalog[0] = (uint32_t)(result + (1u << (ADC_RES_BITS - 1u)));
     }
   }
 
@@ -885,10 +902,10 @@ RAMFUNC ECMDataset_t *ecmProcessSet(void) {
     }
   }
 
-  /* Analog input is d.c. coupled, so restore offset. */
-  // REVISIT : round to nearest, rather than toward 0
   datasetProc.ain =
-      (accumProcessing->analog[0] / numSamples) + (1u << (ADC_RES_BITS - 1u));
+      ecmCfg.ainActive[0]
+          ? (uint16_t)UDivRound(accumProcessing->analog[0], numSamples)
+          : 0u;
 
   perfActive->numCycles++;
   perfActive->microsCycles += (*ecmCfg.timeMicrosDelta)(t_start);
