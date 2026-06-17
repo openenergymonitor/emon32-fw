@@ -117,7 +117,7 @@ typedef struct ECMDataset_ {
   uint32_t activeCh;
   float    rmsV[NUM_V * 2]; /* For L-L */
   DataCT_t CT[NUM_CT];
-  float    ain;
+  uint16_t ain;
 } ECMDataset_t;
 
 typedef struct ECMPerformance_ {

@@ -885,9 +885,10 @@ RAMFUNC ECMDataset_t *ecmProcessSet(void) {
     }
   }
 
-  accumProcessing->analog[0] += (1u << (ADC_RES_BITS + 1u)) * numSamples;
-  datasetProc.ain = qfp_fdiv(qfp_int2float(accumProcessing->analog[0]),
-                             qfp_uint2float(numSamples));
+  /* Analog input is d.c. coupled, so restore offset. */
+  // REVISIT : round to nearest, rather than toward 0
+  datasetProc.ain =
+      (accumProcessing->analog[0] / numSamples) + (1u << (ADC_RES_BITS - 1u));
 
   perfActive->numCycles++;
   perfActive->microsCycles += (*ecmCfg.timeMicrosDelta)(t_start);

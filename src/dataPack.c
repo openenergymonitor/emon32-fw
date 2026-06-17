@@ -216,7 +216,7 @@ size_t dataPackSerial(const Emon32Dataset_t *pData, char *pDst, const size_t m,
 
     if (!(json && !pChsActive->analog)) {
       catId(&strn, 2u, STR_ANALOG, json);
-      strn.n += strnCatFloat(&strn, pData->pECM->ain);
+      strn.n += strnCatUint(&strn, pData->pECM->ain);
     }
   }
 
@@ -242,8 +242,7 @@ uint8_t dataPackPacked(const Emon32Dataset_t *pData, void *pPacked,
       pP->pulse[p] = pData->pulseCnt[p];
     }
 
-    pP->analog[0] =
-        (uint16_t)qfp_float2int_z(qfp_fmul(pData->pECM->ain, 100.0f));
+    pP->analog[0] = pData->pECM->ain;
 
     return sizeof(*pP);
   } else {

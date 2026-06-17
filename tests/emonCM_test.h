@@ -51,4 +51,6 @@ double qfp_dsub(double a, double b) { return a - b; }
 /* Reference C implementations for asm_math functions */
 uint64_t usqr64(uint32_t x) { return (uint64_t)x * x; }
 
+int64_t smul64(int32_t a, int32_t b) { return (int64_t)a * (int64_t)b; }
+
 uint64_t ssqr64(int32_t x) { return (uint64_t)((int64_t)x * x); }
