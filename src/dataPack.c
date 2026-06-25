@@ -195,7 +195,13 @@ size_t dataPackSerial(const Emon32Dataset_t *pData, char *pDst, const size_t m,
     strn.n += strnCatInt(&strn, pData->pECM->CT[i].wattHour);
   }
 
-  /* When functioning as emonPi, don't send 1Wire/Pulse values */
+  if ((!json || pChsActive->analog)) {
+    catId(&strn, 3u, STR_ANALOG, json);
+    strn.n += strnCatUint(&strn, pData->pECM->ain);
+  }
+
+  /* When functioning as emonPi, don't send 1Wire/Pulse values as these are
+   * handled by the attached SBC. */
   if (sercomExtIntfEnabled()) {
     for (size_t i = 0; i < NUM_OPA; i++) {
       if (json && !pChsActive->pulse[i]) {
@@ -212,11 +218,6 @@ size_t dataPackSerial(const Emon32Dataset_t *pData, char *pDst, const size_t m,
       catId(&strn, (i + 1), STR_TEMP, json);
       strn.n +=
           strnCatFloat(&strn, tempAsFloat(TEMP_INTF_ONEWIRE, pData->temp[i]));
-    }
-
-    if (!(json && !pChsActive->analog)) {
-      catId(&strn, 2u, STR_ANALOG, json);
-      strn.n += strnCatUint(&strn, pData->pECM->ain);
     }
   }
 
