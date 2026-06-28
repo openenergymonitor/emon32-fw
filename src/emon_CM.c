@@ -274,7 +274,11 @@ void ecmDataBufferSwap(void) {
   swapPtr((void **)&adcActive, (void **)&adcProc);
 }
 
-volatile RawSampleSetPacked_t *ecmDataBuffer(void) { return adcActive; }
+void ecmDataBuffer(volatile RawSampleSetPacked_t **p0,
+                   volatile RawSampleSetPacked_t **p1) {
+  *p0 = adcActive;
+  *p1 = adcProc;
+}
 
 /******************************************************************************
  * Functions
@@ -284,7 +288,6 @@ static RAMFUNC q15_t applyCorrection(q15_t smp) {
   smp = smp - (1u << (ADC_RES_BITS - 1u));
   if (ecmCfg.correction.valid) {
     int64_t prod = smul64(smp, ecmCfg.correction.gain);
-    // int64_t prod = (int64_t)smp * (int64_t)ecmCfg.correction.gain;
     int32_t y    = (int32_t)((prod + (1LL << 19)) >> 20);
 
     if (y > 2047) {
@@ -474,11 +477,11 @@ void ecmClearEnergyChannel(const size_t idx) {
 
 void ecmFlush(void) {
   discardCycles = EQUIL_CYCLES;
+  t_ZClast      = 0;
 
   (void)memset(accumBuffer, 0, (2 * sizeof(*accumBuffer)));
   (void)memset(dspBuffer, 0, (DOWNSAMPLE_TAPS * sizeof(*dspBuffer)));
   (void)memset(&residualEnergy, 0, (sizeof(*residualEnergy) * NUM_CT));
-  t_ZClast = 0;
 }
 
 RAMFUNC void ecmFilterSample(SampleSet_t *pDst) {
@@ -500,13 +503,15 @@ RAMFUNC void ecmFilterSample(SampleSet_t *pDst) {
       (0 == idxInj) ? (downsampleTaps - 1u) : (idxInj - 1u);
 
   /* Copy the packed raw ADC value into the unpacked buffer; samples[1] is
-   * the most recent sample.
+   * the most recent sample. Need to account for the analog scan as well, as
+   * packing is contiguous regardless of whether it is active.
    */
-  for (size_t idxSmp = 0; idxSmp < (VCT_TOTAL + NUM_AIN); idxSmp++) {
-    dspBuffer[idxInjPrev].smp[idxSmp] =
-        applyCorrection(adcProc->samples[0].smp[idxSmp]);
-    dspBuffer[idxInj].smp[idxSmp] =
-        applyCorrection(adcProc->samples[1].smp[idxSmp]);
+  const size_t stride = ecmCfg.ainActive[0] ? (VCT_TOTAL + NUM_AIN) : VCT_TOTAL;
+  const uint16_t *raw = (const uint16_t *)adcProc;
+
+  for (size_t idxSmp = 0; idxSmp < stride; idxSmp++) {
+    dspBuffer[idxInjPrev].smp[idxSmp] = applyCorrection(raw[idxSmp]);
+    dspBuffer[idxInj].smp[idxSmp]     = applyCorrection(raw[stride + idxSmp]);
   }
 
   /* For an ODD number of taps, take the unique middle value to start. As

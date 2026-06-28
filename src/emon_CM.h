@@ -39,7 +39,7 @@ typedef int32_t q22_t;
 typedef int64_t q63_t;
 
 /* SingleSampleSet_t contains a single set of V + CT ADC samples */
-typedef struct __attribute__((__packed__)) SingleSampleSet_ {
+typedef struct SingleSampleSet_ {
   uint16_t smp[VCT_TOTAL + NUM_AIN];
 } SingleRawSampleSet_t;
 
@@ -47,7 +47,7 @@ typedef struct __attribute__((__packed__)) SingleSampleSet_ {
  * DMAC to blit samples across multiple sample sets, depending on processing
  * needs.
  */
-typedef struct __attribute__((__packed__)) SampleSetPacked_ {
+typedef struct SampleSetPacked_ {
   SingleRawSampleSet_t samples[SAMPLES_IN_SET];
 } RawSampleSetPacked_t;
 
@@ -167,10 +167,12 @@ void ecmConfigInit(void);
  */
 void ecmConfigReportCycles(uint32_t reportCycles);
 
-/*! @brief Returns a pointer to the ADC data buffer
- *  @return pointer to the active ADC data buffer.
+/*! @brief Get the data buffers
+ *  @param [out] p0 pointer to the active ADC data buffer.
+ *  @param [out] p1 pointer to the processing ADC data buffer.
  */
-volatile RawSampleSetPacked_t *ecmDataBuffer(void);
+void ecmDataBuffer(volatile RawSampleSetPacked_t **p0,
+                   volatile RawSampleSetPacked_t **p1);
 
 /*! @brief Swap the data sampling buffers. ADC will be filling the other
  *         while it is handled.

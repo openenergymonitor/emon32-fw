@@ -61,8 +61,7 @@ static void adcConfigureDMAC(const bool ainActive) {
   volatile RawSampleSetPacked_t *adcBuffer[2];
 
   /* Get the contiguous data buffers */
-  adcBuffer[0] = ecmDataBuffer();
-  adcBuffer[1] = adcBuffer[0] + 1;
+  ecmDataBuffer(&adcBuffer[0], &adcBuffer[1]);
 
   dmacConfig.ctrlb = DMAC_CHCTRLB_LVL(3u) |
                      DMAC_CHCTRLB_TRIGSRC(ADC_DMAC_ID_RESRDY) |
@@ -88,8 +87,8 @@ static void adcConfigureDMAC(const bool ainActive) {
                               DMAC_BTCTRL_STEPSEL_DST | DMAC_BTCTRL_STEPSIZE_X1;
 
     dmacChannelConfigure(dmaChan[i], &dmacConfig);
-    dmacEnableChannelInterrupt(dmaChan[i]);
   }
+  dmacEnableChannelInterrupt(DMA_CHAN_ADC0);
 
   /* Link the descriptors so sampling is continuous */
   dmacDesc[0]->DESCADDR.reg = (uint32_t)dmacDesc[1];
@@ -109,7 +108,12 @@ void adcDMACStart(void) {
   }
 }
 
-void adcDMACStop(void) { dmacChannelDisable(DMA_CHAN_ADC0); }
+void adcDMACStop(void) {
+  dmacDisableChannelInterrupt(DMA_CHAN_ADC0);
+  dmacChannelDisable(DMA_CHAN_ADC0);
+  dmacChannelDisable(DMA_CHAN_ADC1);
+  dmacClearChannelInterrupt(DMA_CHAN_ADC0);
+}
 
 void adcSetup(const bool ainActive) {
   extern uint8_t pinsADC[][2];
