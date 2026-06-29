@@ -19,5 +19,7 @@ void adcDMACStart(void);
 /*! @brief Stop the DMAC transfer from the ADC */
 void adcDMACStop(void);
 
-/*! @brief Configure the ADC for the board */
-void adcSetup(void);
+/*! @brief Configure the ADC for the board
+ *  @param [in] ainActive : true if the auxiliary analog input is active
+ */
+void adcSetup(const bool ainActive);

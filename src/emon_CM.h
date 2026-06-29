@@ -39,15 +39,15 @@ typedef int32_t q22_t;
 typedef int64_t q63_t;
 
 /* SingleSampleSet_t contains a single set of V + CT ADC samples */
-typedef struct __attribute__((__packed__)) SingleSampleSet_ {
-  uint16_t smp[VCT_TOTAL];
+typedef struct SingleSampleSet_ {
+  uint16_t smp[VCT_TOTAL + NUM_AIN];
 } SingleRawSampleSet_t;
 
 /* RawSampleSetPacked_t contains a set of single sample sets. This allows the
  * DMAC to blit samples across multiple sample sets, depending on processing
  * needs.
  */
-typedef struct __attribute__((__packed__)) SampleSetPacked_ {
+typedef struct SampleSetPacked_ {
   SingleRawSampleSet_t samples[SAMPLES_IN_SET];
 } RawSampleSetPacked_t;
 
@@ -55,6 +55,7 @@ typedef struct __attribute__((__packed__)) SampleSetPacked_ {
 typedef struct SampleSet_ {
   q15_t smpV[NUM_V];
   q15_t smpCT[NUM_CT];
+  q15_t smpAnalog[NUM_AIN];
 } SampleSet_t;
 
 typedef struct GainOffset_ {
@@ -93,15 +94,14 @@ typedef struct ECMCfg_ {
   uint32_t reportTime_us; /* Report time in microseconds */
   float    assumedVrms;   /* Assume RMS voltage if not found */
 
-  uint8_t mapCTLog[NUM_CT]; /* Map of CT to microcontroller pins */
+  uint8_t mapCTLog[NUM_CT + NUM_AIN]; /* Map of CT to microcontroller pins */
 
   GainOffset_t correction; /* Gain and offset correction */
-  bool         dither;     /* Apply "dither" to output */
-  uint32_t     s0;         /* Random seed 0 */
-  uint32_t     s1;         /* Random seed 0 */
 
   CTCfg_t ctCfg[NUM_CT]; /* CT Configuration */
   VCfg_t  vCfg[NUM_V];   /* Voltage configuration */
+
+  bool ainActive[NUM_AIN]; /* AIN configuration */
 } ECMCfg_t;
 
 typedef struct DataCT_ {
@@ -117,6 +117,7 @@ typedef struct ECMDataset_ {
   uint32_t activeCh;
   float    rmsV[NUM_V * 2]; /* For L-L */
   DataCT_t CT[NUM_CT];
+  uint16_t ain;
 } ECMDataset_t;
 
 typedef struct ECMPerformance_ {
@@ -166,10 +167,12 @@ void ecmConfigInit(void);
  */
 void ecmConfigReportCycles(uint32_t reportCycles);
 
-/*! @brief Returns a pointer to the ADC data buffer
- *  @return pointer to the active ADC data buffer.
+/*! @brief Get the data buffers
+ *  @param [out] p0 pointer to the active ADC data buffer.
+ *  @param [out] p1 pointer to the processing ADC data buffer.
  */
-volatile RawSampleSetPacked_t *ecmDataBuffer(void);
+void ecmDataBuffer(volatile RawSampleSetPacked_t **p0,
+                   volatile RawSampleSetPacked_t **p1);
 
 /*! @brief Swap the data sampling buffers. ADC will be filling the other
  *         while it is handled.

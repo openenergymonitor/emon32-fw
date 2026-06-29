@@ -10,6 +10,10 @@ static void (*cbBufferFill)(void);
 /* Useful ref: https://aykevl.nl/2019/09/samd21-dma */
 
 void dmacSetup(void) {
+  DMAC->CTRL.reg = DMAC_CTRL_SWRST;
+  while (DMAC->CTRL.reg & DMAC_CTRL_SWRST)
+    ;
+
   /* Clocking - AHB and APB are both enabled at reset (16.8.8, 16.8.10) */
   DMAC->BASEADDR.reg = (uint32_t)dmacs;
   DMAC->WRBADDR.reg  = (uint32_t)dmacs_wb;
@@ -30,6 +34,13 @@ void dmacCallbackBufferFill(void (*cb)(void)) { cbBufferFill = cb; }
 void dmacChannelDisable(uint8_t ch) {
   DMAC->CHID.reg           = ch;
   DMAC->CHCTRLA.bit.ENABLE = 0;
+  while (DMAC->CHCTRLA.bit.ENABLE)
+    ;
+  while (DMAC->CHSTATUS.bit.BUSY)
+    ;
+  DMAC->CHCTRLA.bit.SWRST = 1;
+  while (DMAC->CHCTRLA.bit.SWRST)
+    ;
 }
 
 void dmacChannelEnable(uint8_t ch) {
@@ -58,13 +69,9 @@ void dmacChannelConfigure(uint8_t ch, const DMACCfgCh_t *pCfg) {
 }
 
 void irq_handler_dmac(void) {
-  /* Check which channel has triggered the interrupt, set the event, and
-   * clear the interrupt source
-   */
   DMAC->CHID.reg = DMA_CHAN_ADC0;
   if (DMAC->CHINTFLAG.reg & DMAC_CHINTFLAG_TCMPL) {
     DMAC->CHINTFLAG.reg = DMAC_CHINTFLAG_TCMPL;
-    dmacChannelEnable(DMA_CHAN_ADC0);
     (*cbBufferFill)();
   }
 }

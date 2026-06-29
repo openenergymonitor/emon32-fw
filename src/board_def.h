@@ -19,6 +19,7 @@
 
 #define NUM_V              3
 #define NUM_CT             12
+#define NUM_AIN            1
 #define VCT_TOTAL          (NUM_V + NUM_CT)
 #define CT_RES             1 /* Number of CT channels reserved for future use */
 #define SAMPLE_RATE        4800

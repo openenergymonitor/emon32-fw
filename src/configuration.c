@@ -169,7 +169,7 @@ static void configDefault(void) {
   }
 
   /* Initialize ALL slots including reserved. */
-  for (size_t idxCT = 0u; idxCT < (NUM_CT + CT_RES); idxCT++) {
+  for (size_t idxCT = 0u; idxCT < NUM_CT; idxCT++) {
     config.ctCfg[idxCT].ctCal    = 100.0f;
     config.ctCfg[idxCT].phase    = CT_LEAD_DEF;
     config.ctCfg[idxCT].vChan1   = 0;
@@ -822,11 +822,24 @@ static bool configureOPA(void) {
    * a hysteresis period applied. */
   func = inBuffer[posFunc];
 
-  bool isPulse   = ('b' == func) || ('f' == func) || ('r' == func);
+  bool isAnalog  = ('a' == func);
   bool isOneWire = ('o' == func);
+  bool isPulse   = ('b' == func) || ('f' == func) || ('r' == func);
 
-  if (!(isPulse || isOneWire)) {
-    serialPutsError("Invalid OPA function (valid: b/f/r/o).");
+  if (!(isAnalog || isPulse || isOneWire)) {
+    serialPutsError("Invalid OPA function (valid: a/b/f/r/o).");
+    return false;
+  }
+
+  /* OPA1,2 can only be pulse or OneWire */
+  if ((ch < 2u) && isAnalog) {
+    printfError("OPA%d only supports pulse and OneWire.", ch + 1u);
+    return false;
+  }
+
+  /* OPA3 can only be a pulse or analog input */
+  if ((2u == ch) && isOneWire) {
+    serialPutsError("OPA3 only supports pulse and analog input.");
     return false;
   }
 
@@ -845,26 +858,26 @@ static bool configureOPA(void) {
     }
 
     period = convU.val.u8;
+
+    /* For OPA3 only, if it _was_ an analog input before then the ADC must be
+     * reconfigured for normal operation.
+     */
+    if (2u == ch) {
+      if (config.opaCfg[2].func == 'a') {
+        emon32EventSet(EVT_SMP_CFG_START);
+      }
+    }
+
+    config.opaCfg[ch].period = period;
+    config.opaCfg[ch].puEn   = pu;
   }
 
-  /* OPA3 can only be a pulse or analog input */
-  if ((2u == ch) && !isPulse) {
-    serialPutsError("OPA3 only supports pulse input.");
-    return false;
+  if (isAnalog) {
+    emon32EventSet(EVT_SMP_CFG_START);
   }
 
-  if (isOneWire) {
-    config.opaCfg[ch].func = 'o';
-    printSettingOPA(ch);
-    return true;
-  }
-
-  config.opaCfg[ch].func   = func;
-  config.opaCfg[ch].period = period;
-  config.opaCfg[ch].puEn   = pu;
-
+  config.opaCfg[ch].func = func;
   printSettingOPA(ch);
-
   return true;
 }
 
@@ -1099,6 +1112,12 @@ static void printSettingOPA(const size_t ch) {
   /* OneWire */
   if ('o' == config.opaCfg[ch].func) {
     printf_("active = %s, onewire\r\n",
+            config.opaCfg[ch].opaActive ? "on" : "off");
+    return;
+  }
+
+  if ('a' == config.opaCfg[ch].func) {
+    printf_("active = %s, analog\r\n",
             config.opaCfg[ch].opaActive ? "on" : "off");
     return;
   }
@@ -1714,7 +1733,8 @@ void configProcessCmd(void) {
       " - m<v> <w> <x> <y> <z> : Configure OPA1-3 for OneWire or Pulse\r\n"
       "   - v : OPA index. [1-3]\r\n"
       "   - w : OPA active. w = 0: DISABLED, w = 1: ENABLED\r\n"
-      "   - x : function select. x = [b,f,r]: pulse, x = o: OneWire.\r\n"
+      "   - x : function select. x = [b,f,r]: pulse, x = o: OneWire, x = a: "
+      "analog\r\n"
       "   - y : pull-up, only for pulse. y = 0: OFF, y = 1: ON\r\n"
       "   - z : minimum time between pulses (ms), only for "
       "pulse.\r\n"

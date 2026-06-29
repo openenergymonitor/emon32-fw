@@ -9,6 +9,7 @@ typedef struct CHActive_ {
   bool V[NUM_V];
   bool CT[NUM_CT];
   bool pulse[NUM_OPA];
+  bool analog;
 } CHActive_t;
 
 typedef enum PackedRange_ {

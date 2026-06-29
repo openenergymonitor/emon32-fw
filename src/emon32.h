@@ -61,6 +61,7 @@ typedef struct __attribute__((__packed__)) PackedDataTempPulse_ {
   uint32_t msg;
   int16_t  temp[TEMP_MAX_ONEWIRE];
   uint32_t pulse[NUM_OPA];
+  int16_t  analog[NUM_AIN];
 } PackedDataTempPulse_t;
 
 typedef struct __attribute__((__packed__)) PackedDataCommon_ {
@@ -83,6 +84,7 @@ typedef enum EVTSRC_ {
   EVT_EXT_DISABLE     = 0u,
   EVT_TICK_1kHz       = 1u,
   EVT_ECHO            = 2u,
+  EVT_SMP_CFG_START   = 3u,
   EVT_ECM_SET_CMPL    = 8u,
   EVT_TX_RFM          = 9u,
   EVT_OPA_INIT        = 14u,

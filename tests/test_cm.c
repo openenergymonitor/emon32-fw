@@ -14,7 +14,7 @@
 #define MAINS_FREQ  50.0
 #define REPORT_TIME 9.8f
 #define SMP_TICK    1000000u / SAMPLE_RATE / (VCT_TOTAL)
-#define VRMS_GOLD   240.0f
+#define VRMS_GOLD   241.0f // To account for attenuation
 #define MAX_A       (1u << ADC_RES_BITS)
 
 typedef struct wave_ {
@@ -146,6 +146,8 @@ static void dynamicRun(int reports, int prtReport, noise_t *noise, bool noVAC) {
                                                  : (int)randSkewNormal(noise)
                          : 0);
         }
+        smpRaw[smpIdx]->samples[j].smp[VCT_TOTAL + NUM_AIN - 1u] =
+            (1u << (ADC_RES_BITS - 1u));
         tick += SMP_TICK;
       }
     }
@@ -223,10 +225,6 @@ int main(int argc, char *argv[]) {
   pEcmCfg->timeMicros      = &timeMicros;
   pEcmCfg->timeMicrosDelta = &timeMicrosDelta;
 
-  pEcmCfg->dither = false;
-  pEcmCfg->s0     = 0;
-  pEcmCfg->s1     = 0;
-
   for (int i = 0; i < NUM_V; i++) {
     pEcmCfg->vCfg[i].voltageCalRaw = 100.0f;
     pEcmCfg->vCfg[i].vActive       = (i == 0);
@@ -241,13 +239,16 @@ int main(int argc, char *argv[]) {
     pEcmCfg->ctCfg[i].vChan2   = 0;
   }
 
+  pEcmCfg->ainActive[0] = true;
+
   pEcmCfg->correction.valid = false;
   pEcmCfg->correction.gain  = (1 << 11);
 
   /* Remapping for analog CT inputs. This maps the 0-indexed CT physical pin to
    * the logical pin. For example, physical CT1 is the 4th CT sampled so:
    * ainRemap[0] = 3. */
-  const int_fast8_t ainRemap[NUM_CT] = {3, 4, 7, 1, 2, 11, 5, 6, 8, 9, 10, 0};
+  const int_fast8_t ainRemap[NUM_CT + NUM_AIN] = {3, 4, 7, 1,  2, 11, 5,
+                                                  6, 8, 9, 10, 0, 12};
 
   for (int i = 0; i < NUM_CT; i++) {
     pEcmCfg->mapCTLog[i] = ainRemap[i];
@@ -432,6 +433,7 @@ static void printReport(int reportNum, int64_t tick, ECMDataset_t *pDataset,
   printf("      P    (W) : %d\r\n", pDataset->CT[ct].realPower);
   printf("      E    (Wh): %d (delta: %d)\r\n", thisE, (thisE - prevE));
   printf("      pF       : %.2f\r\n", pDataset->CT[ct].pf);
+  printf("      Analog   : %d\r\n", pDataset->ain);
   prevE = thisE;
 }
 

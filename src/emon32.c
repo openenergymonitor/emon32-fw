@@ -214,7 +214,7 @@ void debugPuts(const char *s) {
 /*! @brief Configure the continuous energy monitoring system */
 void ecmConfigure(void) {
 
-  extern const uint8_t ainRemap[NUM_CT];
+  extern const uint8_t ainRemap[NUM_CT + NUM_AIN];
 
   ECMCfg_t *ecmCfg = ecmConfigGet();
 
@@ -226,16 +226,8 @@ void ecmConfigure(void) {
   ecmCfg->timeMicros    = &timerMicros;
   ecmCfg->timeMicrosDelta = &timerMicrosDelta;
 
-  ecmCfg->dither = true;
-  ecmCfg->s0     = getUniqueID(0);
-  ecmCfg->s1     = getUniqueID(1u);
-
-  if (adcCorrectionValid()) {
-    ecmCfg->correction.valid = true;
-    ecmCfg->correction.gain  = adcCorrectionGain();
-  } else {
-    ecmCfg->correction.valid = false;
-  }
+  ecmCfg->correction.gain  = adcCorrectionGain();
+  ecmCfg->correction.valid = adcCorrectionValid();
 
   for (size_t i = 0; i < NUM_V; i++) {
     ecmCfg->vCfg[i].voltageCalRaw = pConfig->voltageCfg[i].voltageCal;
@@ -249,6 +241,10 @@ void ecmConfigure(void) {
     ecmCfg->ctCfg[i].vChan1   = pConfig->ctCfg[i].vChan1;
     ecmCfg->ctCfg[i].vChan2   = pConfig->ctCfg[i].vChan2;
   }
+
+  /* Only OPA3 currently supports analog input */
+  ecmCfg->ainActive[0] = (bool)((pConfig->opaCfg[2].func == 'a') &&
+                                (pConfig->opaCfg[2].opaActive));
 
   for (size_t i = 0; i < NUM_CT; i++) {
     ecmCfg->mapCTLog[i] = ainRemap[i];
@@ -338,7 +334,10 @@ static void pulseConfigure(void) {
   for (size_t i = 0; i < NUM_OPA; i++) {
     PulseCfg_t *pulseCfg = pulseGetCfg(i);
 
-    if (('o' != pConfig->opaCfg[i].func) && (pConfig->opaCfg[i].opaActive)) {
+    const bool isOneWire = ('o' == pConfig->opaCfg[i].func);
+    const bool isAnalog  = ('a' == pConfig->opaCfg[i].func);
+
+    if (!(isOneWire || isAnalog) && (pConfig->opaCfg[i].opaActive)) {
       pulseCfg->edge    = (PulseEdge_t)pConfig->opaCfg[i].func;
       pulseCfg->grp     = pinsPulse[i][0];
       pulseCfg->pin     = pinsPulse[i][1];
@@ -556,6 +555,10 @@ static void transmitData(const Emon32Dataset_t *pSrc, uint32_t *pPkt) {
     chsActive.pulse[i] = pConfig->opaCfg[i].opaActive && isPulse;
   }
 
+  if ('a' == pConfig->opaCfg[2].func) {
+    chsActive.analog = pConfig->opaCfg[2].opaActive;
+  }
+
   (void)dataPackSerial(pSrc, txBuffer, TX_BUFFER_W, pConfig->baseCfg.useJson,
                        &chsActive);
 
@@ -613,7 +616,6 @@ static void ucSetup(void) {
   eicSetup();
   dmacSetup();
   sercomSetup();
-  adcSetup();
   evsysSetup();
   usbSetup();
   wdtSetup();
@@ -674,12 +676,6 @@ int main(void) {
    * serial console later. */
   waitWithUSB(1000);
   configFirmwareBoardInfo();
-
-  /* Set up buffers for ADC data, configure energy processing, and start */
-  ecmConfigure();
-  dmacCallbackBufferFill(&ecmDmaCallback);
-  ecmFlush();
-  adcDMACStart();
   uartEnableRx(SERCOM_UART, SERCOM_UART_INTERACTIVE_IRQn);
   wdtEnable();
 
@@ -689,12 +685,27 @@ int main(void) {
     uiLedColour(LED_GREEN);
   }
 
+  emon32EventSet(EVT_SMP_CFG_START);
+
   for (;;) {
 
     /* While there is an event pending (may be set while another is
      * handled), keep looping. Enter sleep (WFI) when done.
      */
     while (0 != evtPend) {
+
+      /* Configure sampling and start */
+      if (evtPending(EVT_SMP_CFG_START)) {
+        const bool ainActive =
+            pConfig->opaCfg[2].func == 'a' && pConfig->opaCfg[2].opaActive;
+        adcDMACStop();
+        adcSetup(ainActive);
+        ecmConfigure();
+        ecmFlush();
+        dmacCallbackBufferFill(&ecmDmaCallback);
+        adcDMACStart();
+        emon32EventClr(EVT_SMP_CFG_START);
+      }
 
       /* External interface disable */
       if (evtPending(EVT_EXT_DISABLE)) {

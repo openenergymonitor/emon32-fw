@@ -7,12 +7,12 @@
 
 #include "emon_CM.h"
 
-static int32_t correctionGain;
-static bool    correctionValid;
+static int32_t correctionGain  = 0;
+static bool    correctionValid = false;
 
 static void    adcCalibrate(void);
 static int16_t adcCalibrateSmp(const uint32_t pin);
-static void    adcConfigureDMAC(void);
+static void    adcConfigureDMAC(const bool ainActive);
 static void    adcSync(void);
 
 /*! @brief Calculate coarse gain and offset corrections. Only available when
@@ -53,7 +53,7 @@ static int16_t adcCalibrateSmp(const uint32_t pin) {
   return (int16_t)ADC->RESULT.reg;
 }
 
-static void adcConfigureDMAC(void) {
+static void adcConfigureDMAC(const bool ainActive) {
   DMACCfgCh_t              dmacConfig;
   volatile DmacDescriptor *dmacDesc[2];
   uint8_t                  dmaChan[2] = {DMA_CHAN_ADC0, DMA_CHAN_ADC1};
@@ -61,8 +61,7 @@ static void adcConfigureDMAC(void) {
   volatile RawSampleSetPacked_t *adcBuffer[2];
 
   /* Get the contiguous data buffers */
-  adcBuffer[0] = ecmDataBuffer();
-  adcBuffer[1] = adcBuffer[0] + 1;
+  ecmDataBuffer(&adcBuffer[0], &adcBuffer[1]);
 
   dmacConfig.ctrlb = DMAC_CHCTRLB_LVL(3u) |
                      DMAC_CHCTRLB_TRIGSRC(ADC_DMAC_ID_RESRDY) |
@@ -71,12 +70,16 @@ static void adcConfigureDMAC(void) {
   for (size_t i = 0; i < 2; i++) {
     dmacDesc[i] = dmacGetDescriptor(dmaChan[i]);
 
+    const uint16_t btcnt = ainActive
+                               ? ((VCT_TOTAL + NUM_AIN) * OVERSAMPLING_RATIO)
+                               : (VCT_TOTAL * OVERSAMPLING_RATIO);
+
     /* DSTADDR is the last address, rather than first! */
-    dmacDesc[i]->DSTADDR.reg =
-        (uint32_t)adcBuffer[i] + (2 * VCT_TOTAL * OVERSAMPLING_RATIO);
+    dmacDesc[i]->DSTADDR.reg = (uint32_t)adcBuffer[i] +
+                               (2 * (VCT_TOTAL + NUM_AIN) * OVERSAMPLING_RATIO);
     dmacDesc[i]->SRCADDR.reg = (uint32_t)&ADC->RESULT;
     /* Capture a full sample set before interrupt to start downsampling */
-    dmacDesc[i]->BTCNT.reg   = (VCT_TOTAL * OVERSAMPLING_RATIO);
+    dmacDesc[i]->BTCNT.reg   = btcnt;
     dmacDesc[i]->BTCTRL.reg = DMAC_BTCTRL_VALID
                               /* Raise interrupt on block transfer */
                               | DMAC_BTCTRL_BLOCKACT_INT |
@@ -84,8 +87,8 @@ static void adcConfigureDMAC(void) {
                               DMAC_BTCTRL_STEPSEL_DST | DMAC_BTCTRL_STEPSIZE_X1;
 
     dmacChannelConfigure(dmaChan[i], &dmacConfig);
-    dmacEnableChannelInterrupt(dmaChan[i]);
   }
+  dmacEnableChannelInterrupt(DMA_CHAN_ADC0);
 
   /* Link the descriptors so sampling is continuous */
   dmacDesc[0]->DESCADDR.reg = (uint32_t)dmacDesc[1];
@@ -105,13 +108,22 @@ void adcDMACStart(void) {
   }
 }
 
-void adcDMACStop(void) { dmacChannelDisable(DMA_CHAN_ADC0); }
+void adcDMACStop(void) {
+  dmacDisableChannelInterrupt(DMA_CHAN_ADC0);
+  dmacChannelDisable(DMA_CHAN_ADC0);
+  dmacChannelDisable(DMA_CHAN_ADC1);
+  dmacClearChannelInterrupt(DMA_CHAN_ADC0);
+}
 
-void adcSetup(void) {
+void adcSetup(const bool ainActive) {
   extern uint8_t pinsADC[][2];
 
   for (size_t i = 0; pinsADC[i][0] != 0xFF; i++) {
     portPinMux(pinsADC[i][0], pinsADC[i][1], PORT_PMUX_PMUXE_B_Val);
+  }
+
+  if (ainActive) {
+    portPinMux(GRP_ADC_AIN, PIN_ADC_AIN, PORT_PMUX_PMUXE_B_Val);
   }
 
   /* APB bus clock is enabled by default (Table 15-1). Connect GCLK 3 */
@@ -144,17 +156,18 @@ void adcSetup(void) {
    */
   ADC->SAMPCTRL.reg = 0x21u;
 
+  /* INPUTSCAN is number of channels - 1 */
+  const uint32_t inputscan = ainActive ? VCT_TOTAL : (VCT_TOTAL - 1u);
+
   /* Input control - requires synchronisation (33.6.15) */
-  ADC->INPUTCTRL.reg = ADC_INPUTCTRL_MUXPOS_PIN2 |
-                       ADC_INPUTCTRL_MUXNEG_GND
-                       /* INPUTSCAN is number of channels - 1 */
-                       | ADC_INPUTCTRL_INPUTSCAN(VCT_TOTAL - 1u);
+  ADC->INPUTCTRL.reg = ADC_INPUTCTRL_MUXPOS_PIN2 | ADC_INPUTCTRL_MUXNEG_GND |
+                       ADC_INPUTCTRL_INPUTSCAN(inputscan);
   adcSync();
 
   /* ADC is triggered by an event from TIMER_ADC with no CPU intervention */
   ADC->EVCTRL.reg = ADC_EVCTRL_STARTEI;
 
-  adcConfigureDMAC();
+  adcConfigureDMAC(ainActive);
 }
 
 static void adcSync(void) {

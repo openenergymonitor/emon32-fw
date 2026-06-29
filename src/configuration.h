@@ -32,7 +32,7 @@ typedef struct __attribute__((__packed__)) DataTxCfg_ {
 
 typedef struct __attribute__((__packed__)) OpaCfgPacked_ {
   uint8_t period;    /* Blank time (pulse only) */
-  uint8_t func;      /* 'o': OneWire; 'r', 'b', 'f': pulse  */
+  uint8_t func;      /* 'a': analog; 'o': OneWire; 'r', 'b', 'f': pulse  */
   bool    opaActive; /* Channel active */
   bool    puEn;      /* Pull up enabled */
 } OpaCfgPacked_t;

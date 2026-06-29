@@ -23,6 +23,7 @@
 #define STR_LCURL  9
 #define STR_RCURL  10
 #define STR_COMMA  11
+#define STR_ANALOG 12
 
 /* "Fat" string with current length and buffer size. */
 typedef struct StrN {
@@ -43,13 +44,14 @@ static size_t strnCatUint(StrN_t *strD, uint32_t v);
 static char tmpStr[CONV_STR_W] = {0};
 
 /* Strings that are inserted in the transmitted message */
-const StrN_t baseStr[12] = {
+const StrN_t baseStr[13] = {
     {.str = "MSG", .n = 3, .m = 4},   {.str = "V", .n = 1, .m = 2},
     {.str = "P", .n = 1, .m = 2},     {.str = "E", .n = 1, .m = 2},
     {.str = "pulse", .n = 5, .m = 6}, {.str = "t", .n = 1, .m = 2},
     {.str = ":", .n = 1, .m = 2},     {.str = "\r\n", .n = 2, .m = 3},
     {.str = "\"", .n = 1, .m = 2},    {.str = "{", .n = 1, .m = 2},
-    {.str = "}", .n = 1, .m = 2},     {.str = ",", .n = 1, .m = 2}};
+    {.str = "}", .n = 1, .m = 2},     {.str = ",", .n = 1, .m = 2},
+    {.str = "analog", .n = 6, .m = 7}};
 
 /*! @brief Append "<field><id>:" to the string
  *  @param [out] strD : pointer to the fat string
@@ -193,7 +195,13 @@ size_t dataPackSerial(const Emon32Dataset_t *pData, char *pDst, const size_t m,
     strn.n += strnCatInt(&strn, pData->pECM->CT[i].wattHour);
   }
 
-  /* When functioning as emonPi, don't send 1Wire/Pulse values */
+  if ((!json || pChsActive->analog)) {
+    catId(&strn, 3u, STR_ANALOG, json);
+    strn.n += strnCatUint(&strn, pData->pECM->ain);
+  }
+
+  /* When functioning as emonPi, don't send 1Wire/Pulse values as these are
+   * handled by the attached SBC. */
   if (sercomExtIntfEnabled()) {
     for (size_t i = 0; i < NUM_OPA; i++) {
       if (json && !pChsActive->pulse[i]) {
@@ -230,9 +238,13 @@ uint8_t dataPackPacked(const Emon32Dataset_t *pData, void *pPacked,
     for (size_t t = 0; t < TEMP_MAX_ONEWIRE; t++) {
       pP->temp[t] = (int16_t)((pData->temp[t] * 6) + (pData->temp[t] >> 2));
     }
+
     for (size_t p = 0; p < NUM_OPA; p++) {
       pP->pulse[p] = pData->pulseCnt[p];
     }
+
+    pP->analog[0] = pData->pECM->ain;
+
     return sizeof(*pP);
   } else {
     PackedDataCT_t *pP = (PackedDataCT_t *)pPacked;
