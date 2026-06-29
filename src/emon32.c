@@ -71,6 +71,7 @@ void        putchar_(char c);
 static void rfmConfigure(void);
 static void ssd1306Setup(void);
 static void tempReadEvt(Emon32Dataset_t *pData, const uint32_t numT);
+static void tempSample(const uint32_t numTempSensors);
 static uint32_t tempSetup(Emon32Dataset_t *pData);
 static void     totalEnergy(const Emon32Dataset_t *pData, EPAccum_t *pAcc);
 static void     transmitData(const Emon32Dataset_t *pSrc, uint32_t *pPkt);
@@ -458,6 +459,16 @@ static void tempReadEvt(Emon32Dataset_t *pData, const uint32_t numT) {
   }
 }
 
+static void tempSample(const uint32_t numTempSensors) {
+  if (sercomExtIntfEnabled() && (numTempSensors > 0)) {
+    for (size_t i = 0; i < NUM_OPA; i++) {
+      if (('o' == pConfig->opaCfg[i].func) && pConfig->opaCfg[i].opaActive) {
+        (void)tempStartSample(TEMP_INTF_ONEWIRE, i);
+      }
+    }
+  }
+}
+
 /*! @brief Initialises the temperature sensors
  *  @param [in] pData : pointer to dataset to initialise
  *  @return number of temperature sensors found
@@ -750,28 +761,14 @@ int main(void) {
        * the last temperature sample, start a temperature sample as well.
        */
       if (evtPending(EVT_ECM_TRIG)) {
-        if (sercomExtIntfEnabled() && (numTempSensors > 0)) {
-          for (size_t i = 0; i < NUM_OPA; i++) {
-            if (('o' == pConfig->opaCfg[i].func) &&
-                pConfig->opaCfg[i].opaActive) {
-              (void)tempStartSample(TEMP_INTF_ONEWIRE, i);
-            }
-          }
-        }
+        tempSample(numTempSensors);
         ecmProcessSetTrigger();
         emon32EventClr(EVT_ECM_TRIG);
       }
 
       /* Trigger a temperature sample 1 s before the report is due. */
       if (evtPending(EVT_ECM_PEND_1S)) {
-        if (sercomExtIntfEnabled() && (numTempSensors > 0)) {
-          for (size_t i = 0; i < NUM_OPA; i++) {
-            if (('o' == pConfig->opaCfg[i].func) &&
-                pConfig->opaCfg[i].opaActive) {
-              (void)tempStartSample(TEMP_INTF_ONEWIRE, i);
-            }
-          }
-        }
+        tempSample(numTempSensors);
         emon32EventClr(EVT_ECM_PEND_1S);
       }
 
