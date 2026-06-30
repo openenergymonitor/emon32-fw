@@ -578,9 +578,10 @@ static void transmitData(const Emon32Dataset_t *pSrc, uint32_t *pPkt) {
       }
     }
     for (size_t p = 0; p < NUM_OPA; p++) {
-      const uint8_t func    = pConfig->opaCfg[p].func;
-      const bool    isPulse = ('r' == func) || ('f' == func) || ('b' == func);
-      if (isPulse && pConfig->opaCfg[p].opaActive) {
+      const uint8_t func     = pConfig->opaCfg[p].func;
+      const bool    isPulse  = ('r' == func) || ('f' == func) || ('b' == func);
+      const bool    isAnalog = ('a' == func);
+      if ((isPulse || isAnalog) && pConfig->opaCfg[p].opaActive) {
         *pPkt |= (1u << 1);
         break;
       }
