@@ -23,7 +23,7 @@ void eicSetup(void) {
 
   /* EXTINT[0] is DISABLE_EXT_INTFn */
   portPinMux(GRP_DISABLE_EXTn, PIN_DISABLE_EXTn, PORT_PMUX_PMUXE_A);
-  EIC->CONFIG[0].reg = EIC_CONFIG_FILTEN0 | EIC_CONFIG_SENSE0_FALL;
+  EIC->CONFIG[0].reg = EIC_CONFIG_FILTEN0 | EIC_CONFIG_SENSE0_BOTH;
   EIC->INTENSET.reg  = EIC_INTENSET_EXTINT0;
 }
 
@@ -33,6 +33,8 @@ void irq_handler_eic(void) {
     if (!portPinValue(GRP_DISABLE_EXTn, PIN_DISABLE_EXTn)) {
       /* Disable asynchronously so any onging transactions can complete */
       emon32EventSet(EVT_EXT_DISABLE);
+    } else {
+      emon32EventSet(EVT_PI_SHUTDOWN);
     }
   }
 }

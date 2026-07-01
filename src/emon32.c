@@ -69,6 +69,7 @@ static bool evtPending(EVTSRC_t evt);
 static void pulseConfigure(void);
 void        putchar_(char c);
 static void rfmConfigure(void);
+static void ssd1306IndicateShutdown(void);
 static void ssd1306Setup(void);
 static void tempReadEvt(Emon32Dataset_t *pData, const uint32_t numT);
 static void tempSample(const uint32_t numTempSensors);
@@ -379,6 +380,17 @@ void serialPuts(const char *s) {
     usbCDCPutsBlocking(s);
   }
   uartPutsBlocking(SERCOM_UART, s);
+}
+
+static void ssd1306IndicateShutdown(void) {
+  if (ssd1306Active()) {
+    ssd1306ClearBuffer();
+    ssd1306SetPosition((PosXY_t){.x = 44u, .y = 0u});
+    ssd1306DrawString("emonPi3");
+    ssd1306SetPosition((PosXY_t){.x = 35u, .y = 2u});
+    ssd1306DrawString("Shut down.");
+    ssd1306DisplayUpdate();
+  }
 }
 
 /*! @brief Setup the SSD1306 display, if present. Display a basic message */
@@ -712,6 +724,12 @@ int main(void) {
       if (evtPending(EVT_EXT_DISABLE)) {
         sercomExtIntfDisable();
         emon32EventClr(EVT_EXT_DISABLE);
+      }
+
+      /* Raspberry Pi has shutdown, indicate safe to remove power */
+      if (evtPending(EVT_PI_SHUTDOWN)) {
+        ssd1306IndicateShutdown();
+        emon32EventClr(EVT_PI_SHUTDOWN);
       }
 
       /* 1 ms timer flag */

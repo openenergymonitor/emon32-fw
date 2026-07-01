@@ -9,6 +9,11 @@ typedef struct PosXY_ {
   uint32_t y;
 } PosXY_t;
 
+/*! @brief Indicate if the SSD1306 has been found and initialised
+ *  @return true if active, false otherwise.
+ */
+bool ssd1306Active(void);
+
 /*! @brief Clear the SSD1306 buffer */
 void ssd1306ClearBuffer(void);
 

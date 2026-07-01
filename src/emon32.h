@@ -85,6 +85,7 @@ typedef enum EVTSRC_ {
   EVT_TICK_1kHz       = 1u,
   EVT_ECHO            = 2u,
   EVT_SMP_CFG_START   = 3u,
+  EVT_PI_SHUTDOWN     = 4u,
   EVT_ECM_SET_CMPL    = 8u,
   EVT_TX_RFM          = 9u,
   EVT_OPA_INIT        = 14u,

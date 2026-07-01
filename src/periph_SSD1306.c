@@ -89,7 +89,7 @@ static SSD1306_Status_t bufUpdatePos();
 static SSD1306_Status_t drawChar(const char c);
 static bool             ssd1306I2CActivate(void);
 
-static int32_t displayFound;
+static bool displayFound;
 
 /* Font definition */
 static const uint8_t FONTS[][CHARS_COLS_LENGTH] = {
@@ -241,6 +241,8 @@ static bool ssd1306I2CActivate(void) {
   return true;
 }
 
+bool ssd1306Active(void) { return displayFound; }
+
 void ssd1306ClearBuffer(void) { memset(lineBuffer, 0, LINE_MEM_SIZE); }
 
 SSD1306_Status_t ssd1306DisplayOff(void) {
@@ -345,7 +347,7 @@ SSD1306_Status_t ssd1306Init(Sercom *pSercomI2C) {
 
   ssd1306ClearBuffer();
 
-  displayFound = 1;
+  displayFound = true;
   return SSD1306_SUCCESS;
 }
 
