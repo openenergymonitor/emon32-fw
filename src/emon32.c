@@ -69,7 +69,8 @@ static bool evtPending(EVTSRC_t evt);
 static void pulseConfigure(void);
 void        putchar_(char c);
 static void rfmConfigure(void);
-static void ssd1306IndicateShutdown(void);
+static bool ssd1306IndicateShutdown(void);
+static void ssd1306RefreshTitle(void);
 static void ssd1306Setup(void);
 static void tempReadEvt(Emon32Dataset_t *pData, const uint32_t numT);
 static void tempSample(const uint32_t numTempSensors);
@@ -382,15 +383,51 @@ void serialPuts(const char *s) {
   uartPutsBlocking(SERCOM_UART, s);
 }
 
-static void ssd1306IndicateShutdown(void) {
+static bool ssd1306IndicateShutdown(void) {
+  static uint32_t t_last_ms = 0;
+  static int      t_count   = 0;
+
   if (ssd1306Active()) {
-    ssd1306ClearBuffer();
-    ssd1306SetPosition((PosXY_t){.x = 44u, .y = 0u});
-    ssd1306DrawString("emonPi3");
-    ssd1306SetPosition((PosXY_t){.x = 35u, .y = 2u});
-    ssd1306DrawString("Shut down.");
+
+    /* Update every 1 s */
+    if (1000u > timerMillisDelta(t_last_ms)) {
+      return true;
+    }
+
+    PosXY_t xy = {.x = 6u, .y = 2u};
+    if (0 == t_count) {
+      ssd1306RefreshTitle();
+      t_last_ms = timerMillis();
+      t_count   = 30;
+    }
+    char buffer[24];
+
+    if (1 != t_count) {
+      snprintf_(buffer, 24, "Shutting down: %02d s", t_count);
+    } else {
+      ssd1306RefreshTitle();
+      xy.x = 35u;
+      xy.y = 2u;
+      snprintf_(buffer, 24, "Shut down.");
+    }
+    ssd1306SetPosition(xy);
+    ssd1306DrawString(buffer);
     ssd1306DisplayUpdate();
+
+    t_count--;
+    t_last_ms = timerMillis();
+
+    return (0 == t_count ? false : true);
+
+  } else {
+    return false;
   }
+}
+
+static void ssd1306RefreshTitle(void) {
+  ssd1306ClearBuffer();
+  ssd1306SetPosition((PosXY_t){.x = 44u, .y = 0u});
+  ssd1306DrawString("emonPi3");
 }
 
 /*! @brief Setup the SSD1306 display, if present. Display a basic message */
@@ -414,11 +451,10 @@ static void ssd1306Setup(void) {
       }
     }
 
-    ssd1306SetPosition((PosXY_t){.x = 44u, .y = 0u});
-    ssd1306DrawString("emonPi3");
-    ssd1306SetPosition((PosXY_t){.x = (46u - offset_rev), .y = 1u});
+    ssd1306RefreshTitle();
+    ssd1306SetPosition((PosXY_t){.x = (52u - offset_release), .y = 1u});
     ssd1306DrawString(vInfo.release);
-    ssd1306SetPosition((PosXY_t){.x = (44u - offset_release), .y = 2u});
+    ssd1306SetPosition((PosXY_t){.x = (44u - offset_rev), .y = 2u});
     ssd1306DrawString(vInfo.revision);
 
     ssd1306SetPosition((PosXY_t){.x = 35u, .y = 4u});
@@ -728,8 +764,9 @@ int main(void) {
 
       /* Raspberry Pi has shutdown, indicate safe to remove power */
       if (evtPending(EVT_PI_SHUTDOWN)) {
-        ssd1306IndicateShutdown();
-        emon32EventClr(EVT_PI_SHUTDOWN);
+        if (!ssd1306IndicateShutdown()) {
+          emon32EventClr(EVT_PI_SHUTDOWN);
+        }
       }
 
       /* 1 ms timer flag */

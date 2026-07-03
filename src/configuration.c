@@ -1778,6 +1778,9 @@ void configProcessCmd(void) {
 
   /* Decode on first character in the buffer */
   switch (inBuffer[0]) {
+  case 'h':
+    emon32EventSet(EVT_PI_SHUTDOWN);
+    break;
   case '?':
     /* Print help text */
     serialPuts(helpText);
