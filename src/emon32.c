@@ -70,6 +70,7 @@ static void pulseConfigure(void);
 void        putchar_(char c);
 static void rfmConfigure(void);
 static bool ssd1306IndicateShutdown(void);
+static void ssd1306IndicateStartup(void);
 static void ssd1306RefreshTitle(void);
 static void ssd1306Setup(void);
 static void tempReadEvt(Emon32Dataset_t *pData, const uint32_t numT);
@@ -424,16 +425,8 @@ static bool ssd1306IndicateShutdown(void) {
   }
 }
 
-static void ssd1306RefreshTitle(void) {
-  ssd1306ClearBuffer();
-  ssd1306SetPosition((PosXY_t){.x = 44u, .y = 0u});
-  ssd1306DrawString("emonPi3");
-}
-
-/*! @brief Setup the SSD1306 display, if present. Display a basic message */
-static void ssd1306Setup(void) {
-
-  if (SSD1306_SUCCESS == ssd1306Init(SERCOM_I2CM_EXT)) {
+static void ssd1306IndicateStartup(void) {
+  if (ssd1306Active()) {
     VersionInfo_t vInfo          = configVersion();
     uint32_t      offset_rev     = 0;
     uint32_t      offset_release = 0;
@@ -461,6 +454,19 @@ static void ssd1306Setup(void) {
     ssd1306DrawString("Starting...");
 
     ssd1306DisplayUpdate();
+  }
+}
+
+static void ssd1306RefreshTitle(void) {
+  ssd1306ClearBuffer();
+  ssd1306SetPosition((PosXY_t){.x = 44u, .y = 0u});
+  ssd1306DrawString("emonPi3");
+}
+
+/*! @brief Setup the SSD1306 display, if present. Display a basic message */
+static void ssd1306Setup(void) {
+  if (SSD1306_SUCCESS == ssd1306Init(SERCOM_I2CM_EXT)) {
+    ssd1306IndicateStartup();
   }
 }
 

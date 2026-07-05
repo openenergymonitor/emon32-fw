@@ -30,7 +30,8 @@ typedef enum {
   CONFIRM_ZERO_ACCUM,
   CONFIRM_ZERO_ACCUM_INDIVIDUAL,
   CONFIRM_NVM_OVERWRITE,
-  CONFIRM_RESET
+  CONFIRM_RESET,
+  CONFIRM_SHUTDOWN_PI
   /* CONFIRM_RESTORE_DEFAULTS - Removed pending OEM decision on restore defaults
      confirmation */
 } ConfirmState_t;
@@ -104,6 +105,7 @@ static void     putFloat(float val, const size_t flt_len);
 static uint32_t readWordAtAddress(uintptr_t address);
 static void     resetRequest(void);
 static void     saveToNVM(void);
+static void     shutdownPi(void);
 static void     zeroAccumulators(void);
 
 /*************************************
@@ -1369,6 +1371,14 @@ static void saveToNVM(void) {
   }
 }
 
+static void shutdownPi(void) {
+  serialPuts("> Shut down Raspberry Pi? 'y' to proceed.\r\n");
+  __disable_irq();
+  confirmStartTime_ms = timerMillis();
+  confirmState        = CONFIRM_SHUTDOWN_PI;
+  __enable_irq();
+}
+
 /*! @brief Check if waiting for confirmation and handle if yes
  *  @param [in] c : character received
  *  @return true if character was handled as confirmation, false otherwise
@@ -1503,6 +1513,19 @@ static void handleConfirmation(char c) {
      *   __enable_irq();
      *   break;
      */
+
+  case CONFIRM_SHUTDOWN_PI:
+    if ('y' == c) {
+      serialPuts("    - Shutting down.\r\n");
+      emon32EventSet(EVT_PI_SHUTDOWN);
+    } else {
+      serialPuts("    - Cancelled.\r\n");
+    }
+    __disable_irq();
+    confirmState        = CONFIRM_IDLE;
+    confirmStartTime_ms = 0;
+    __enable_irq();
+    break;
 
   case CONFIRM_IDLE:
     /* Not waiting for confirmation, ignore */
@@ -1779,7 +1802,7 @@ void configProcessCmd(void) {
   /* Decode on first character in the buffer */
   switch (inBuffer[0]) {
   case 'h':
-    emon32EventSet(EVT_PI_SHUTDOWN);
+    shutdownPi();
     break;
   case '?':
     /* Print help text */
