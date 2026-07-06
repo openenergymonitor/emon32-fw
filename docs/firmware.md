@@ -1,7 +1,7 @@
 # Firmware
 
 ```{tip}
-Most users do not need to compile their own firmware. Pre-built firmware can be downloaded from GitHub.
+Most users do not need to compile their own firmware. Pre-built firmware can be downloaded from [GitHub](https://github.com/openenergymonitor/emon32-fw/releases).
 ```
 
 ## Updating firmware
@@ -23,12 +23,13 @@ The easiest way to update the emonPi3's firmware is to use the firmware upload t
 
 To update the emonPi3 using the command line, you can use the [BOSSA](https://github.com/shumatech/BOSSA) application. The exact port name will depend on your system, `/dev/ttyS0` is the port for the Raspberry Pi. The following steps are taken:
 
-1. Open a serial connection using, for example, `minicom` to `/dev/ttyS0` (`minicom -D /dev/ttyS0 -b 115200`)
-2. Enter 'e' and then press Enter.
-3. You will be prompted to reboot to enter the bootloader. Any unsaved configuration changes at this point will be lost. Press 'y' to continue, or any other key to cancel.
-4. The emonPi3's LED will slowly pulse green indicating it is in the bootloader.
-5. To check the bootloader is responsive, run `bossac -p /dev/ttyS0 -i`.
-6. To upload the compiled firmare, run `bossac -p /dev/ttyS0 -e -w -v -R --offset=0x2000 path/to/bin`.
+- Connect to the emonPi3 via SSH, it's disabled by default, use the push button & LCD to enabled it, see [emonSD download page](https://docs.openenergymonitor.org/emonsd/download.html) for credentials
+- Open a serial connection using, for example, `minicom` to `/dev/ttyAMA0` (`minicom -D /dev/ttyAMA0 -b 115200`)
+- Enter 'e' and then press Enter.
+- You will be prompted to reboot to enter the bootloader. Any unsaved configuration changes at this point will be lost. Press 'y' to continue, or any other key to cancel.
+- The emonPi3's LED will slowly pulse green indicating it is in the bootloader.
+- To check the bootloader is responsive, run `bossac -p /dev/ttyAMA0 -i`.
+- To upload the compiled firware, run `bossac -p /dev/ttyAMA0 -e -w -v -R --offset=0x2000 path/to/.bin`.
 
 If BOSSA is not installed, it can be installed by:
 
