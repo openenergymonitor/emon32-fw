@@ -1373,6 +1373,9 @@ static void saveToNVM(void) {
 
 static void shutdownPi(void) {
   serialPuts("> Shut down Raspberry Pi? 'y' to proceed.\r\n");
+  if (1u == getBoardRevision()) {
+    serialPuts("> This will not remove power, only indicate when safe.\r\n");
+  }
   __disable_irq();
   confirmStartTime_ms = timerMillis();
   confirmState        = CONFIRM_SHUTDOWN_PI;
@@ -1743,6 +1746,7 @@ void configProcessCmd(void) {
       " - e           : enter bootloader\r\n"
       " - f<n>        : line frequency (Hz)\r\n"
       " - g<n>        : set network group (default = 210)\r\n"
+      " - h           : safe power off countdown (will not remove power)\r\n"
       " - j<n>        : JSON serial format. n = 0: OFF, n = 1: ON\r\n"
       " - k<x> <a> <y.y> <z.z> v1 v2 : Configure an analog input\r\n"
       "   - x:        : channel (1-3 -> V; 4... -> CT)\r\n"
@@ -1801,9 +1805,6 @@ void configProcessCmd(void) {
 
   /* Decode on first character in the buffer */
   switch (inBuffer[0]) {
-  case 'h':
-    shutdownPi();
-    break;
   case '?':
     /* Print help text */
     serialPuts(helpText);
@@ -1843,6 +1844,9 @@ void configProcessCmd(void) {
       rfmSetGroupID(config.baseCfg.dataGrp);
       unsavedChange = true;
     }
+    break;
+  case 'h':
+    shutdownPi();
     break;
   case 'j':
     if (configureJSON()) {
