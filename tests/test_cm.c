@@ -93,8 +93,8 @@ SampleSet_t     smpProc;
 unsigned int    smpIdx = 0;
 ECMDataset_t   *dataset;
 
-volatile RawSampleSetPacked_t *volatile smpRaw[2];
-wave_t wave[VCT_TOTAL];
+volatile RawSampleSetPacked_t *smpRaw[2];
+wave_t                         wave[VCT_TOTAL];
 
 static uint32_t timeMicros(void) { return tick; }
 
@@ -207,14 +207,8 @@ int main(int argc, char *argv[]) {
 
   pEcmCfg = ecmConfigGet();
 
-  /* ecmDataBuffer returns a pointer to the buffer which the DMA is putting
-   * data into.
-   */
   memset(&smpProc, 0, sizeof(smpProc));
-  smpRaw[0] = ecmDataBuffer();
-  ecmDataBufferSwap();
-  smpRaw[1] = ecmDataBuffer();
-  ecmDataBufferSwap();
+  ecmDataBuffer(&smpRaw[0], &smpRaw[1]);
 
   pEcmCfg->reportCycles = (unsigned int)(REPORT_TIME * MAINS_FREQ);
   pEcmCfg->mainsFreq    = 50;
@@ -336,7 +330,7 @@ int main(int argc, char *argv[]) {
   printf("  Dynamic tests...\n\n");
 
   printf("    - Phase 0°, PF = 1 ...    ");
-  dynamicRun(4, 0, &noise, false);
+  dynamicRun(4, 11, &noise, false);
   if (!checkDataset(dataset, 1.0f)) {
     return 1;
   }
