@@ -52,6 +52,8 @@ static void currentToWave(double IRMS, int scaleCT, double phase, wave_t *w);
  */
 static double degToRad(const double deg);
 
+static bool checkCTCurrents(const double *gold);
+
 static void dynamicRun(int reports, int prtReport, noise_t *noise, bool noVAC);
 
 /*! @brief Generates a Q11 [0, 4095] wave with configurable parameters
@@ -95,6 +97,7 @@ ECMDataset_t   *dataset;
 
 volatile RawSampleSetPacked_t *smpRaw[2];
 wave_t                         wave[VCT_TOTAL];
+static uint8_t                 rawToLogicalCT[NUM_CT];
 
 static uint32_t timeMicros(void) { return tick; }
 
@@ -129,25 +132,47 @@ static bool checkDataset(ECMDataset_t *pData, float pF) {
   return true;
 }
 
+static bool checkCTCurrents(const double *gold) {
+  for (size_t i = 0; i < NUM_CT; i++) {
+    const double err = fabs((double)dataset->CT[i].rmsI - gold[i]);
+    if (err > 0.05) {
+      printf("\nCT%zu Irms Gold: %.2f Test: %.2f\n", i + 1, gold[i],
+             dataset->CT[i].rmsI);
+      return false;
+    }
+  }
+  return true;
+}
+
 static double degToRad(const double deg) { return deg * (M_PI / 180.0); }
 
 static void dynamicRun(int reports, int prtReport, noise_t *noise, bool noVAC) {
   int reportNum = 0;
 
   while (reportNum < reports) {
+    const size_t stride =
+        ecmConfigGet()->ainActive[0] ? (VCT_TOTAL + NUM_AIN) : VCT_TOTAL;
+    uint16_t *raw = (uint16_t *)smpRaw[smpIdx];
+
     for (int j = 0; j < 2; j++) {
-      for (int i = 0; i < VCT_TOTAL; i++) {
+      for (size_t i = 0; i < stride; i++) {
+        if (i == VCT_TOTAL) {
+          raw[(j * stride) + i] = (1u << (ADC_RES_BITS - 1u));
+          continue;
+        }
+
+        wave_t *pWave =
+            (i < NUM_V) ? &wave[i] : &wave[NUM_V + rawToLogicalCT[i - NUM_V]];
+
         if (noVAC && (i < NUM_V)) {
-          smpRaw[smpIdx]->samples[j].smp[i] = 0;
+          raw[(j * stride) + i] = 0;
         } else {
-          smpRaw[smpIdx]->samples[j].smp[i] = generateWave(&wave[i], tick);
-          smpRaw[smpIdx]->samples[j].smp[i] +=
+          raw[(j * stride) + i] = generateWave(pWave, tick);
+          raw[(j * stride) + i] +=
               (noise->en ? (noise->alpha == 0.0) ? (int)randNormal(noise)
                                                  : (int)randSkewNormal(noise)
                          : 0);
         }
-        smpRaw[smpIdx]->samples[j].smp[VCT_TOTAL + NUM_AIN - 1u] =
-            (1u << (ADC_RES_BITS - 1u));
         tick += SMP_TICK;
       }
     }
@@ -238,14 +263,11 @@ int main(int argc, char *argv[]) {
   pEcmCfg->correction.valid = false;
   pEcmCfg->correction.gain  = (1 << 11);
 
-  /* Remapping for analog CT inputs. This maps the 0-indexed CT physical pin to
-   * the logical pin. For example, physical CT1 is the 4th CT sampled so:
-   * ainRemap[0] = 3. */
-  const int_fast8_t ainRemap[NUM_CT + NUM_AIN] = {3, 4, 7, 1,  2, 11, 5,
-                                                  6, 8, 9, 10, 0, 12};
+  extern const uint8_t ainRemap[NUM_CT + NUM_AIN];
 
   for (int i = 0; i < NUM_CT; i++) {
-    pEcmCfg->mapCTLog[i] = ainRemap[i];
+    pEcmCfg->mapCTLog[i]        = ainRemap[i];
+    rawToLogicalCT[ainRemap[i]] = i;
   }
 
   ecmConfigInit();
@@ -281,6 +303,7 @@ int main(int argc, char *argv[]) {
     printf("                        sigma : %f\n", noise.sigma);
     printf("                        alpha : %f\n", noise.alpha);
   }
+  printf("    - Analog          : %s\n", pEcmCfg->ainActive[0] ? "Yes" : "no");
   printf("\n");
 
   /* ============ START : HALF BAND TEST ============ */
@@ -329,8 +352,24 @@ int main(int argc, char *argv[]) {
    */
   printf("  Dynamic tests...\n\n");
 
+  printf("    - CT ordering ...         ");
+  double goldCurrent[NUM_CT];
+  for (size_t i = 0; i < NUM_CT; i++) {
+    goldCurrent[i] = (double)(i + 1u);
+    currentToWave(goldCurrent[i], 100, 0, &wave[NUM_V + i]);
+  }
+  dynamicRun(4, -1, &noise, false);
+  if (!checkCTCurrents(goldCurrent)) {
+    return 1;
+  }
+  printf("Done!\n");
+
+  for (size_t i = NUM_V; i < VCT_TOTAL; i++) {
+    currentToWave(2.0, 100, 0, &wave[i]);
+  }
+
   printf("    - Phase 0°, PF = 1 ...    ");
-  dynamicRun(4, 11, &noise, false);
+  dynamicRun(4, -1, &noise, false);
   if (!checkDataset(dataset, 1.0f)) {
     return 1;
   }

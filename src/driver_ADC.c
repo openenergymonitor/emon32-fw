@@ -74,9 +74,10 @@ static void adcConfigureDMAC(const bool ainActive) {
                                ? ((VCT_TOTAL + NUM_AIN) * OVERSAMPLING_RATIO)
                                : (VCT_TOTAL * OVERSAMPLING_RATIO);
 
-    /* DSTADDR is the last address, rather than first! */
-    dmacDesc[i]->DSTADDR.reg = (uint32_t)adcBuffer[i] +
-                               (2 * (VCT_TOTAL + NUM_AIN) * OVERSAMPLING_RATIO);
+    /* DSTADDR is the end address, rather than first. Keep it matched to the
+     * active scan length because AIN-disabled captures are densely packed.
+     */
+    dmacDesc[i]->DSTADDR.reg = (uint32_t)adcBuffer[i] + (2u * btcnt);
     dmacDesc[i]->SRCADDR.reg = (uint32_t)&ADC->RESULT;
     /* Capture a full sample set before interrupt to start downsampling */
     dmacDesc[i]->BTCNT.reg   = btcnt;
