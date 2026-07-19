@@ -420,6 +420,7 @@ static bool configureAssumed(void) {
     ECMCfg_t *pEcmCfg          = ecmConfigGet();
     pEcmCfg->assumedVrms       = qfp_uint2float(convU.val.u32);
     config.baseCfg.assumedVrms = convU.val.u16;
+    printf_("assumedV = %d\r\n", config.baseCfg.assumedVrms);
     return true;
   }
   return false;

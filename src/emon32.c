@@ -445,7 +445,7 @@ static void ssd1306IndicateStartup(void) {
     }
 
     ssd1306RefreshTitle();
-    ssd1306SetPosition((PosXY_t){.x = (52u - offset_release), .y = 1u});
+    ssd1306SetPosition((PosXY_t){.x = (47u - offset_release), .y = 1u});
     ssd1306DrawString(vInfo.release);
     ssd1306SetPosition((PosXY_t){.x = (44u - offset_rev), .y = 2u});
     ssd1306DrawString(vInfo.revision);
