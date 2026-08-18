@@ -55,6 +55,12 @@ ConvUint_t utilAtoui(const char *pBuf, ITOA_BASE_t base);
  */
 bool utilCharPrintable(const char c);
 
+/*! @brief Calculate the absolute value of a float
+ *  @param [in] f : float to convert
+ *  @return absolute value of f
+ */
+float utilFabs(const float f);
+
 /*! @brief Convert float to null terminated base 10 string, with 2 dp.
  *         precision.
  *  @param [in] pBuf : pointer to string buffer, at least 11 characters

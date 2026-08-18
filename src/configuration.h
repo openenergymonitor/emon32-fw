@@ -6,15 +6,22 @@
 
 #include "board_def.h"
 
-typedef struct AutoConfig_ {
+typedef struct CalibConfig_ {
   bool    inProgress; /* true when a configuration is in progress. */
   bool    isCT;       /* Indicate if channel is CT or V. */
   uint8_t ch;         /* channel that's being configured. */
   uint8_t iter;       /* Iteration count. */
   char    mode;       /* amplitude or phase configuration. */
-  float   target;     /* target amplitude value. */
-  float   accum;      /* accumulated value. */
-} AutoConfig_t;
+  /* Amplitude calibration */
+  float   target; /* target amplitude value. */
+  float   accum;  /* accumulated value. */
+  /* Phase calibration */
+  float   phi;    /* Current phase. */
+  float   lastPF; /* Previous power factor. */
+  float   incr;   /* Phase increment. */
+  bool    defer;  /* Defer this sample set. */
+  bool    first;  /* Need to take a π/2 sample first. */
+} CalibConfig_t;
 
 /* Configurable options. All the structs are packed to allow simple write to
  * EEPROM as a contiguous set.
@@ -100,7 +107,7 @@ typedef struct VersionInfo_ {
 /*! @brief Get the status of any auto configuration in progress.
  *  @return pointer to the auto configuration struct.
  */
-AutoConfig_t *configAutoStatus(void);
+CalibConfig_t *configAutoStatus(void);
 
 /*! @brief Add a character to the command stream
  *  @param [in] c : character to add

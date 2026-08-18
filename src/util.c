@@ -133,6 +133,8 @@ bool utilCharPrintable(const char c) {
   return (((c >= 32) && (c <= 126)) || ('\r' == c) || ('\n' == c));
 }
 
+float utilFabs(const float f) { return (f < 0.0f) ? qfp_fmul(f, -1.0f) : f; }
+
 size_t utilFtoa(char *pBuf, float val) {
   char     buf[16]; /* Enough for -2147483648.99 + null */
   char    *p = &buf[15];

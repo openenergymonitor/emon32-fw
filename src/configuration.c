@@ -70,7 +70,7 @@ static void      configInitialiseNVM(void);
 static uint16_t  configTimeToCycles(const float time, const uint32_t mainsFreq);
 static bool      configureVCTChannel(void);
 static bool      configureAssumed(void);
-static bool      configureAuto(void);
+static bool      configureCalib(void);
 static void      configureAccumulatorSet(void);
 static void      configureBackup(void);
 static bool      configureDatalog(void);
@@ -153,9 +153,9 @@ static void printfError(const char *fmt, ...) {
 static Emon32Config_t config;
 static Emon32Config_t config_nvm;
 static char           inBuffer[IN_BUFFER_W];
-static CmdArgs_t     cmdArgs;
+static CmdArgs_t      cmdArgs;
 
-static AutoConfig_t autocfg = {0};
+static CalibConfig_t calibcfg = {0};
 
 /* Async confirmation state */
 static volatile ConfirmState_t confirmState        = CONFIRM_IDLE;
@@ -448,7 +448,10 @@ static bool configureAssumed(void) {
   return true;
 }
 
-static bool configureAuto(void) {
+static bool configureCalib(void) {
+  CmdArgs_t args = inBufferTok();
+
+  // REVISIT argc
   if (3u != cmdArgs.argc) {
     serialPutsError("Auto calibration requires channel, mode, and value.");
     return false;
@@ -460,14 +463,14 @@ static bool configureAuto(void) {
     return false;
   }
   if (0 == convU.val.u8 || convU.val.u8 > VCT_TOTAL) {
-    printfError("OPA channel out of range (valid: 1-%d).", VCT_TOTAL);
+    printfError("Channel out of range (valid: 1-%d).", VCT_TOTAL);
     return false;
   }
 
-  if (autocfg.inProgress) {
-    printfError("Automatic %s configuration in progress on channel %d.",
-                ((autocfg.mode == 'a') ? "amplitude" : "phase"),
-                (autocfg.ch + 1u));
+  if (calibcfg.inProgress) {
+    printfError("%s calibration in progress on channel %d.",
+                ((calibcfg.mode == 'a') ? "Amplitude" : "Phase"),
+                (calibcfg.ch + 1u));
     return false;
   }
 
@@ -475,7 +478,7 @@ static bool configureAuto(void) {
   const char     mode = cmdArgs.argv[1][0];
 
   if (('a' != mode) && ('p' != mode)) {
-    serialPutsError("Automatic calibration must be a or p.");
+    serialPutsError("Calibration mode must be a or p.");
     return false;
   }
 
@@ -485,16 +488,19 @@ static bool configureAuto(void) {
       printfError("CT%d is not active.\r\n", ch + 1u - NUM_V);
       return false;
     }
-    autocfg.isCT = true;
-    autocfg.ch   = ch - NUM_V;
+    calibcfg.isCT = true;
+    calibcfg.ch   = ch - NUM_V;
   } else {
     if (!config.voltageCfg[ch].vActive) {
       printfError("V%d is not active.\r\n", ch + 1u);
       return false;
     }
-    autocfg.isCT = false;
-    autocfg.ch   = ch;
+    calibcfg.isCT = false;
+    calibcfg.ch   = ch;
   }
+
+  calibcfg.mode = mode;
+  calibcfg.iter = 0u;
 
   if ('a' == mode) {
     ConvFloat_t convF = utilAtof(cmdArgs.argv[2]);
@@ -503,25 +509,40 @@ static bool configureAuto(void) {
       return false;
     }
 
-    autocfg.mode   = 'a';
-    autocfg.target = convF.val;
-    autocfg.iter   = 0u;
-    autocfg.accum  = 0.0f;
+    calibcfg.target = convF.val;
+    calibcfg.accum  = 0.0f;
 
-    autocfg.inProgress = true;
+    calibcfg.inProgress = true;
     serialPuts("> Calibration in progress.\r\n");
     return true;
   }
 
   if ('p' == mode) {
-    /* Revisit : automatic phase calibration */
+
+    if (ch < NUM_V) {
+      serialPutsError("Phase calibration only for CT channels.");
+      return false;
+    }
+
+    calibcfg.incr  = 1.0f;
+    calibcfg.phi   = 90.0f;
+    calibcfg.defer = true;
+    calibcfg.first = true;
+
+    ECMCfg_t *pEcmCfg = ecmConfigGet();
+
+    pEcmCfg->ctCfg[ch - NUM_V].phCal = 90.0f;
+    ecmConfigChannel(ch);
+
+    calibcfg.inProgress = true;
+    serialPuts("> Phase calibration in progress.\r\n");
     return false;
   }
 
   return false;
 }
 
-AutoConfig_t *configAutoStatus(void) { return &autocfg; }
+CalibConfig_t *configAutoStatus(void) { return &calibcfg; }
 
 static void configureAccumulatorSet(void) {
   char   ep = cmdArgs.argv[0][1];
@@ -758,8 +779,15 @@ static bool configure1WAddr(void) {
     return false;
   case 'r':
     return configure1WRemap();
-  case '1': case '2': case '3': case '4': case '5':
-  case '6': case '7': case '8': case '9':
+  case '1':
+  case '2':
+  case '3':
+  case '4':
+  case '5':
+  case '6':
+  case '7':
+  case '8':
+  case '9':
     return configure1WSave();
   default:
     return false;
@@ -2032,7 +2060,7 @@ void configProcessCmd(void) {
     shutdownPi();
     break;
   case 'i':
-    unsavedChange = configureAuto();
+    unsavedChange = configureCalib();
     break;
   case 'j':
     unsavedChange = configureJSON();

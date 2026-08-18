@@ -43,13 +43,13 @@ typedef struct TxBlink_ {
   uint32_t timeBlink;  /* Time to blink LED for */
 } TxBlink_t;
 
-typedef struct AutoCfgP_ {
+typedef struct CalibCfgP_ {
   float  mean;
   float  target;
   float  newCal;
   size_t index;
   bool   isCT;
-} AutoCfgP_t;
+} CalibCfgP_t;
 
 /*************************************
  * Persistent state variables
@@ -75,8 +75,9 @@ static void datasetAddPulse(Emon32Dataset_t *pDst);
 static void ecmDmaCallback(void);
 static void evtKiloHertz(void);
 static bool evtPending(EVTSRC_t evt);
-static void handleAutoCfg(const ECMDataset_t *pECM);
-static void handleAutoCfgPrintA(const AutoCfgP_t *pAuto);
+static void handleCalibCfg(const ECMDataset_t *pECM);
+static void handleCalibCfgPrintA(const CalibCfgP_t *pCal);
+static void handleCalibCfgPrintP(const float phi, const size_t idx);
 static void pulseConfigure(void);
 static void rfmConfigure(void);
 static bool ssd1306IndicateShutdown(void);
@@ -338,70 +339,142 @@ static void evtKiloHertz(void) {
  */
 static bool evtPending(EVTSRC_t evt) { return (evtPend & (1u << evt)) != 0; }
 
-static void handleAutoCfg(const ECMDataset_t *pECM) {
-  AutoConfig_t *autocfg = configAutoStatus();
-  if (autocfg->inProgress) {
-    if (autocfg->mode == 'a') {
+static void handleCalibCfg(const ECMDataset_t *pECM) {
+  CalibConfig_t *calibcfg = configAutoStatus();
+  if (calibcfg->inProgress) {
+    if (calibcfg->mode == 'a') {
 
-      autocfg->accum =
-          autocfg->isCT ? qfp_fadd(autocfg->accum, pECM->CT[autocfg->ch].rmsI)
-                        : qfp_fadd(autocfg->accum, pECM->rmsV[autocfg->ch]);
-      autocfg->iter++;
+      calibcfg->accum =
+          calibcfg->isCT
+              ? qfp_fadd(calibcfg->accum, pECM->CT[calibcfg->ch].rmsI)
+              : qfp_fadd(calibcfg->accum, pECM->rmsV[calibcfg->ch]);
+      calibcfg->iter++;
 
-      if (AUTOCAL_AVG == autocfg->iter) {
+      if (CAL_AMPL_AVG == calibcfg->iter) {
         ECMCfg_t   *ecmCfg = ecmConfigGet();
-        const float mean   = qfp_fdiv(autocfg->accum, (float)AUTOCAL_AVG);
+        const float mean   = qfp_fdiv(calibcfg->accum, (float)CAL_AMPL_AVG);
 
         if (mean < 0.25f) {
-          autocfg->inProgress = false;
+          calibcfg->inProgress = false;
           serialPuts("> Measured input too low, calibration failed.\r\n");
           return;
         }
 
-        const float ratio  = qfp_fdiv(autocfg->target, mean);
-        AutoCfgP_t  result = {.index  = autocfg->ch + 1u,
-                              .isCT   = autocfg->isCT,
+        const float ratio  = qfp_fdiv(calibcfg->target, mean);
+        CalibCfgP_t result = {.index  = calibcfg->ch + 1u,
+                              .isCT   = calibcfg->isCT,
                               .mean   = mean,
-                              .target = autocfg->target,
+                              .target = calibcfg->target,
                               .newCal = 0.0f};
 
-        if (autocfg->isCT) {
+        if (calibcfg->isCT) {
           const float newCal =
-              qfp_fmul(ratio, pConfig->ctCfg[autocfg->ch].ctCal);
-          pConfig->ctCfg[autocfg->ch].ctCal   = newCal;
-          ecmCfg->ctCfg[autocfg->ch].ctCalRaw = newCal;
-          ecmConfigChannel(autocfg->ch + NUM_V);
+              qfp_fmul(ratio, pConfig->ctCfg[calibcfg->ch].ctCal);
+          pConfig->ctCfg[calibcfg->ch].ctCal   = newCal;
+          ecmCfg->ctCfg[calibcfg->ch].ctCalRaw = newCal;
+          ecmConfigChannel(calibcfg->ch + NUM_V);
 
           result.newCal = newCal;
-          handleAutoCfgPrintA(&result);
+          handleCalibCfgPrintA(&result);
         } else {
           const float newCal =
-              qfp_fmul(ratio, pConfig->voltageCfg[autocfg->ch].voltageCal);
-          pConfig->voltageCfg[autocfg->ch].voltageCal = newCal;
-          ecmCfg->vCfg[autocfg->ch].voltageCalRaw     = newCal;
-          ecmConfigChannel(autocfg->ch);
+              qfp_fmul(ratio, pConfig->voltageCfg[calibcfg->ch].voltageCal);
+          pConfig->voltageCfg[calibcfg->ch].voltageCal = newCal;
+          ecmCfg->vCfg[calibcfg->ch].voltageCalRaw     = newCal;
+          ecmConfigChannel(calibcfg->ch);
 
           result.newCal = newCal;
-          handleAutoCfgPrintA(&result);
+          handleCalibCfgPrintA(&result);
         }
-        autocfg->inProgress = false;
+        calibcfg->inProgress = false;
       }
+    } else { /* Phase calibration */
+      ECMCfg_t   *pEcmCfg = ecmConfigGet();
+      const float lastPF  = calibcfg->lastPF;
+      const float thisPF  = pECM->CT[calibcfg->ch].pf;
+
+      if (calibcfg->defer) {
+        calibcfg->defer = false;
+        return;
+      }
+
+      calibcfg->iter++;
+      const float pfDelta    = qfp_fsub(lastPF, thisPF);
+      const float pfDeltaAbs = utilFabs(pfDelta);
+      float       phiNxt;
+
+      if (calibcfg->iter > CAL_PHASE_MAX_ITER ||
+          pfDeltaAbs <= CAL_PHASE_PF_TOL) {
+
+        phiNxt = calibcfg->phi - 90.0f;
+
+        pConfig->ctCfg[calibcfg->ch].phase = phiNxt;
+        pEcmCfg->ctCfg[calibcfg->ch].phCal = phiNxt;
+        ecmConfigChannel(calibcfg->ch + NUM_V);
+        calibcfg->inProgress = false;
+        handleCalibCfgPrintP(phiNxt, calibcfg->ch);
+
+        return;
+      }
+
+      if (calibcfg->first) {
+        calibcfg->first  = false;
+        calibcfg->lastPF = thisPF;
+        phiNxt           = qfp_fadd(calibcfg->phi, calibcfg->incr);
+
+        calibcfg->phi                      = phiNxt;
+        pEcmCfg->ctCfg[calibcfg->ch].phCal = phiNxt;
+        ecmConfigChannel(calibcfg->ch + NUM_V);
+        return;
+      }
+
+      bool pfCrossing   = qfp_fmul(lastPF, thisPF) < 0.0f;
+      bool pfAbsGreater = (calibcfg->lastPF < thisPF);
+
+      if (!pfCrossing && pfAbsGreater) {
+        if (pfAbsGreater) {
+          /* Going in the wrong direction. */
+          calibcfg->incr = qfp_fmul(calibcfg->incr, -1.0f);
+          phiNxt = qfp_fadd(calibcfg->phi, qfp_fmul(calibcfg->incr, 2.0f));
+        } else {
+          phiNxt = qfp_fadd(calibcfg->phi, calibcfg->incr);
+        }
+      } else {
+        /* Crossed PF == 0, reverse and reduce step size */
+        calibcfg->incr = qfp_fmul(calibcfg->incr, -0.5f);
+        phiNxt         = qfp_fadd(calibcfg->phi, calibcfg->incr);
+      }
+
+      const uint32_t prevIV = pEcmCfg->ctCfg[calibcfg->ch].idxInterpolateV;
+      pEcmCfg->ctCfg[calibcfg->ch].phCal = phiNxt;
+      ecmConfigChannel(calibcfg->ch + NUM_V);
+
+      /* If the interpolation position has changed, defer next sample */
+      const uint32_t thisIV = pEcmCfg->ctCfg[calibcfg->ch].idxInterpolateV;
+      calibcfg->defer       = prevIV != thisIV;
     }
   }
 }
 
-static void handleAutoCfgPrintA(const AutoCfgP_t *pAuto) {
-  printf_("> Finished calibration for %s%d.\r\n", (pAuto->isCT ? "CT" : "V"),
-          pAuto->index);
-  printf_("  - Measured %sRMS  : ", (pAuto->isCT ? "I" : "V"));
-  putFloat(pAuto->mean, 0);
-  printf_(" %s.\r\n", (pAuto->isCT ? "A" : "V"));
-  printf_("  - Actual %sRMS  : ", (pAuto->isCT ? "I" : "V"));
-  putFloat(pAuto->target, 0);
-  printf_(" %s.\r\n", (pAuto->isCT ? "A" : "V"));
+static void handleCalibCfgPrintA(const CalibCfgP_t *pCal) {
+  printf_("> Finished calibration for %s%d.\r\n", (pCal->isCT ? "CT" : "V"),
+          pCal->index);
+  printf_("  - Measured %sRMS  : ", (pCal->isCT ? "I" : "V"));
+  putFloat(pCal->mean, 0);
+  printf_(" %s.\r\n", (pCal->isCT ? "A" : "V"));
+  printf_("  - Actual %sRMS  : ", (pCal->isCT ? "I" : "V"));
+  putFloat(pCal->target, 0);
+  printf_(" %s.\r\n", (pCal->isCT ? "A" : "V"));
   serialPuts("  - New calibration: ");
-  putFloat(pAuto->newCal, 0);
+  putFloat(pCal->newCal, 0);
   serialPuts(".\r\n");
+}
+
+static void handleCalibCfgPrintP(const float phi, const size_t idx) {
+  printf_("> Finished phase calibration for CT%d\r\n.", idx);
+  serialPuts("  - New phase calibration: ");
+  putFloat(phi, 0);
+  serialPuts("\r\n");
 }
 
 /*! @brief Configure any pulse counter interfaces */
@@ -965,7 +1038,7 @@ int main(void) {
         cumulativeProcess(&nvmCumulative, &dataset,
                           pConfig->baseCfg.epDeltaStore);
 
-        handleAutoCfg(dataset.pECM);
+        handleCalibCfg(dataset.pECM);
 
         /* Blink the STATUS LED, and clear the event. */
         uiLedColour(LED_RED);
