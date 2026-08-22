@@ -5,7 +5,7 @@
 The emonPi3 supports temperature sensing with [DS18B20 temperature sensors](../electricity-monitoring/temperature/DS18B20-temperature-sensing.md). These are small temperature sensors with a 12-bit ADC and a digital output all in the sensor itself. Communication is over a OneWire bus and requires no additional components. The sensors have a quoted accuracy of ±0.5°C in the range -10°C to +85°C.
 
 ```{tip}
-We have tested up to 6 temperature sensors connected at once, the OneWire bus should however support more than this.
+We have tested up to 8 temperature sensors connected at once, the OneWire bus should however support more than this.
 ```
 
 DS18B20 temperature sensors are connected via the labelled pluggable terminal blocks (multiple sensors can be connected to each temperature input, e.g using a 6x sensor breakout board). *Please note that temperature sensing is not broken out on the RJ45 connector which is for voltage sensing and power only.*
@@ -15,11 +15,19 @@ GND (black), DATA (yellow), 3.3V (red), left to right, repeated for each of the 
 
 ![emonpi2_temperature_sensing.JPG](img/emonpi2_temperature_sensing.JPG)
 
-The function of the emonPi3 terminal blocks is configured in software (see the [configuration information](./configuration.md)). The default configuration is for both inputs to be temperature sensor imputs.
+The function of the emonPi3 terminal blocks is configured in software (see the [configuration information](./configuration.md)). The default configuration for OPA1 and OPA2 is to be temperature sensor inputs.
 
 ![emonPi2_temperature_inputs.png](img/emonPi2_temperature_inputs.png)
 
-The DS18B20 input is connected to GPIO17 on the RaspberryPi via the GPIO connection header. It is also connected to the microcontroller for use in transmitter mode as part of an emonTx6.
+### Error Indication
+
+The following temperature readings indicate errors or invalid readings:
+
+- 300°C: no sensor has ever been found on this input.
+- 302°C: sensor returned out of range reading (less than -55°C or greater than 125°C).
+- 304°C: no data received or bad checksum.
+
+These error codes are [defined](https://docs.openenergymonitor.org/electricity-monitoring/temperature/DS18B20-temperature-sensing.html) for OpenEnergyMonitor firmware.
 
 ## Pulse counting
 
