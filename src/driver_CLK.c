@@ -1,9 +1,11 @@
+#include "driver_CLK.h"
+#include "board_def.h"
 #include "driver_SAMD.h"
 #include "emon32_samd.h"
 #include "fuses.h"
 
 static inline void SYNC_DFLL(void) {
-  while (0 == (SYSCTRL->PCLKSR.reg & SYSCTRL_PCLKSR_DFLLRDY))
+  while (!SYSCTRL->PCLKSR.bit.DFLLRDY)
     ;
 }
 
@@ -17,7 +19,7 @@ void clkSetup(void) {
 
   /* Disable BOD during configuration to avoid spurious reset */
   SYSCTRL->BOD33.bit.ENABLE = 0;
-  while (!(SYSCTRL->PCLKSR.reg & SYSCTRL_PCLKSR_B33SRDY))
+  while (!SYSCTRL->PCLKSR.bit.B33SRDY)
     ;
 
   /* Configure BOD to watch the system voltage @3V3
@@ -28,20 +30,20 @@ void clkSetup(void) {
       SYSCTRL_BOD33_LEVEL(48) | SYSCTRL_BOD33_ACTION_NONE | SYSCTRL_BOD33_HYST;
 
   SYSCTRL->BOD33.bit.ENABLE = 1;
-  while (!(SYSCTRL->PCLKSR.reg & SYSCTRL_PCLKSR_B33SRDY))
+  while (!SYSCTRL->PCLKSR.bit.B33SRDY)
     ;
 
   /* PCLKSR.BOD33DET is 1 when the voltage is too low */
-  while (SYSCTRL->PCLKSR.reg & SYSCTRL_PCLKSR_BOD33DET)
+  while (SYSCTRL->PCLKSR.bit.BOD33DET)
     ;
 
   /* Now at ~3V3, set BOD33 to reset the micro on brown out */
   SYSCTRL->BOD33.bit.ENABLE = 0;
-  while (!(SYSCTRL->PCLKSR.reg & SYSCTRL_PCLKSR_B33SRDY))
+  while (!SYSCTRL->PCLKSR.bit.B33SRDY)
     ;
   SYSCTRL->BOD33.reg |= SYSCTRL_BOD33_ACTION_RESET;
   SYSCTRL->BOD33.bit.ENABLE = 1;
-  while (!(SYSCTRL->PCLKSR.reg & SYSCTRL_PCLKSR_B33SRDY))
+  while (!SYSCTRL->PCLKSR.bit.B33SRDY)
     ;
 
   /* Ensure the bootloader is protected, enabled if not */
@@ -63,7 +65,7 @@ void clkSetup(void) {
   SYSCTRL->OSC32K.reg = SYSCTRL_OSC32K_CALIB(samdCalibration(CAL_OSC32K)) |
                         SYSCTRL_OSC32K_STARTUP(0x6u) | SYSCTRL_OSC32K_EN32K |
                         SYSCTRL_OSC32K_ENABLE;
-  while (0 == (SYSCTRL->PCLKSR.reg & SYSCTRL_PCLKSR_OSC32KRDY))
+  while (!SYSCTRL->PCLKSR.bit.OSC32KRDY)
     ;
 
   /* Reset clock system; 32K sources are not affected (Section 14.7)
@@ -71,20 +73,19 @@ void clkSetup(void) {
    * (Section 15.8.1)
    */
   GCLK->CTRL.reg = GCLK_CTRL_SWRST;
-  while ((GCLK->CTRL.reg & GCLK_CTRL_SWRST) &&
-         (GCLK->STATUS.reg & GCLK_STATUS_SYNCBUSY))
+  while (GCLK->CTRL.bit.SWRST && GCLK->STATUS.bit.SYNCBUSY)
     ;
 
   /* 2. OSC32K -> generator 1 */
   GCLK->GENCTRL.reg =
       GCLK_GENCTRL_ID(1u) | GCLK_GENCTRL_SRC_OSC32K | GCLK_GENCTRL_GENEN;
-  while (GCLK->STATUS.reg & GCLK_STATUS_SYNCBUSY)
+  while (GCLK->STATUS.bit.SYNCBUSY)
     ;
 
   /* Gen 1 -> Mux 0 */
   GCLK->CLKCTRL.reg =
       GCLK_CLKCTRL_ID(0u) | GCLK_CLKCTRL_GEN_GCLK1 | GCLK_CLKCTRL_CLKEN;
-  while (GCLK->STATUS.reg & GCLK_STATUS_SYNCBUSY)
+  while (GCLK->STATUS.bit.SYNCBUSY)
     ;
 
   /* 4. Enable DFLL48M in closed loop mode (Section 17.6.7.1) */
@@ -116,17 +117,26 @@ void clkSetup(void) {
 
   /* 6. DFLL48M -> generator 0 */
   GCLK->GENDIV.reg = GCLK_GENDIV_ID(0u);
-  while (GCLK->STATUS.reg & GCLK_STATUS_SYNCBUSY)
+  while (GCLK->STATUS.bit.SYNCBUSY)
     ;
 
   GCLK->GENCTRL.reg = GCLK_GENCTRL_ID(0u) | GCLK_GENCTRL_SRC_DFLL48M |
                       GCLK_GENCTRL_IDC | GCLK_GENCTRL_GENEN;
-  while (GCLK->STATUS.reg & GCLK_STATUS_SYNCBUSY)
+  while (GCLK->STATUS.bit.SYNCBUSY)
     ;
 
-  /* Connect OSC8M to generator 3 */
+  /* Connect OSC8M to generator 3 (general peripherals) */
+  GCLK->GENCTRL.reg = GCLK_GENCTRL_ID(GCLK_PERIPH) | GCLK_GENCTRL_SRC_OSC8M |
+                      GCLK_GENCTRL_GENEN;
+  while (GCLK->STATUS.bit.SYNCBUSY)
+    ;
+}
+
+void clkSetupTime(const bool srcIO) {
+  (void)srcIO; /* REVISIT for external clock in v1.1 onward hardware */
+  /* Connect OSC8M to generator 5 (timing peripherals) */
   GCLK->GENCTRL.reg =
-      GCLK_GENCTRL_ID(3u) | GCLK_GENCTRL_SRC_OSC8M | GCLK_GENCTRL_GENEN;
+      GCLK_GENCTRL_ID(GCLK_TIME) | GCLK_GENCTRL_SRC_OSC8M | GCLK_GENCTRL_GENEN;
   while (GCLK->STATUS.bit.SYNCBUSY)
     ;
 }

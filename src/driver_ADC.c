@@ -127,9 +127,9 @@ void adcSetup(const bool ainActive) {
     portPinMux(GRP_ADC_AIN, PIN_ADC_AIN, PORT_PMUX_PMUXE_B_Val);
   }
 
-  /* APB bus clock is enabled by default (Table 15-1). Connect GCLK 3 */
-  GCLK->CLKCTRL.reg =
-      GCLK_CLKCTRL_ID(ADC_GCLK_ID) | GCLK_CLKCTRL_GEN(3u) | GCLK_CLKCTRL_CLKEN;
+  /* APB bus clock is enabled by default (Table 15-1). Connect GCLK. */
+  GCLK->CLKCTRL.reg = GCLK_CLKCTRL_ID(ADC_GCLK_ID) |
+                      GCLK_CLKCTRL_GEN(GCLK_PERIPH) | GCLK_CLKCTRL_CLKEN;
 
   /* Reset all the ADC registers */
   ADC->CTRLA.reg = ADC_CTRLA_SWRST;

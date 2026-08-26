@@ -744,8 +744,8 @@ static void transmitData(const Emon32Dataset_t *pSrc, uint32_t *pPkt) {
  */
 static void ucSetup(void) {
   clkSetup();
-  timerSetup();
   portSetup();
+  timerSetup();
   eicSetup();
   dmacSetup();
   sercomSetup();

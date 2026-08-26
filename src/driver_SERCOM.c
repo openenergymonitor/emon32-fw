@@ -95,13 +95,13 @@ void sercomSetup(void) {
 
   PM->APBCMASK.reg |= SERCOM_I2CM_INT_APBCMASK;
   GCLK->CLKCTRL.reg = GCLK_CLKCTRL_ID(SERCOM_I2CM_INT_GCLK_ID) |
-                      GCLK_CLKCTRL_GEN(3u) | GCLK_CLKCTRL_CLKEN;
+                      GCLK_CLKCTRL_GEN(GCLK_PERIPH) | GCLK_CLKCTRL_CLKEN;
 
   i2cmCommon(SERCOM_I2CM);
 
   PM->APBCMASK.reg |= SERCOM_I2CM_EXT_APBCMASK;
   GCLK->CLKCTRL.reg = GCLK_CLKCTRL_ID(SERCOM_I2CM_EXT_GCLK_ID) |
-                      GCLK_CLKCTRL_GEN(3u) | GCLK_CLKCTRL_CLKEN;
+                      GCLK_CLKCTRL_GEN(GCLK_PERIPH) | GCLK_CLKCTRL_CLKEN;
 
   i2cmExtPinsSetup();
   i2cmCommon(SERCOM_I2CM_EXT);
@@ -150,7 +150,7 @@ static void uartSetup(void) {
   /* Configure clocks - runs from the OSC8M clock on gen 3 */
   PM->APBCMASK.reg |= SERCOM_UART_APBCMASK;
   GCLK->CLKCTRL.reg = GCLK_CLKCTRL_ID(SERCOM_UART_GCLK_ID) |
-                      GCLK_CLKCTRL_GEN(3u) | GCLK_CLKCTRL_CLKEN;
+                      GCLK_CLKCTRL_GEN(GCLK_PERIPH) | GCLK_CLKCTRL_CLKEN;
 
   /* Reset the USART fully to flush any state */
   SERCOM_UART->USART.CTRLA.reg = SERCOM_USART_CTRLA_SWRST;
@@ -179,7 +179,7 @@ static void sercomSetupSPI(void) {
   /* Configure clocks - runs from the OSC8M clock on gen 3 */
   PM->APBCMASK.reg |= SERCOM_SPI_APBCMASK;
   GCLK->CLKCTRL.reg = GCLK_CLKCTRL_ID(SERCOM_SPI_GCLK_ID) |
-                      GCLK_CLKCTRL_GEN(3u) | GCLK_CLKCTRL_CLKEN;
+                      GCLK_CLKCTRL_GEN(GCLK_PERIPH) | GCLK_CLKCTRL_CLKEN;
 
   /* Table 25-2 - driven @ F_REF = F_PERIPH. BAUD = F_REF / 2F_BAUD - 1
    * RFM69 maximum SCK is 10 MHz, so can go at maximum 4 MHz SCK easily.

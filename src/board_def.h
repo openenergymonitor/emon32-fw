@@ -13,6 +13,9 @@
 #define F_PERIPH    8000000ul
 #define F_TIMER_ADC (F_PERIPH / 8)
 
+#define GCLK_PERIPH 3u /* For general peripherals */
+#define GCLK_TIME   5u /* For timing */
+
 #define BOOTPROT_SAMD  0x2  /* 8KB bootloader protection, Table 22-2 */
 #define EMON32_WDT_EW  0xAu /* 8K early warning cycles */
 #define EMON32_WDT_PER 0xBu /* 16K watchdog cycles */
