@@ -153,6 +153,7 @@ static void printfError(const char *fmt, ...) {
 static Emon32Config_t config;
 static Emon32Config_t config_nvm;
 static char           inBuffer[IN_BUFFER_W];
+static CmdArgs_t     cmdArgs;
 
 static AutoConfig_t autocfg = {0};
 
@@ -270,11 +271,10 @@ static bool configureVCTChannel(void) {
   uint8_t     vCh1     = 0;
   uint8_t     vCh2     = 0;
   ECMCfg_t   *ecmCfg   = 0;
-  CmdArgs_t   args     = inBufferTok();
 
   /* All or no parameters must be specified */
-  if ((args.argc != 2u) && (args.argc != 4u) && (args.argc != 5u) &&
-      (args.argc != 6u)) {
+  if ((cmdArgs.argc != 2u) && (cmdArgs.argc != 4u) && (cmdArgs.argc != 5u) &&
+      (cmdArgs.argc != 6u)) {
     serialPutsError("Missing required parameters.");
     return false;
   }
@@ -282,7 +282,7 @@ static bool configureVCTChannel(void) {
   /* Voltage channels are [1..3], CTs are [4..] but 0 indexed internally. All
    * fields must be present for a given channel type.
    */
-  convU = utilAtoui(args.argv[0] + 1, ITOA_BASE10);
+  convU = utilAtoui(cmdArgs.argv[0] + 1, ITOA_BASE10);
   if (!convU.valid) {
     serialPutsError("Invalid channel number.");
     return false;
@@ -295,7 +295,7 @@ static bool configureVCTChannel(void) {
 
   ch = convU.val.u32;
 
-  convU = utilAtoui(args.argv[1], ITOA_BASE10);
+  convU = utilAtoui(cmdArgs.argv[1], ITOA_BASE10);
   if (!convU.valid || (convU.val.u32 > 1u)) {
     serialPutsError("Invalid active value (valid: 0 or 1).");
     return false;
@@ -305,7 +305,7 @@ static bool configureVCTChannel(void) {
   ecmCfg = ecmConfigGet();
 
   /* Exit early if just activating or deactivating */
-  if (2u == args.argc) {
+  if (2u == cmdArgs.argc) {
     if (ch < NUM_V) {
       ecmCfg->vCfg[ch].vActive      = active;
       config.voltageCfg[ch].vActive = active;
@@ -321,20 +321,20 @@ static bool configureVCTChannel(void) {
 
   /* CT requires at least V1 */
   if (ch >= NUM_V) {
-    if (args.argc < 5u) {
+    if (cmdArgs.argc < 5u) {
       serialPutsError("CT requires voltage channel reference.");
       return false;
     }
   }
 
-  convF = utilAtof(args.argv[2]);
+  convF = utilAtof(cmdArgs.argv[2]);
   if (!convF.valid) {
     serialPutsError("Invalid calibration value.");
     return false;
   }
   calAmpl = convF.val;
 
-  convF = utilAtof(args.argv[3]);
+  convF = utilAtof(cmdArgs.argv[3]);
   if (!convF.valid) {
     serialPutsError("Invalid phase value.");
     return false;
@@ -371,7 +371,7 @@ static bool configureVCTChannel(void) {
     return true;
   }
 
-  convU = utilAtoui(args.argv[4], ITOA_BASE10);
+  convU = utilAtoui(cmdArgs.argv[4], ITOA_BASE10);
   if (!convU.valid) {
     serialPutsError("Invalid v1 value.");
     return false;
@@ -383,8 +383,8 @@ static bool configureVCTChannel(void) {
   vCh1 = convU.val.u8;
 
   /* V2 is optional */
-  if (args.argc > 5u) {
-    convU = utilAtoui(args.argv[5], ITOA_BASE10);
+  if (cmdArgs.argc > 5u) {
+    convU = utilAtoui(cmdArgs.argv[5], ITOA_BASE10);
     if (!convU.valid) {
       serialPutsError("Invalid v2 value.");
       return false;
@@ -430,7 +430,12 @@ static bool configureVCTChannel(void) {
  *************************************/
 
 static bool configureAssumed(void) {
-  ConvUint_t convU = utilAtoui(inBuffer + 1, ITOA_BASE10);
+  if (1u != cmdArgs.argc) {
+    serialPutsError("Unexpected arguments.");
+    return false;
+  }
+
+  ConvUint_t convU = utilAtoui(cmdArgs.argv[0] + 1, ITOA_BASE10);
   if (!convU.valid) {
     serialPutsError("Invalid assumed voltage value.");
     return false;
@@ -444,13 +449,12 @@ static bool configureAssumed(void) {
 }
 
 static bool configureAuto(void) {
-  CmdArgs_t args = inBufferTok();
-  if (3u != args.argc) {
+  if (3u != cmdArgs.argc) {
     serialPutsError("Auto calibration requires channel, mode, and value.");
     return false;
   }
 
-  ConvUint_t convU = utilAtoui(args.argv[0] + 1u, ITOA_BASE10);
+  ConvUint_t convU = utilAtoui(cmdArgs.argv[0] + 1u, ITOA_BASE10);
   if (!convU.valid) {
     serialPutsError("Invalid channel index.");
     return false;
@@ -468,7 +472,7 @@ static bool configureAuto(void) {
   }
 
   const uint32_t ch   = convU.val.u8 - 1u;
-  const char     mode = args.argv[1][0];
+  const char     mode = cmdArgs.argv[1][0];
 
   if (('a' != mode) && ('p' != mode)) {
     serialPutsError("Automatic calibration must be a or p.");
@@ -493,7 +497,7 @@ static bool configureAuto(void) {
   }
 
   if ('a' == mode) {
-    ConvFloat_t convF = utilAtof(args.argv[2]);
+    ConvFloat_t convF = utilAtof(cmdArgs.argv[2]);
     if (!convF.valid) {
       serialPutsError("Invalid calibration value.");
       return false;
@@ -520,7 +524,7 @@ static bool configureAuto(void) {
 AutoConfig_t *configAutoStatus(void) { return &autocfg; }
 
 static void configureAccumulatorSet(void) {
-  char   ep = inBuffer[1];
+  char   ep = cmdArgs.argv[0][1];
   size_t ch = 0;
 
   if (ep != 'e' && ep != 'p') {
@@ -528,13 +532,12 @@ static void configureAccumulatorSet(void) {
     return;
   }
 
-  CmdArgs_t args = inBufferTok();
-  if (2u != args.argc) {
+  if (2u != cmdArgs.argc) {
     serialPutsError("Accumulator set requires an index and value.");
     return;
   }
 
-  ConvUint_t convU = utilAtoui(args.argv[0] + 2, ITOA_BASE10);
+  ConvUint_t convU = utilAtoui(cmdArgs.argv[0] + 2, ITOA_BASE10);
   if (!convU.valid) {
     serialPutsError("Invalid index.");
     return;
@@ -547,7 +550,7 @@ static void configureAccumulatorSet(void) {
       return;
     }
 
-    ConvInt_t convI = utilAtoi(args.argv[1], ITOA_BASE10);
+    ConvInt_t convI = utilAtoi(cmdArgs.argv[1], ITOA_BASE10);
     if (!convI.valid) {
       serialPutsError("Invalid energy value.");
       return;
@@ -562,7 +565,7 @@ static void configureAccumulatorSet(void) {
       return;
     }
 
-    convU = utilAtoui(args.argv[1], ITOA_BASE10);
+    convU = utilAtoui(cmdArgs.argv[1], ITOA_BASE10);
     if (!convU.valid) {
       serialPutsError("Invalid pulse count value.");
       return;
@@ -573,6 +576,11 @@ static void configureAccumulatorSet(void) {
 }
 
 static void configureBackup(void) {
+  if (1u != cmdArgs.argc || 1u != strlen(cmdArgs.argv[0])) {
+    serialPutsError("Unexpected arguments.");
+    return;
+  }
+
   /* Send all configuration values as JSON over the serial link. */
   char strBuf[8] = {0};
 
@@ -623,7 +631,12 @@ static void configureBackup(void) {
 }
 
 static bool configureDatalog(void) {
-  ConvFloat_t convF = utilAtof(inBuffer + 1);
+  if (1u != cmdArgs.argc) {
+    serialPutsError("Unexpected arguments.");
+    return false;
+  }
+
+  ConvFloat_t convF = utilAtof(cmdArgs.argv[0] + 1);
   /* Set the datalog period (s) in range 0.5 <= t <= 600 */
   if (!convF.valid) {
     serialPutsError("Invalid datalog value.");
@@ -645,7 +658,12 @@ static bool configureDatalog(void) {
 }
 
 static bool configureGroupID(void) {
-  ConvUint_t convU = utilAtoui(inBuffer + 1, ITOA_BASE10);
+  if (1u != cmdArgs.argc) {
+    serialPutsError("Unexpected arguments.");
+    return false;
+  }
+
+  ConvUint_t convU = utilAtoui(cmdArgs.argv[0] + 1, ITOA_BASE10);
 
   if (!convU.valid) {
     serialPutsError("Invalid group ID value.");
@@ -664,7 +682,12 @@ static bool configureGroupID(void) {
 }
 
 static bool configureJSON(void) {
-  ConvUint_t convU = utilAtoui(inBuffer + 1, ITOA_BASE10);
+  if (1u != cmdArgs.argc) {
+    serialPutsError("Unexpected arguments.");
+    return false;
+  }
+
+  ConvUint_t convU = utilAtoui(cmdArgs.argv[0] + 1, ITOA_BASE10);
 
   if (!convU.valid) {
     serialPutsError("Invalid JSON value.");
@@ -682,10 +705,12 @@ static bool configureJSON(void) {
 }
 
 static bool configureLineFrequency(void) {
-  /* f<n>
-   * n must be 50 or 60
-   */
-  ConvUint_t convU = utilAtoui(inBuffer + 1, ITOA_BASE10);
+  if (1u != cmdArgs.argc) {
+    serialPutsError("Unexpected arguments.");
+    return false;
+  }
+
+  ConvUint_t convU = utilAtoui(cmdArgs.argv[0] + 1, ITOA_BASE10);
   if (!convU.valid) {
     serialPutsError("Invalid frequency value.");
     return false;
@@ -715,7 +740,7 @@ static bool configureLineFrequency(void) {
  *************************************/
 
 static bool configure1WAddr(void) {
-  char c1 = *(inBuffer + 1);
+  char c1 = cmdArgs.argv[0][1];
   switch (c1) {
   case 'c':
     return configure1WAddrClear();
@@ -733,24 +758,25 @@ static bool configure1WAddr(void) {
     return false;
   case 'r':
     return configure1WRemap();
-  default:
+  case '1': case '2': case '3': case '4': case '5':
+  case '6': case '7': case '8': case '9':
     return configure1WSave();
+  default:
+    return false;
   }
-
-  return false;
 }
 
 static bool configure1WAddrClear(void) {
 
   /* Clear _all_ saved addresses */
-  if ('a' == inBuffer[2]) {
+  if ('a' == cmdArgs.argv[0][2] && '\0' == cmdArgs.argv[0][3]) {
     memset(&config.oneWireAddr.addr, 0, sizeof(config.oneWireAddr.addr));
     serialPuts("> Cleared all saved 1-Wire addresses.\r\n");
     emon32EventSet(EVT_OPA_INIT);
     return true;
   }
 
-  ConvUint_t convU = utilAtoui(inBuffer + 2, ITOA_BASE10);
+  ConvUint_t convU = utilAtoui(cmdArgs.argv[0] + 2, ITOA_BASE10);
   if (!convU.valid) {
     serialPutsError("Invalid 1-Wire channel value.");
     return false;
@@ -814,14 +840,12 @@ static void configure1WListSaved(void) {
 }
 
 static bool configure1WRemap(void) {
-  CmdArgs_t args = inBufferTok();
-
-  if (3u != args.argc) {
+  if (3u != cmdArgs.argc) {
     serialPutsError("1-Wire remap requires two parameters.");
     return false;
   }
 
-  ConvUint_t convU = utilAtoui(args.argv[1], ITOA_BASE10);
+  ConvUint_t convU = utilAtoui(cmdArgs.argv[1], ITOA_BASE10);
   if (!convU.valid) {
     serialPutsError("Invalid 1-Wire channel value.");
     return false;
@@ -833,7 +857,7 @@ static bool configure1WRemap(void) {
   }
   const size_t ch = convU.val.u32 - 1u;
 
-  convU = utilAtoui(args.argv[2], ITOA_BASE10);
+  convU = utilAtoui(cmdArgs.argv[2], ITOA_BASE10);
   if (!convU.valid) {
     serialPutsError("Invalid 1-Wire remap channel value.");
     return false;
@@ -863,14 +887,12 @@ static bool configure1WRemap(void) {
 static bool configure1WSave(void) {
   size_t ch;
 
-  CmdArgs_t args = inBufferTok();
-
-  if (9u != args.argc) {
+  if (9u != cmdArgs.argc) {
     serialPutsError("1-Wire save requires 8 address bytes.");
     return false;
   }
 
-  ConvUint_t convU = utilAtoui(args.argv[0] + 1, ITOA_BASE10);
+  ConvUint_t convU = utilAtoui(cmdArgs.argv[0] + 1, ITOA_BASE10);
   if (!convU.valid) {
     serialPutsError("Invalid 1-Wire channel value.");
     return false;
@@ -884,7 +906,7 @@ static bool configure1WSave(void) {
 
   uint64_t addr = 0;
   for (size_t i = 0; i < 8; i++) {
-    convU = utilAtoui(args.argv[i + 1u], ITOA_BASE16);
+    convU = utilAtoui(cmdArgs.argv[i + 1u], ITOA_BASE16);
     if (!convU.valid) {
       serialPutsError("Invalid 1-Wire address byte.");
       return false;
@@ -923,14 +945,13 @@ static bool configureOPA(void) {
   bool       pu     = false;
   uint8_t    period = 0;
 
-  CmdArgs_t args = inBufferTok();
-  if (args.argc < 2u) {
+  if (cmdArgs.argc < 2u) {
     serialPutsError("OPA requires channel and active value.");
     return false;
   }
 
   /* Channel index */
-  convU = utilAtoui(args.argv[0] + 1, ITOA_BASE10);
+  convU = utilAtoui(cmdArgs.argv[0] + 1, ITOA_BASE10);
   if (!convU.valid) {
     serialPutsError("Invalid OPA channel value.");
     return false;
@@ -944,7 +965,7 @@ static bool configureOPA(void) {
   ch = convU.val.u8 - 1;
 
   /* Check if the channel is active or inactive */
-  convU = utilAtoui(args.argv[1], ITOA_BASE10);
+  convU = utilAtoui(cmdArgs.argv[1], ITOA_BASE10);
   if ((!convU.valid) || (convU.val.u32 > 1u)) {
     serialPutsError("Invalid OPA active value.");
     return false;
@@ -952,7 +973,7 @@ static bool configureOPA(void) {
 
   active = (bool)convU.val.u8;
 
-  if (!active || (args.argc < 3u)) {
+  if (!active || (cmdArgs.argc < 3u)) {
     config.opaCfg[ch].opaActive = active;
     printSettingOPA(ch, false);
     return true;
@@ -961,7 +982,7 @@ static bool configureOPA(void) {
 
   /* Check for the function. Must be a valid type and if a pulse must also have
    * a hysteresis period applied. */
-  func = args.argv[2][0];
+  func = cmdArgs.argv[2][0];
 
   bool isAnalog  = ('a' == func);
   bool isOneWire = ('o' == func);
@@ -985,19 +1006,19 @@ static bool configureOPA(void) {
   }
 
   if (isPulse) {
-    if (args.argc < 5u) {
+    if (cmdArgs.argc < 5u) {
       serialPutsError("OPA pulse requires pull-up and period values.");
       return false;
     }
 
-    convU = utilAtoui(args.argv[3], ITOA_BASE10);
+    convU = utilAtoui(cmdArgs.argv[3], ITOA_BASE10);
     if (!convU.valid || (convU.val.u32 > 1u)) {
       serialPutsError("Invalid OPA pull-up value.");
       return false;
     }
     pu = (bool)convU.val.u8;
 
-    convU = utilAtoui(args.argv[4], ITOA_BASE10);
+    convU = utilAtoui(cmdArgs.argv[4], ITOA_BASE10);
     if (!convU.valid) {
       serialPutsError("Invalid OPA period value.");
       return false;
@@ -1032,10 +1053,12 @@ static bool configureOPA(void) {
  *************************************/
 
 static bool configureNodeID(void) {
-  /* n<n>
-   * Valid range is 1..60.
-   */
-  ConvUint_t convU = utilAtoui(inBuffer + 1, ITOA_BASE10);
+  if (1u != cmdArgs.argc) {
+    serialPutsError("Unexpected arguments.");
+    return false;
+  }
+
+  ConvUint_t convU = utilAtoui(cmdArgs.argv[0] + 1, ITOA_BASE10);
   if (!convU.valid) {
     serialPutsError("Invalid node ID value.");
     return false;
@@ -1065,13 +1088,17 @@ static void configureReconfigureAll(void) {
 }
 
 static void configureRestore(void) {
-  if ('\0' == inBuffer[1]) {
+  if (1u != cmdArgs.argc || strlen(cmdArgs.argv[0]) > 2u) {
+    return;
+  }
+
+  if ('\0' == cmdArgs.argv[0][1]) {
     configDefault();
     configureReconfigureAll();
 
     serialPuts("> Restored default values.\r\n");
     unsavedChange = true;
-  } else if ('s' == inBuffer[1]) {
+  } else if ('s' == cmdArgs.argv[0][1]) {
     (void)configLoadFromNVM();
     configureReconfigureAll();
 
@@ -1081,23 +1108,31 @@ static void configureRestore(void) {
 }
 
 static bool configureRFEnable(void) {
-  int32_t val = inBuffer[1] - '0';
+  if (1u != cmdArgs.argc) {
+    serialPutsError("Unexpected arguments.");
+    return false;
+  }
 
-  if (!((0 == val) || (1 == val))) {
+  ConvUint_t conv = utilAtoui(cmdArgs.argv[0] + 1, ITOA_BASE10);
+  if (!conv.valid || conv.val.u32 > 1u) {
     serialPutsError("RF enable must be 0 or 1.");
     return false;
   }
 
-  config.dataTxCfg.useRFM = (bool)val;
-  printf_("RF = %s\r\n", (bool)val ? "on" : "off");
+  config.dataTxCfg.useRFM = (bool)conv.val.u32;
+  printf_("RF = %s\r\n", conv.val.u32 ? "on" : "off");
 
   return true;
 }
 
 static bool configureRF433(void) {
-  int32_t val = inBuffer[1] - '0';
+  if (1u != cmdArgs.argc) {
+    serialPutsError("Unexpected arguments.");
+    return false;
+  }
 
-  if (!((0 == val) || (1 == val))) {
+  ConvUint_t conv = utilAtoui(cmdArgs.argv[0] + 1, ITOA_BASE10);
+  if (!conv.valid || conv.val.u32 > 1u) {
     serialPutsError("RF 433 value must be 0 or 1.");
     return false;
   }
@@ -1108,7 +1143,7 @@ static bool configureRF433(void) {
     return false;
   }
 
-  config.dataTxCfg.rfmFreq = val ? 2 : 3;
+  config.dataTxCfg.rfmFreq = conv.val.u32 ? 2 : 3;
 
   serialPuts("rfBand = ");
   printSettingRFFreq(false);
@@ -1118,10 +1153,12 @@ static bool configureRF433(void) {
 }
 
 static bool configureRFPower(void) {
-  /* p<n>
-   * n is in range: 0-31
-   */
-  ConvUint_t convU = utilAtoui(inBuffer + 1, ITOA_BASE10);
+  if (1u != cmdArgs.argc) {
+    serialPutsError("Unexpected arguments.");
+    return false;
+  }
+
+  ConvUint_t convU = utilAtoui(cmdArgs.argv[0] + 1, ITOA_BASE10);
   if (!convU.valid) {
     serialPutsError("Invalid RF power value.");
     return false;
@@ -1139,10 +1176,12 @@ static bool configureRFPower(void) {
 }
 
 static bool configureSerialLog(void) {
-  /* Log to serial output, default TRUE
-   * Format: c0 | c1
-   */
-  ConvUint_t convU = utilAtoui(inBuffer + 1, ITOA_BASE10);
+  if (1u != cmdArgs.argc) {
+    serialPutsError("Unexpected arguments.");
+    return false;
+  }
+
+  ConvUint_t convU = utilAtoui(cmdArgs.argv[0] + 1, ITOA_BASE10);
 
   if (!convU.valid) {
     serialPutsError("Invalid serial log value.");
@@ -1178,8 +1217,11 @@ static void confirmationStart(ConfirmState_t state) {
 }
 
 static void enterBootloader(void) {
-  /* Set confirmation state and prompt user
-   * Response will be handled asynchronously by handleConfirmation() */
+  if (1u != cmdArgs.argc || 1u != strlen(cmdArgs.argv[0])) {
+    serialPutsError("Unexpected arguments.");
+    return;
+  }
+
   serialPuts("> Enter bootloader? All unsaved changes will be lost. 'y' to "
              "proceed.\r\n");
   confirmationStart(CONFIRM_BOOTLOADER);
@@ -1239,8 +1281,8 @@ static void inBufferClear(const size_t n) {
 }
 
 static CmdArgs_t inBufferTok(void) {
-  CmdArgs_t args  = {0};
-  bool      inTok = false;
+  CmdArgs_t result = {0};
+  bool      inTok  = false;
 
   for (size_t i = 0; i < IN_BUFFER_W; i++) {
     if ('\0' == inBuffer[i]) {
@@ -1253,14 +1295,14 @@ static CmdArgs_t inBufferTok(void) {
     }
 
     if (!inTok) {
-      if (args.argc < (sizeof(args.argv) / sizeof(args.argv[0]))) {
-        args.argv[args.argc++] = &inBuffer[i];
+      if (result.argc < (sizeof(result.argv) / sizeof(result.argv[0]))) {
+        result.argv[result.argc++] = &inBuffer[i];
       }
       inTok = true;
     }
   }
 
-  return args;
+  return result;
 }
 
 /*************************************
@@ -1403,20 +1445,27 @@ static void printAccumulators(void) {
 }
 
 static void printSettings(void) {
-  if ('h' == inBuffer[1]) {
-    if ('s' == inBuffer[2]) {
+  const size_t len = strlen(cmdArgs.argv[0]);
+
+  if (len > 3u) {
+    return;
+  }
+
+  if ('h' == cmdArgs.argv[0][1]) {
+    if ('s' == cmdArgs.argv[0][2]) {
       printSettingsHR(true);
-    } else {
+    } else if ('\0' == cmdArgs.argv[0][2]) {
       printSettingsHR(false);
-    }
-    /* Only show accumulators with 'lh' command */
-    printAccumulators();
-  } else {
-    if ('s' == inBuffer[1]) {
-      printSettingsKV(true);
     } else {
-      printSettingsKV(false);
+      return;
     }
+    printAccumulators();
+  } else if ('s' == cmdArgs.argv[0][1]) {
+    printSettingsKV(true);
+  } else if ('\0' == cmdArgs.argv[0][1]) {
+    printSettingsKV(false);
+  } else {
+    return;
   }
 
   if (unsavedChange) {
@@ -1559,13 +1608,22 @@ static uint32_t readWordAtAddress(uintptr_t address) {
  *************************************/
 
 static void resetRequest(void) {
+  if (1u != cmdArgs.argc || 1u != strlen(cmdArgs.argv[0])) {
+    serialPutsError("Unexpected arguments.");
+    return;
+  }
+
   serialPuts(
       "> Reset system? All unsaved changes will be lost. 'y' to proceed.\r\n");
   confirmationStart(CONFIRM_RESET);
 }
 
 static void saveToNVM(void) {
-  /* Save to NVM config space after recalculating CRC */
+  if (1u != cmdArgs.argc || 1u != strlen(cmdArgs.argv[0])) {
+    serialPutsError("Unexpected arguments.");
+    return;
+  }
+
   if (unsavedChange) {
     memcpy(&config_nvm, &config, sizeof(config));
     config.crc16_ccitt = calcCRC16_ccitt(&config, (sizeof(config) - 2));
@@ -1581,6 +1639,11 @@ static void saveToNVM(void) {
 }
 
 static void shutdownPi(void) {
+  if (1u != cmdArgs.argc || 1u != strlen(cmdArgs.argv[0])) {
+    serialPutsError("Unexpected arguments.");
+    return;
+  }
+
   serialPuts("> Shut down Raspberry Pi? 'y' to proceed.\r\n");
   if (1u == getBoardRevision()) {
     serialPuts("> This will not remove power, only indicate when safe.\r\n");
@@ -1789,44 +1852,38 @@ static void zeroAccumulatorIndividual(uint8_t idx) {
 
 /*! @brief Parse z command and zero accumulators (z, ze1-12, zp1-3) */
 static void parseAndZeroAccumulator(void) {
+  if (1u != cmdArgs.argc) {
+    serialPutsError("Unexpected arguments.");
+    return;
+  }
+
+  const char *cmd = cmdArgs.argv[0];
+
   /* z - zero all */
-  if (inBuffer[1] == '\0') {
+  if (cmd[1] == '\0') {
     zeroAccumulators();
     return;
   }
 
-  /* ze1-12 - zero energy accumulator */
-  if (inBuffer[1] == 'e' && inBuffer[2] >= '1' && inBuffer[2] <= '9') {
-    union {
-      int     i;
-      uint8_t u8;
-    } digit;
-    digit.i     = inBuffer[2] - '0';
-    uint8_t num = digit.u8;
-    /* Check for two-digit number (ze10-12) */
-    if (inBuffer[3] >= '0' && inBuffer[3] <= '9') {
-      num *= 10;
-      digit.i = inBuffer[3] - '0';
-      num += digit.u8;
-    }
-    if (num >= 1 && num <= NUM_CT) {
-      zeroAccumulatorIndividual(num - 1); /* Convert to 0-indexed */
-    } else {
+  /* ze<N> - zero energy accumulator */
+  if (cmd[1] == 'e') {
+    ConvUint_t conv = utilAtoui(cmd + 2, ITOA_BASE10);
+    if (!conv.valid || conv.val.u32 < 1u || conv.val.u32 > NUM_CT) {
       printfError("Invalid energy accumulator index (valid: ze1-%d).", NUM_CT);
+      return;
     }
+    zeroAccumulatorIndividual(conv.val.u32 - 1u);
     return;
   }
 
-  /* zp1-3 - zero pulse accumulator */
-  if (inBuffer[1] == 'p' && inBuffer[2] >= '1' &&
-      inBuffer[2] <= '0' + NUM_OPA) {
-    uint8_t num = inBuffer[2] - '0';
-    if (num >= 1 && num <= NUM_OPA) {
-      zeroAccumulatorIndividual(NUM_CT + num - 1); /* Pulse index starts after
-                                                       energy */
-    } else {
+  /* zp<N> - zero pulse accumulator */
+  if (cmd[1] == 'p') {
+    ConvUint_t conv = utilAtoui(cmd + 2, ITOA_BASE10);
+    if (!conv.valid || conv.val.u32 < 1u || conv.val.u32 > NUM_OPA) {
       printfError("Invalid pulse accumulator index (valid: zp1-%d).", NUM_OPA);
+      return;
     }
+    zeroAccumulatorIndividual(NUM_CT + conv.val.u32 - 1u);
     return;
   }
 
@@ -1934,26 +1991,21 @@ Emon32Config_t *configLoadFromNVM(void) {
 }
 
 void configProcessCmd(void) {
-  uint32_t arglen    = 0;
-  bool     termFound = false;
+  cmdArgs = inBufferTok();
 
-  /* Convert \r or \n to 0, and get the length until then. */
-  while (!termFound && (arglen < IN_BUFFER_W)) {
-    if (0 == inBuffer[arglen]) {
-      termFound = true;
-      break;
-    }
-    arglen++;
-  }
-
-  if (!termFound) {
+  if (0 == cmdArgs.argc) {
+    cmdPending = false;
+    inBufferClear(IN_BUFFER_W);
     return;
   }
 
-  /* Decode on first character in the buffer */
-  switch (inBuffer[0]) {
+  switch (cmdArgs.argv[0][0]) {
   case '?':
-    serialPuts(configHelpText);
+    if (1u == cmdArgs.argc && 1u == strlen(cmdArgs.argv[0])) {
+      serialPuts(configHelpText);
+    } else {
+      serialPutsError("Unexpected arguments.");
+    }
     break;
   case 'a':
     unsavedChange = configureAssumed();
@@ -1989,7 +2041,11 @@ void configProcessCmd(void) {
     unsavedChange = configureVCTChannel();
     break;
   case 'l':
-    printSettings();
+    if (1u == cmdArgs.argc) {
+      printSettings();
+    } else {
+      serialPutsError("Unexpected arguments.");
+    }
     break;
   case 'm':
     if (configureOPA()) {
@@ -2019,13 +2075,25 @@ void configProcessCmd(void) {
     saveToNVM();
     break;
   case 't':
-    emon32EventSet(EVT_ECM_TRIG);
+    if (1u == cmdArgs.argc && 1u == strlen(cmdArgs.argv[0])) {
+      emon32EventSet(EVT_ECM_TRIG);
+    } else {
+      serialPutsError("Unexpected arguments.");
+    }
     break;
   case 'u':
-    emon32EventSet(EVT_STORE_ACCUM);
+    if (1u == cmdArgs.argc && 1u == strlen(cmdArgs.argv[0])) {
+      emon32EventSet(EVT_STORE_ACCUM);
+    } else {
+      serialPutsError("Unexpected arguments.");
+    }
     break;
   case 'v':
-    configFirmwareBoardInfo();
+    if (1u == cmdArgs.argc && 1u == strlen(cmdArgs.argv[0])) {
+      configFirmwareBoardInfo();
+    } else {
+      serialPutsError("Unexpected arguments.");
+    }
     break;
   case 'w':
     unsavedChange = configureRFEnable();
@@ -2039,11 +2107,13 @@ void configProcessCmd(void) {
   case 'z':
     parseAndZeroAccumulator();
     break;
+  default:
+    break;
   }
 
   unsavedChange = configCheckUnsaved();
   cmdPending    = false;
-  inBufferClear(arglen + 1);
+  inBufferClear(IN_BUFFER_W);
 }
 
 bool configUnsavedChanges(void) { return unsavedChange; }
