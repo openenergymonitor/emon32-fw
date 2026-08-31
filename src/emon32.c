@@ -340,7 +340,7 @@ static void evtKiloHertz(void) {
 static bool evtPending(EVTSRC_t evt) { return (evtPend & (1u << evt)) != 0; }
 
 static void handleCalibCfg(const ECMDataset_t *pECM) {
-  CalibConfig_t *calibcfg = configAutoStatus();
+  CalibConfig_t *calibcfg = configCalibStatus();
   if (calibcfg->inProgress) {
     if (calibcfg->mode == 'a') {
 
@@ -429,9 +429,9 @@ static void handleCalibCfg(const ECMDataset_t *pECM) {
       }
 
       bool pfCrossing   = qfp_fmul(lastPF, thisPF) < 0.0f;
-      bool pfAbsGreater = (calibcfg->lastPF < thisPF);
+      bool pfAbsGreater = (lastPF < utilFabs(thisPF));
 
-      if (!pfCrossing && pfAbsGreater) {
+      if (!pfCrossing) {
         if (pfAbsGreater) {
           /* Going in the wrong direction. */
           calibcfg->incr = qfp_fmul(calibcfg->incr, -1.0f);
@@ -452,6 +452,9 @@ static void handleCalibCfg(const ECMDataset_t *pECM) {
       /* If the interpolation position has changed, defer next sample */
       const uint32_t thisIV = pEcmCfg->ctCfg[calibcfg->ch].idxInterpolateV;
       calibcfg->defer       = prevIV != thisIV;
+
+      calibcfg->phi    = phiNxt;
+      calibcfg->lastPF = thisPF;
     }
   }
 }
@@ -471,7 +474,7 @@ static void handleCalibCfgPrintA(const CalibCfgP_t *pCal) {
 }
 
 static void handleCalibCfgPrintP(const float phi, const size_t idx) {
-  printf_("> Finished phase calibration for CT%d\r\n.", idx);
+  printf_("> Finished phase calibration for CT%d\r\n.", idx + 1u);
   serialPuts("  - New phase calibration: ");
   putFloat(phi, 0);
   serialPuts("\r\n");

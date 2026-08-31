@@ -26,7 +26,7 @@ _Static_assert((sizeof(bool) == 1), "bool must be 1 byte");
 #define CONFIRM_TIMEOUT_MS 30000u /* Confirmation timeout (ms) */
 #define CAL_AMPL_AVG       4u     /* Number of sample sets for calibration */
 #define CAL_PHASE_MAX_ITER 16u    /* Maximum number of iterations for phase */
-#define CAL_PHASE_PF_TOL   0.05f  /* PF change considered complete */
+#define CAL_PHASE_PF_TOL   0.005f /* PF change considered complete */
 
 /*********************************
  * Remaining

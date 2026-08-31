@@ -107,7 +107,7 @@ typedef struct VersionInfo_ {
 /*! @brief Get the status of any auto configuration in progress.
  *  @return pointer to the auto configuration struct.
  */
-CalibConfig_t *configAutoStatus(void);
+CalibConfig_t *configCalibStatus(void);
 
 /*! @brief Add a character to the command stream
  *  @param [in] c : character to add

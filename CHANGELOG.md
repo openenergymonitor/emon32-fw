@@ -10,6 +10,7 @@
 - Improved unsaved change indication.
 - Allow viewing saved configurations.
 - Energy/pulse values can be set.
+- Datalog is now updated when no external V sense.
 
 ## v1.1.1
 

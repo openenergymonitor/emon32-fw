@@ -449,13 +449,6 @@ static bool configureAssumed(void) {
 }
 
 static bool configureCalib(void) {
-  CmdArgs_t args = inBufferTok();
-
-  // REVISIT argc
-  if (3u != cmdArgs.argc) {
-    serialPutsError("Auto calibration requires channel, mode, and value.");
-    return false;
-  }
 
   ConvUint_t convU = utilAtoui(cmdArgs.argv[0] + 1u, ITOA_BASE10);
   if (!convU.valid) {
@@ -503,6 +496,13 @@ static bool configureCalib(void) {
   calibcfg.iter = 0u;
 
   if ('a' == mode) {
+
+    if (3u != cmdArgs.argc) {
+      serialPutsError(
+          "Amplitude calibration requires channel, mode, and value.");
+      return false;
+    }
+
     ConvFloat_t convF = utilAtof(cmdArgs.argv[2]);
     if (!convF.valid) {
       serialPutsError("Invalid calibration value.");
@@ -518,6 +518,11 @@ static bool configureCalib(void) {
   }
 
   if ('p' == mode) {
+
+    if (2u != cmdArgs.argc) {
+      serialPutsError("Phase calibration requires channel and mode.");
+      return false;
+    }
 
     if (ch < NUM_V) {
       serialPutsError("Phase calibration only for CT channels.");
@@ -535,14 +540,14 @@ static bool configureCalib(void) {
     ecmConfigChannel(ch);
 
     calibcfg.inProgress = true;
-    serialPuts("> Phase calibration in progress.\r\n");
+    printf_("> Phase calibration in progress on CT%d.\r\n", (calibcfg.ch + 1u));
     return false;
   }
 
   return false;
 }
 
-CalibConfig_t *configAutoStatus(void) { return &calibcfg; }
+CalibConfig_t *configCalibStatus(void) { return &calibcfg; }
 
 static void configureAccumulatorSet(void) {
   char   ep = cmdArgs.argv[0][1];
