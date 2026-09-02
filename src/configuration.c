@@ -2062,14 +2062,18 @@ void configProcessCmd(void) {
   bool unlockedCommand = false;
 
   switch (cmdArgs.argv[0][0]) {
+  case '?':
   case 'b':
   case 'l':
   case 'v':
     unlockedCommand = true;
+    break;
+  case 'o':
+    unlockedCommand = ('l' == cmdArgs.argv[0][1]);
   }
 
   if (cmdLocked && !unlockedCommand) {
-    serialPutsError("Locked.");
+    serialPutsError("Locked (unlock with: emonunlock).");
   }
 
   if (!cmdLocked || unlockedCommand) {
