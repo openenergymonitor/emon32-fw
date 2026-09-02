@@ -67,6 +67,7 @@ static void      configDefault(void);
 static void      configEchoQueueChar(const uint8_t c);
 static void      configEchoQueueStr(const char *s);
 static void      configInitialiseNVM(void);
+static void      configProcessCmdCleanup(void);
 static uint16_t  configTimeToCycles(const float time, const uint32_t mainsFreq);
 static bool      configureVCTChannel(void);
 static bool      configureAssumed(void);
@@ -165,6 +166,7 @@ static uint8_t                 clearAccumIdx =
 static size_t inBufferIdx   = 0;
 static bool   cmdPending    = false;
 static bool   unsavedChange = false;
+static bool   cmdLocked     = false;
 
 static bool configCheckUnsaved(void) {
   return (0 != memcmp(&config, &config_nvm, sizeof(config)));
@@ -1502,10 +1504,17 @@ static void printSettings(void) {
   }
 
   if (unsavedChange) {
-    serialPuts("There are unsaved changes. Command \"s\" to save.\r\n\r\n");
+    serialPuts("There are unsaved changes. Command \"s\" to save.\r\n");
   } else {
-    serialPuts("All settings saved.\r\n\r\n");
+    serialPuts("All settings saved.\r\n");
   }
+
+  if (cmdLocked) {
+    serialPuts("Locked.\r\n");
+  } else {
+    serialPuts("Unlocked.\r\n");
+  }
+  serialPuts("\r\n");
 }
 
 static void printSettingsHR(bool fromNvm) {
@@ -2023,130 +2032,161 @@ Emon32Config_t *configLoadFromNVM(void) {
   return &config;
 }
 
+static void configProcessCmdCleanup(void) {
+  unsavedChange = configCheckUnsaved();
+  cmdPending    = false;
+  inBufferClear(IN_BUFFER_W);
+}
+
 void configProcessCmd(void) {
   cmdArgs = inBufferTok();
 
   if (0 == cmdArgs.argc) {
-    cmdPending = false;
-    inBufferClear(IN_BUFFER_W);
+    configProcessCmdCleanup();
     return;
   }
 
-  switch (cmdArgs.argv[0][0]) {
-  case '?':
-    if (1u == cmdArgs.argc && 1u == strlen(cmdArgs.argv[0])) {
-      serialPuts(configHelpText);
-    } else {
-      serialPutsError("Unexpected arguments.");
-    }
-    break;
-  case 'a':
-    unsavedChange = configureAssumed();
-    break;
-  case 'b':
-    configureBackup();
-    break;
-  case 'c':
-    unsavedChange = configureSerialLog();
-    break;
-  case 'd':
-    unsavedChange = configureDatalog();
-    break;
-  case 'e':
-    enterBootloader();
-    break;
-  case 'f':
-    unsavedChange = configureLineFrequency();
-    break;
-  case 'g':
-    unsavedChange = configureGroupID();
-    break;
-  case 'h':
-    shutdownPi();
-    break;
-  case 'i':
-    unsavedChange = configureCalib();
-    break;
-  case 'j':
-    unsavedChange = configureJSON();
-    break;
-  case 'k':
-    unsavedChange = configureVCTChannel();
-    break;
-  case 'l':
-    if (1u == cmdArgs.argc) {
-      printSettings();
-    } else {
-      serialPutsError("Unexpected arguments.");
-    }
-    break;
-  case 'm':
-    if (configureOPA()) {
-      unsavedChange = true;
-      emon32EventSet(EVT_OPA_INIT);
-    }
-    break;
-  case 'o':
-    if (configure1WAddr()) {
-      unsavedChange = true;
-      emon32EventSet(EVT_OPA_INIT);
-    }
-    break;
-  case 'n':
-    unsavedChange = configureNodeID();
-    break;
-  case 'p':
-    unsavedChange = configureRFPower();
-    break;
-  case 'q':
-    resetRequest();
-    break;
-  case 'r':
-    configureRestore();
-    break;
-  case 's':
-    saveToNVM();
-    break;
-  case 't':
-    if (1u == cmdArgs.argc && 1u == strlen(cmdArgs.argv[0])) {
-      emon32EventSet(EVT_ECM_TRIG);
-    } else {
-      serialPutsError("Unexpected arguments.");
-    }
-    break;
-  case 'u':
-    if (1u == cmdArgs.argc && 1u == strlen(cmdArgs.argv[0])) {
-      emon32EventSet(EVT_STORE_ACCUM);
-    } else {
-      serialPutsError("Unexpected arguments.");
-    }
-    break;
-  case 'v':
-    if (1u == cmdArgs.argc && 1u == strlen(cmdArgs.argv[0])) {
-      configFirmwareBoardInfo();
-    } else {
-      serialPutsError("Unexpected arguments.");
-    }
-    break;
-  case 'w':
-    unsavedChange = configureRFEnable();
-    break;
-  case 'x':
-    unsavedChange = configureRF433();
-    break;
-  case 'y':
-    configureAccumulatorSet();
-    break;
-  case 'z':
-    parseAndZeroAccumulator();
-    break;
-  default:
-    break;
+  if (0 == strcmp(cmdArgs.argv[0], "emonlock")) {
+    cmdLocked = true;
+    serialPuts("> Locked.\r\n");
+    configProcessCmdCleanup();
+    return;
+  } else if (0 == strcmp(cmdArgs.argv[0], "emonunlock")) {
+    cmdLocked = false;
+    serialPuts("> Unlocked.\r\n");
+    configProcessCmdCleanup();
+    return;
   }
 
-  unsavedChange = configCheckUnsaved();
-  cmdPending    = false;
-  inBufferClear(IN_BUFFER_W);
+  /* Only a few commands are available when locked */
+  bool unlockedCommand = false;
+
+  switch (cmdArgs.argv[0][0]) {
+  case 'b':
+  case 'l':
+  case 'v':
+    unlockedCommand = true;
+  }
+
+  if (cmdLocked && !unlockedCommand) {
+    serialPutsError("Locked.");
+  }
+
+  if (!cmdLocked || unlockedCommand) {
+
+    switch (cmdArgs.argv[0][0]) {
+    case '?':
+      if (1u == cmdArgs.argc && 1u == strlen(cmdArgs.argv[0])) {
+        serialPuts(configHelpText);
+      } else {
+        serialPutsError("Unexpected arguments.");
+      }
+      break;
+    case 'a':
+      unsavedChange = configureAssumed();
+      break;
+    case 'b':
+      configureBackup();
+      break;
+    case 'c':
+      unsavedChange = configureSerialLog();
+      break;
+    case 'd':
+      unsavedChange = configureDatalog();
+      break;
+    case 'e':
+      enterBootloader();
+      break;
+    case 'f':
+      unsavedChange = configureLineFrequency();
+      break;
+    case 'g':
+      unsavedChange = configureGroupID();
+      break;
+    case 'h':
+      shutdownPi();
+      break;
+    case 'i':
+      unsavedChange = configureCalib();
+      break;
+    case 'j':
+      unsavedChange = configureJSON();
+      break;
+    case 'k':
+      unsavedChange = configureVCTChannel();
+      break;
+    case 'l':
+      if (1u == cmdArgs.argc) {
+        printSettings();
+      } else {
+        serialPutsError("Unexpected arguments.");
+      }
+      break;
+    case 'm':
+      if (configureOPA()) {
+        unsavedChange = true;
+        emon32EventSet(EVT_OPA_INIT);
+      }
+      break;
+    case 'o':
+      if (configure1WAddr()) {
+        unsavedChange = true;
+        emon32EventSet(EVT_OPA_INIT);
+      }
+      break;
+    case 'n':
+      unsavedChange = configureNodeID();
+      break;
+    case 'p':
+      unsavedChange = configureRFPower();
+      break;
+    case 'q':
+      resetRequest();
+      break;
+    case 'r':
+      configureRestore();
+      break;
+    case 's':
+      saveToNVM();
+      break;
+    case 't':
+      if (1u == cmdArgs.argc && 1u == strlen(cmdArgs.argv[0])) {
+        emon32EventSet(EVT_ECM_TRIG);
+      } else {
+        serialPutsError("Unexpected arguments.");
+      }
+      break;
+    case 'u':
+      if (1u == cmdArgs.argc && 1u == strlen(cmdArgs.argv[0])) {
+        emon32EventSet(EVT_STORE_ACCUM);
+      } else {
+        serialPutsError("Unexpected arguments.");
+      }
+      break;
+    case 'v':
+      if (1u == cmdArgs.argc && 1u == strlen(cmdArgs.argv[0])) {
+        configFirmwareBoardInfo();
+      } else {
+        serialPutsError("Unexpected arguments.");
+      }
+      break;
+    case 'w':
+      unsavedChange = configureRFEnable();
+      break;
+    case 'x':
+      unsavedChange = configureRF433();
+      break;
+    case 'y':
+      configureAccumulatorSet();
+      break;
+    case 'z':
+      parseAndZeroAccumulator();
+      break;
+    default:
+      break;
+    }
+  }
+  configProcessCmdCleanup();
 }
 
 bool configUnsavedChanges(void) { return unsavedChange; }
