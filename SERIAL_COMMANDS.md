@@ -32,7 +32,9 @@ To test if your serial connection is working, try these commands first:
 | Command | Description |
 |---------|-------------|
 | **?** | Show help text |
-| **a\<n>** | Set the assumed RMS voltage as integer (when no AC voltage detected)<br>Example: `a230` sets assumed voltage to 230V |
+| **emonlock** | Lock the configuration interface |
+| **emonunlock** | Unlock the configuration interface |
+| **a\<n>** | Set the assumed RMS voltage as integer (when no AC voltage detected)<br>Example: `a230` sets assumed voltage to 230 V |
 | **b** | Backup configuration to serial |
 | **c\<n>** | Log to serial output<br>- `c0`: Disable serial logging<br>- `c1`: Enable serial logging<br>- `c1`: Enable verbose serial logging |
 | **d\<x.x>** | Set data log period in seconds<br>Example: `d10.0` sets logging period to 10 seconds |
@@ -72,6 +74,15 @@ When making configuration changes:
 3. Save with `s` (save to NVM)
 
 ## Examples
+
+### Lock and unlocking the configuration
+
+To protect against accidental changes, the configuration interface can be locked against changes. Read only commands are still available when locked.
+
+```
+emonlock             # Configuration locked
+emonunlock           # Configuration unlocked
+```
 
 ### Enable Voltage Channels V2 and V3 (for 3-phase monitoring)
 

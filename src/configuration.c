@@ -2069,7 +2069,8 @@ void configProcessCmd(void) {
     unlockedCommand = true;
     break;
   case 'o':
-    unlockedCommand = ('l' == cmdArgs.argv[0][1]);
+    unlockedCommand =
+        ('l' == cmdArgs.argv[0][1]) || ('n' == cmdArgs.argv[0][1]);
   }
 
   if (cmdLocked && !unlockedCommand) {

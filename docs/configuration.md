@@ -27,6 +27,8 @@ The following table details the available commands and their function.
 | Command | Description |
 |---------|-------------|
 | **?** | Show help text |
+| **emonlock** | Lock the configuration interface |
+| **emonunlock** | Unlock the configuration interface |
 | **a\<n>** | Set the assumed RMS voltage as integer (when no AC voltage detected)<br>Example: `a230` sets assumed voltage to 230V |
 | **b** | Backup configuration to serial |
 | **c\<n>** | Log to serial output<br>- `c0`: Disable serial logging<br>- `c1`: Enable serial logging<br>- `c1`: Enable serial logging |
@@ -57,6 +59,10 @@ The following table details the available commands and their function.
 | **ye<n> <m>** | Set energy accumulator `n` to `m` Wh |
 | **yp<n> <m>** | Set pulse accumulator `n` to `m` pulses |
 | **z** | Zero energy/pulse accumulators (reset Wh/pulse counters)<br>- `z`: Zero all accumulators (E1-E12, pulse1-3) with confirmation<br>- `ze1` to `ze12`: Zero individual energy accumulator (e.g., `ze3` zeros E3 only)<br>- `zp1` to `zp2`: Zero individual pulse accumulator (e.g., `zp1` zeros pulse1 only)<br>All commands require 'y' confirmation |
+
+## Locking and unlocking the configuration
+
+To protect against accidental changes, the configuration interface can be locked against changes. Read only commands are still available when locked.
 
 ## EmonHub Node Decoder Configuration
 
