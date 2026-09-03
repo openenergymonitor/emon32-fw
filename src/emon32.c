@@ -74,7 +74,9 @@ static void cumulativeProcess(Emon32Cumulative_t    *pPkt,
 static void datasetAddPulse(Emon32Dataset_t *pDst);
 static void ecmDmaCallback(void);
 static void evtKiloHertz(void);
+static void evtClear(const EVTSRC_t evt);
 static bool evtPending(EVTSRC_t evt);
+static bool evtTake(const EVTSRC_t evt);
 static void handleCalibCfg(const ECMDataset_t *pECM);
 static void handleCalibCfgPrintA(const CalibCfgP_t *pCal);
 static void handleCalibCfgPrintP(const float phi, const size_t idx);
@@ -283,7 +285,7 @@ void ecmDmaCallback(void) {
   }
 }
 
-void emon32EventClr(const EVTSRC_t evt) {
+static void evtClear(const EVTSRC_t evt) {
   /* Disable interrupts during RMW update of event status */
   uint32_t evtDecode = ~(1u << evt);
   __disable_irq();
@@ -338,6 +340,18 @@ static void evtKiloHertz(void) {
  *  @return true if pending, false otherwise
  */
 static bool evtPending(EVTSRC_t evt) { return (evtPend & (1u << evt)) != 0; }
+
+static bool evtTake(const EVTSRC_t evt) {
+  uint32_t evtDecode = (1u << evt);
+  uint32_t primask   = __get_PRIMASK();
+
+  __disable_irq();
+  const bool ret = (evtPend & evtDecode) ? true : false;
+  evtPend &= ~evtDecode;
+  __set_PRIMASK(primask);
+
+  return ret;
+}
 
 static void handleCalibCfg(const ECMDataset_t *pECM) {
   CalibConfig_t *calibcfg = configCalibStatus();
@@ -656,7 +670,7 @@ static void tempReadEvt(Emon32Dataset_t *pData, const uint32_t numT) {
 
   if ((0 == numT) || (numT == tempRdCount)) {
     emon32EventSet(EVT_PROCESS_DATASET);
-    emon32EventClr(EVT_TEMP_READ);
+    evtClear(EVT_TEMP_READ);
     tempRdCount = 0;
   }
 }
@@ -904,7 +918,7 @@ int main(void) {
     while (0 != evtPend) {
 
       /* Configure sampling and start */
-      if (evtPending(EVT_SMP_CFG_START)) {
+      if (evtTake(EVT_SMP_CFG_START)) {
         const bool ainActive =
             pConfig->opaCfg[2].func == 'a' && pConfig->opaCfg[2].opaActive;
         adcDMACStop();
@@ -913,24 +927,22 @@ int main(void) {
         ecmFlush();
         dmacCallbackBufferFill(&ecmDmaCallback);
         adcDMACStart();
-        emon32EventClr(EVT_SMP_CFG_START);
       }
 
       /* External interface disable */
-      if (evtPending(EVT_EXT_DISABLE)) {
+      if (evtTake(EVT_EXT_DISABLE)) {
         sercomExtIntfDisable();
-        emon32EventClr(EVT_EXT_DISABLE);
       }
 
       /* Raspberry Pi has shutdown, indicate safe to remove power */
       if (evtPending(EVT_PI_SHUTDOWN)) {
         if (!ssd1306IndicateShutdown()) {
-          emon32EventClr(EVT_PI_SHUTDOWN);
+          evtClear(EVT_PI_SHUTDOWN);
         }
       }
 
       /* 1 ms timer flag */
-      if (evtPending(EVT_TICK_1kHz)) {
+      if (evtTake(EVT_TICK_1kHz)) {
         wdtFeed();
         tud_task();
         usbCDCTask();
@@ -942,30 +954,26 @@ int main(void) {
         configCheckConfirmationTimeout();
 
         evtKiloHertz();
-        emon32EventClr(EVT_TICK_1kHz);
       }
 
       /* Pending character(s) from the serial receive queue */
-      if (evtPending(EVT_PROCESS_RX_CHAR)) {
-        emon32EventClr(EVT_PROCESS_RX_CHAR);
+      if (evtTake(EVT_PROCESS_RX_CHAR)) {
         configRxProcess();
       }
 
       /* Pending character(s) in echo queue */
-      if (evtPending(EVT_ECHO)) {
+      if (evtTake(EVT_ECHO)) {
         uint8_t c = configEchoChar();
         while (c) {
           putchar_((char)c);
           c = configEchoChar();
         }
-        emon32EventClr(EVT_ECHO);
       }
 
       /* Configuration request to store accumulator values to NVM on demand. */
-      if (evtPending(EVT_STORE_ACCUM)) {
+      if (evtTake(EVT_STORE_ACCUM)) {
         cumulativeNVMStore(&nvmCumulative, &dataset, false);
         printf_("> Storing...\r\n");
-        emon32EventClr(EVT_STORE_ACCUM);
       }
 
       /* Configuration request to clear all accumulator values (energy and
@@ -973,7 +981,7 @@ int main(void) {
        * next read/write is reset. Clear the running counters in the main
        * loop, any residual energy in the dataset, and all pulse counters.
        */
-      if (evtPending(EVT_CLEAR_ACCUM)) {
+      if (evtTake(EVT_CLEAR_ACCUM)) {
         lastStoredEP.E = 0;
         lastStoredEP.P = 0;
         /* REVISIT : may need to make this asynchronous as it will take 240 ms
@@ -986,29 +994,25 @@ int main(void) {
           pulseSetCount(i, 0);
         }
         serialPuts("    - Accumulators cleared.\r\n");
-        emon32EventClr(EVT_CLEAR_ACCUM);
       }
 
       /* There has been a trigger request externally; the CM buffers will be
        * swapped on the next cycle. If there has been sufficient time between
        * the last temperature sample, start a temperature sample as well.
        */
-      if (evtPending(EVT_ECM_TRIG)) {
+      if (evtTake(EVT_ECM_TRIG)) {
         tempSample(numTempSensors);
         ecmProcessSetTrigger();
-        emon32EventClr(EVT_ECM_TRIG);
       }
 
       /* Trigger a temperature sample 1 s before the report is due. */
-      if (evtPending(EVT_ECM_PEND_1S)) {
+      if (evtTake(EVT_ECM_PEND_1S)) {
         tempSample(numTempSensors);
-        emon32EventClr(EVT_ECM_PEND_1S);
       }
 
       /* Readout has been requested, trigger a temperature read. */
-      if (evtPending(EVT_ECM_SET_CMPL)) {
+      if (evtTake(EVT_ECM_SET_CMPL)) {
         emon32EventSet(EVT_TEMP_READ);
-        emon32EventClr(EVT_ECM_SET_CMPL);
       }
 
       /* Read back samples from each DS18B20 present. This is a blocking
@@ -1020,7 +1024,7 @@ int main(void) {
         if (sercomExtIntfEnabled()) {
           tempReadEvt(&dataset, numTempSensors);
         } else {
-          emon32EventClr(EVT_TEMP_READ);
+          evtClear(EVT_TEMP_READ);
           emon32EventSet(EVT_PROCESS_DATASET);
         }
       }
@@ -1028,7 +1032,7 @@ int main(void) {
       /* Report period elapsed; generate, pack, and send through the
        * configured channels.
        */
-      if (evtPending(EVT_PROCESS_DATASET)) {
+      if (evtTake(EVT_PROCESS_DATASET)) {
 
         dataset.msgNum++;
         dataset.pECM = ecmProcessSet();
@@ -1047,7 +1051,6 @@ int main(void) {
         uiLedColour(LED_RED);
         txBlink.timeBlink  = timerMillis();
         txBlink.txIndicate = true;
-        emon32EventClr(EVT_PROCESS_DATASET);
       }
 
       if (evtPending(EVT_TX_RFM)) {
@@ -1062,7 +1065,7 @@ int main(void) {
 
           if (0 == rfmPkts) {
             /* All packets sent */
-            emon32EventClr(EVT_TX_RFM);
+            evtClear(EVT_TX_RFM);
           } else if (rfmPkts & 0x1u) {
             sendPkt = true;
           } else if (rfmPkts & (1u << 1)) {
@@ -1087,16 +1090,15 @@ int main(void) {
         } else if (RFM_TX_ABORT == txState) {
           /* RFM module blocked, reset and reconfigure */
           rfmConfigure();
-          emon32EventClr(EVT_TX_RFM);
+          evtClear(EVT_TX_RFM);
         }
       }
 
-      if (evtPending(EVT_PROCESS_CMD)) {
-        emon32EventClr(EVT_PROCESS_CMD);
+      if (evtTake(EVT_PROCESS_CMD)) {
         configProcessCmd();
       }
 
-      if (evtPending(EVT_OPA_INIT)) {
+      if (evtTake(EVT_OPA_INIT)) {
         pulseConfigure();
         numTempSensors = tempSetup(&dataset);
         if (numTempSensorsLast != numTempSensors) {
@@ -1104,7 +1106,6 @@ int main(void) {
                   numTempSensors, (1u == numTempSensors ? "" : "s"));
           numTempSensorsLast = numTempSensors;
         }
-        emon32EventClr(EVT_OPA_INIT);
       }
     }
 

@@ -111,11 +111,6 @@ void debugPuts(const char *s);
 /*! @brief Configure the continuous energy monitoring system */
 void ecmConfigure(void);
 
-/*! @brief Clear a pending event/interrupt flag after the task has been handled
- *  @param [in] evt : event source in enum
- */
-void emon32EventClr(const EVTSRC_t evt);
-
 /*! @brief Set the pending event/interrupt flag for tasks that are not handled
  *         within an ISR
  *  @param [in] evt : Event source in enum
