@@ -401,8 +401,9 @@ static bool configureVCTChannel(void) {
   }
 
   /* CT configuration - assume 10/200 A min/max CTs */
-  if ((calAmpl < 10.0f) || (calAmpl) > 200.0f) {
-    serialPutsError("iCal out of range (valid: 10-200).");
+  const float calAmplAbs = utilFabs(calAmpl);
+  if ((calAmplAbs < 10.0f) || (calAmplAbs) > 200.0f) {
+    serialPutsError("iCal out of range (valid: ±10-200).");
     return false;
   }
 
