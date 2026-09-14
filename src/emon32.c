@@ -85,9 +85,9 @@ static void rfmConfigure(void);
 static bool ssd1306IndicateShutdown(void);
 static void ssd1306IndicateStartup(void);
 static void ssd1306RefreshTitle(void);
-static void ssd1306Setup(void);
-static void tempReadEvt(Emon32Dataset_t *pData, const uint32_t numT);
-static void tempSample(const uint32_t numTempSensors);
+static uint32_t ssd1306Setup(void);
+static void     tempReadEvt(Emon32Dataset_t *pData, const uint32_t numT);
+static void     tempSample(const uint32_t numTempSensors);
 static uint32_t tempSetup(Emon32Dataset_t *pData);
 static void     totalEnergy(const Emon32Dataset_t *pData, EPAccum_t *pAcc);
 static void     transmitData(const Emon32Dataset_t *pSrc, uint32_t *pPkt);
@@ -626,11 +626,21 @@ static void ssd1306RefreshTitle(void) {
   ssd1306DisplayUpdate();
 }
 
-/*! @brief Setup the SSD1306 display, if present. Display a basic message */
-static void ssd1306Setup(void) {
-  if (SSD1306_SUCCESS == ssd1306Init(SERCOM_I2CM_EXT)) {
-    ssd1306IndicateStartup();
-  }
+/*! @brief Setup the SSD1306 display. If present, display a basic message. Retry
+ * up to 4 times with I2C bus recovery as device is coming out of reset. */
+static uint32_t ssd1306Setup(void) {
+  uint32_t retries = 0u;
+  do {
+    const SSD1306_Status_t s = ssd1306Init(SERCOM_I2CM_EXT);
+    if (SSD1306_SUCCESS == s) {
+      ssd1306IndicateStartup();
+      break;
+    } else {
+      retries++;
+      waitWithUSB(100u);
+    }
+  } while (retries < 4u);
+  return retries;
 }
 
 static void tempReadEvt(Emon32Dataset_t *pData, const uint32_t numT) {
@@ -870,7 +880,7 @@ int main(void) {
   /* Pause to allow any external pins to settle */
   waitWithUSB(100);
   spiConfigureExt();
-  ssd1306Setup();
+  const uint32_t ssdRetries = ssd1306Setup();
 
   eicEnable();
   uartEnableTx(SERCOM_UART);
@@ -894,10 +904,9 @@ int main(void) {
   numTempSensors     = tempSetup(&dataset);
   numTempSensorsLast = numTempSensors;
 
-  /* Wait 1s to allow USB to enumerate as serial. Not always possible, but
-   * gives the possibility. The board information can be accessed through the
-   * serial console later. */
-  waitWithUSB(1000);
+  /* Wait 1 s to allow USB to enumerate as serial. Not always possible. The
+   * board information can be accessed through the serial console later. */
+  waitWithUSB(1000u - (ssdRetries * 100u));
   configFirmwareBoardInfo();
   uartEnableRx(SERCOM_UART, SERCOM_UART_INTERACTIVE_IRQn);
   wdtEnable();
