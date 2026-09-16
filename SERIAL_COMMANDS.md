@@ -36,7 +36,7 @@ To test if your serial connection is working, try these commands first:
 | **emonunlock** | Unlock the configuration interface |
 | **a\<n>** | Set the assumed RMS voltage as integer (when no AC voltage detected)<br>Example: `a230` sets assumed voltage to 230 V |
 | **b** | Backup configuration to serial |
-| **c\<n>** | Log to serial output<br>- `c0`: Disable serial logging<br>- `c1`: Enable serial logging<br>- `c1`: Enable verbose serial logging |
+| **c\<n>** | Log to serial output<br>- `c0`: Disable serial logging<br>- `c1`: Enable serial logging<br>- `c2`: Enable verbose serial logging |
 | **d\<x.x>** | Set data log period in seconds<br>Example: `d10.0` sets logging period to 10 seconds |
 | **e** | Enter bootloader mode for firmware updates |
 | **f\<n>** | Set line frequency in Hz<br>- `f50`: 50 Hz (Europe, UK, etc.)<br>- `f60`: 60 Hz (US, Canada, etc.) |
@@ -58,12 +58,13 @@ To test if your serial connection is working, try these commands first:
 | **rs** | Restore saved settings (unsaved changes will be lost) |
 | **s** | Save settings to NVM (non-volatile memory)<br>Must be used after making configuration changes |
 | **t** | Trigger report on next cycle (force immediate data transmission) |
+| **u** | Save accumulator values to NVM |
 | **v** | Show firmware and board information |
 | **w\<n>** | RF module active<br>- `w0`: Disable RF<br>- `w1`: Enable RF |
 | **x\<n>** | 433 MHz RF frequency compatibility<br>- `x0`: 433.92 MHz (standard)<br>- `x1`: 433.00 MHz (legacy compatibility) |
 | **ye<n> <m>** | Set energy accumulator `n` to `m` Wh |
 | **yp<n> <m>** | Set pulse accumulator `n` to `m` pulses |
-| **z** | Zero energy/pulse accumulators (reset Wh/pulse counters)<br>- `z`: Zero all accumulators (E1-E12, pulse1-3) with confirmation<br>- `ze1` to `ze12`: Zero individual energy accumulator (e.g., `ze3` zeros E3 only)<br>- `zp1` to `zp2`: Zero individual pulse accumulator (e.g., `zp1` zeros pulse1 only)<br>All commands require 'y' confirmation |
+| **z** | Zero energy/pulse accumulators (reset Wh/pulse counters)<br>- `z`: Zero all accumulators (E1-E12, pulse1-3) with confirmation<br>- `ze1` to `ze12`: Zero individual energy accumulator (e.g., `ze3` zeros E3 only)<br>- `zp1` to `zp3`: Zero individual pulse accumulator (e.g., `zp1` zeros pulse1 only)<br>All commands require 'y' confirmation |
 
 ## Configuration Workflow
 
@@ -87,8 +88,8 @@ emonunlock           # Configuration unlocked
 ### Enable Voltage Channels V2 and V3 (for 3-phase monitoring)
 
 ```
-k2 1 100.0           # Enable V2 with default calibration (100.0)
-k3 1 100.0           # Enable V3 with default calibration (100.0)
+k2 1 100.0 0         # Enable V2 with amplitude scale 100.0 and phase 0.0°
+k3 1 100.0 0         # Enable V3 with amplitude scale 100.0 and phase 0.0°
 s                    # Save configuration
 ```
 
@@ -103,14 +104,14 @@ The phase and voltage reference parameters (v1, v2) are only required for CT cha
 ### Configure a CT channel
 
 ```
-k4 1 90.0 1.5 1 1    # Enable CT4, cal=90.0, phase=1.5°, refs V1-V1
+k4 1 90.0 1.5 1 1    # Enable CT1, cal=90.0, phase=1.5°, refs V1-V1
 s                    # Save configuration
 ```
 
 ### Configure a 3-phase CT on L1-L2
 
 ```
-k4 1 90.0 4.2 1 2    # Enable CT4, references V1 and V2 (L1-L2 load)
+k4 1 90.0 4.2 1 2    # Enable CT1, references V1 and V2 (L1-L2 load)
 s                    # Save configuration
 ```
 
@@ -169,7 +170,7 @@ To add RMS current, power factor, and apparent power to serial output use `c2`.
 
 ```
 f50                   # Set to 50 Hz
-s                     # Save (will automatically reset)
+s                     # Save configuration
 ```
 
 ### Save a OneWire temperature sensor to a position

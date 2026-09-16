@@ -83,20 +83,10 @@ It is available on:
 
 ### Run time configuration
 
-The _emon32_ firmware is compatible with the OpenEnergyMonitor [emonPi2 configuration](https://docs.openenergymonitor.org/emonpi2/configuration.html) options, which can be accessed through the debug serial link.
+The _emon32_ firmware is compatible with the OpenEnergyMonitor [emonPi2 configuration](https://docs.openenergymonitor.org/emonpi2/configuration.html) options, which can be accessed through the serial link. See the [command documentation](SERIAL_COMMANDS.md) for more information.
 
 > [!NOTE]
 > All options can be listed by entering `?`.
-
-The following options are added:
-
-|Command      |Definition                                             |
-|-------------|-------------------------------------------------------|
-|b            |Print the configuration as JSON on serial              |
-|o&lt;_x_&gt; |Auto calibrate CT lead for channel _x_                 |
-|t            |Trigger a data set processing event                    |
-|v            |Print firmware and board information                   |
-|x&lt;_n_&gt; |Set 433.00 MHz compatibility, _n_ = 1                  |
 
 ### Data acquisition
 
@@ -129,7 +119,7 @@ When a full report is ready, the following actions take place:
 
 ### Script to compile and upload
 
-A script [flash-emontx6.sh](./scripts/flash-emontx6.sh) is provided to compile and upload new firmware via the USB-C port.
+A script [./scripts/flash-emontx6.sh](./scripts/flash-emontx6.sh) is provided to compile and upload new firmware via the USB-C port.
 
 #### Script Requirements
 
@@ -179,7 +169,7 @@ The bootloader can be updated by the same process as for uploading normal firmwa
 
 #### Restoring the bootloader
 
-If, for whatever reason, the bootloader is corrupted it can be flashed back to the board with the included binary. The bootloader binary is included in `bin/bootloader-emonPi3-v*` as a `.bin` and `.elf` file. You will need a suitable SWD programmer to do this.
+If, for whatever reason, the bootloader is corrupted it can be flashed back to the board with the included binary. The bootloader binaries are included in `bin/bootloaders/` as `.bin` and `.elf` file. You will need a suitable SWD programmer to do this.
 
 ## Modifications
 
@@ -235,10 +225,10 @@ The following table lists the peripherals used in the SAMD21.
 |EIC              |                 |External interrupt controller  |External device sense              |
 |EVSYS            |                 |Event System                   |Asynchronous event handling        |
 |PORT             |                 |GPIO handling                  |                                   |
-|SERCOM2          |SERCOM_UART      |UART                           |Configuration and data UART        |
-|SERCOM3          |SERCOM_I2CM      |I2C (internal)                 |I2C for internal peripherals       |
-|SERCOM4          |SERCOM_SPI       |SPI                            |Drives RFM module                  |
-|SERCOM5          |SERCOM_I2M_EXT   |I2C (external)                 |Drives display module              |
+|SERCOM2          |SERCOM_SPI       |SPI                            |Drives RFM module                  |
+|SERCOM3          |SERCOM_I2M_EXT   |I2C (external)                 |Drives display module              |
+|SERCOM4          |SERCOM_I2CM      |I2C (internal)                 |I2C for internal peripherals       |
+|SERCOM5          |SERCOM_UART      |UART                           |Configuration and data UART        |
 |TC3              |TIMER_ADC        |Timer/Counter (16bit)          |ADC sample trigger                 |
 |TC4+5            |TIMER_DELAY      |Timer/Counter (32bit)          |Delay timer                        |
 |TC6+7            |TIMER_TICK       |Timer/Counter (32bit)          |Global time (micro/millisecond)    |

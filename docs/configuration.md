@@ -31,7 +31,7 @@ The following table details the available commands and their function.
 | **emonunlock** | Unlock the configuration interface |
 | **a\<n>** | Set the assumed RMS voltage as integer (when no AC voltage detected)<br>Example: `a230` sets assumed voltage to 230V |
 | **b** | Backup configuration to serial |
-| **c\<n>** | Log to serial output<br>- `c0`: Disable serial logging<br>- `c1`: Enable serial logging<br>- `c1`: Enable serial logging |
+| **c\<n>** | Log to serial output<br>- `c0`: Disable serial logging<br>- `c1`: Enable serial logging<br>- `c2`: Enable serial logging |
 | **d\<x.x>** | Set data log period in seconds<br>Example: `d10.0` sets logging period to 10 seconds |
 | **e** | Enter bootloader mode for firmware updates |
 | **f\<n>** | Set line frequency in Hz<br>- `f50`: 50 Hz (Europe, UK, etc.)<br>- `f60`: 60 Hz (US, Canada, etc.) |
@@ -53,12 +53,13 @@ The following table details the available commands and their function.
 | **rs** | Restore saved settings (unsaved changes will be lost) |
 | **s** | Save settings to NVM (non-volatile memory)<br>Must be used after making configuration changes |
 | **t** | Trigger report on next cycle (force immediate data transmission) |
+| **u** | Save accumulator values to NVM |
 | **v** | Show firmware and board information |
 | **w\<n>** | RF module active<br>- `w0`: Disable RF<br>- `w1`: Enable RF |
 | **x\<n>** | 433 MHz RF frequency compatibility<br>- `x0`: 433.92 MHz (standard)<br>- `x1`: 433.00 MHz (legacy compatibility) |
 | **ye<n> <m>** | Set energy accumulator `n` to `m` Wh |
 | **yp<n> <m>** | Set pulse accumulator `n` to `m` pulses |
-| **z** | Zero energy/pulse accumulators (reset Wh/pulse counters)<br>- `z`: Zero all accumulators (E1-E12, pulse1-3) with confirmation<br>- `ze1` to `ze12`: Zero individual energy accumulator (e.g., `ze3` zeros E3 only)<br>- `zp1` to `zp2`: Zero individual pulse accumulator (e.g., `zp1` zeros pulse1 only)<br>All commands require 'y' confirmation |
+| **z** | Zero energy/pulse accumulators (reset Wh/pulse counters)<br>- `z`: Zero all accumulators (E1-E12, pulse1-3) with confirmation<br>- `ze1` to `ze12`: Zero individual energy accumulator (e.g., `ze3` zeros E3 only)<br>- `zp1` to `zp3`: Zero individual pulse accumulator (e.g., `zp1` zeros pulse1 only)<br>All commands require 'y' confirmation |
 
 ## Locking and unlocking the configuration
 
@@ -70,25 +71,27 @@ The emonTx6 transmits data via RF that needs to be decoded by EmonHub. The node 
 
 ### Single-Phase Mode
 
-When only voltage channel V1 is active, the emonTx6 operates in single-phase mode and transmits a single voltage reading along with power and energy data.
-
 The decoder configuration for node 20 (main CT1-6 channels) in single-phase mode is:
 
 ```
 [[20]]
 nodename = emonTx6_20
 [[[rx]]]
-names =     MSG, Vrms, P1, P2, P3, P4, P5, P6, E1, E2, E3, E4, E5, E6
-datacodes = L, h, h, h, h, h, h, h, l, l, l, l, l, l
-scales =    1.0, 0.01, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0
-units =     n, V, W, W, W, W, W, W, Wh, Wh, Wh, Wh, Wh, Wh
+names =     MSG, Vrms1, Vrms2, Vrms3, P1, P2, P3, P4, P5, P6, E1, E2, E3, E4, E5, E6
+datacodes = L, h, h, h, h, h, h, h, h, h, l, l, l, l, l, l
+scales =    1.0, 0.01, 0.01, 0.01, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0
+units =     n, V, V, V, W, W, W, W, W, W, Wh, Wh, Wh, Wh, Wh, Wh
 ```
 
 **Data fields:**
 - `MSG`: Message counter
-- `Vrms`: Single RMS voltage (scaled by 0.01)
+- `Vrms1`: Single RMS voltage (scaled by 0.01)
+- `Vrms2`: Always 0
+- `Vrms3`: Always 0
 - `P1-P6`: Real power for CT channels 1-6 (watts)
 - `E1-E6`: Energy accumulator for CT channels 1-6 (watt-hours)
+
+In single-phase mode, Vrms2 and Vrms3 will always read as 0.
 
 ### Three-Phase Mode
 
