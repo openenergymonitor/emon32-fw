@@ -44,11 +44,11 @@ typedef struct TxBlink_ {
 } TxBlink_t;
 
 typedef struct CalibCfgP_ {
-  float  mean;
-  float  target;
-  float  newCal;
-  size_t index;
-  bool   isCT;
+  float  mean;   /* Mean amplitude */
+  float  target; /* Target amplitude */
+  float  newCal; /* New calibration value */
+  size_t index;  /* V/CT index */
+  bool   isCT;   /* indicates if this is a CT */
 } CalibCfgP_t;
 
 /*************************************
@@ -79,7 +79,8 @@ static bool evtPending(EVTSRC_t evt);
 static bool evtTake(const EVTSRC_t evt);
 static void handleCalibCfg(const ECMDataset_t *pECM);
 static void handleCalibCfgPrintA(const CalibCfgP_t *pCal);
-static void handleCalibCfgPrintP(const float phi, const size_t idx);
+static void handleCalibCfgPrintP(const float phi, const size_t idx,
+                                 const bool failed);
 static void pulseConfigure(void);
 static void rfmConfigure(void);
 static bool ssd1306IndicateShutdown(void);
@@ -419,14 +420,20 @@ static void handleCalibCfg(const ECMDataset_t *pECM) {
 
       if (calibcfg->iter > CAL_PHASE_MAX_ITER ||
           pfDeltaAbs <= CAL_PHASE_PF_TOL) {
-
-        phiNxt = calibcfg->phi - 90.0f;
+        bool failed = false;
+        /* If the PF didn't settle, restore the original phase. */
+        if (calibcfg->iter > CAL_PHASE_MAX_ITER) {
+          phiNxt = pConfig->ctCfg[calibcfg->ch].phase;
+          failed = true;
+        } else {
+          phiNxt = calibcfg->phi - 90.0f;
+        }
 
         pConfig->ctCfg[calibcfg->ch].phase = phiNxt;
         pEcmCfg->ctCfg[calibcfg->ch].phCal = phiNxt;
         ecmConfigChannel(calibcfg->ch + NUM_V);
         calibcfg->inProgress = false;
-        handleCalibCfgPrintP(phiNxt, calibcfg->ch);
+        handleCalibCfgPrintP(phiNxt, calibcfg->ch, failed);
 
         return;
       }
@@ -487,11 +494,17 @@ static void handleCalibCfgPrintA(const CalibCfgP_t *pCal) {
   serialPuts(".\r\n");
 }
 
-static void handleCalibCfgPrintP(const float phi, const size_t idx) {
-  printf_("> Finished phase calibration for CT%d\r\n.", idx + 1u);
-  serialPuts("  - New phase calibration: ");
-  putFloat(phi, 0);
-  serialPuts("\r\n");
+static void handleCalibCfgPrintP(const float phi, const size_t idx,
+                                 const bool failed) {
+  if (!failed) {
+    printf_("> Finished phase calibration for CT%d\r\n.", idx + 1u);
+    serialPuts("  - New phase calibration: ");
+    putFloat(phi, 0);
+    serialPuts("\r\n");
+  } else {
+    printf_("> Failed to find phase calibration for CT%d\r\n.", idx + 1u);
+    serialPuts("  - Restored original phase value.\r\n");
+  }
 }
 
 /*! @brief Configure any pulse counter interfaces */
