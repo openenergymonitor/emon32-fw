@@ -16,11 +16,12 @@ typedef struct CalibConfig_ {
   float   target; /* target amplitude value. */
   float   accum;  /* accumulated value. */
   /* Phase calibration */
-  float   phi;    /* Current phase. */
-  float   lastPF; /* Previous power factor. */
-  float   incr;   /* Phase increment. */
-  bool    defer;  /* Defer this sample set. */
-  bool    first;  /* Need to take a π/2 sample first. */
+  float   prevDatalog; /* Previous data log period */
+  float   phi;         /* Current phase. */
+  float   lastPF;      /* Previous power factor. */
+  float   incr;        /* Phase increment. */
+  bool    defer;       /* Defer this sample set. */
+  bool    first;       /* Need to take a π/2 sample first. */
 } CalibConfig_t;
 
 /* Configurable options. All the structs are packed to allow simple write to
@@ -153,6 +154,11 @@ void configProcessCmd(void);
  *  @return true if there are unsaved changes, false otherwise
  */
 bool configUnsavedChanges(void);
+
+/*! @brief Update the data log period
+ *  @param [in] datalog : data log period (s)
+ */
+void configUpdateDatalog(const float datalog);
 
 /*! @brief Fetch the version and revision information
  *  @return Version and revision struct

@@ -433,6 +433,11 @@ static void handleCalibCfg(const ECMDataset_t *pECM) {
         pEcmCfg->ctCfg[calibcfg->ch].phCal = phiNxt;
         ecmConfigChannel(calibcfg->ch + NUM_V);
         calibcfg->inProgress = false;
+
+        /* Restore original data log period. */
+        pConfig->baseCfg.reportTime = calibcfg->prevDatalog;
+        configUpdateDatalog(calibcfg->prevDatalog);
+
         handleCalibCfgPrintP(phiNxt, calibcfg->ch, failed);
 
         return;
@@ -473,6 +478,16 @@ static void handleCalibCfg(const ECMDataset_t *pECM) {
       /* If the interpolation position has changed, defer next sample */
       const uint32_t thisIV = pEcmCfg->ctCfg[calibcfg->ch].idxInterpolateV;
       calibcfg->defer       = prevIV != thisIV;
+
+      serialPuts("> Phase Calibration:\r\n");
+      printf_("  - Sample: %d\r\n", calibcfg->iter);
+      serialPuts("  - phi: ");
+      putFloat(calibcfg->phi, 0);
+      serialPuts("\r\n  - PF: ");
+      putFloat(thisPF, 0);
+      serialPuts("\r\n  - phiNxt: ");
+      putFloat(phiNxt, 0);
+      serialPuts("\r\n");
 
       calibcfg->phi    = phiNxt;
       calibcfg->lastPF = thisPF;
@@ -1059,7 +1074,15 @@ int main(void) {
         dataset.msgNum++;
         dataset.pECM = ecmProcessSet();
         datasetAddPulse(&dataset);
-        transmitData(&dataset, &rfmPkts);
+
+        /* During phase calibration, do not send messages as the data log period
+         * is changed. */
+        CalibConfig_t *pCC    = configCalibStatus();
+        const bool     calibP = pCC->inProgress && (pCC->mode == 'p');
+
+        if (!calibP) {
+          transmitData(&dataset, &rfmPkts);
+        }
 
         /* If the energy used since the last storage is greater than the
          * configured energy delta then save the accumulated energy to NVM.

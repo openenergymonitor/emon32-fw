@@ -125,8 +125,9 @@ static void      zeroAccumulators(void);
  * Constants
  *************************************/
 
-#define IN_BUFFER_W  64u
-#define ERROR_PREFIX "> Error: "
+#define IN_BUFFER_W   64u
+#define ERROR_PREFIX  "> Error: "
+#define T_PHASE_CALIB 1.0f /* Phase calibration period */
 
 /*************************************
  * Error output
@@ -532,12 +533,16 @@ static bool configureCalib(void) {
       return false;
     }
 
-    calibcfg.incr  = 1.0f;
-    calibcfg.phi   = 90.0f;
-    calibcfg.defer = true;
-    calibcfg.first = true;
+    calibcfg.prevDatalog = config.baseCfg.reportTime;
+    calibcfg.incr        = 1.0f;
+    calibcfg.phi         = 90.0f;
+    calibcfg.defer       = true;
+    calibcfg.first       = true;
 
     ECMCfg_t *pEcmCfg = ecmConfigGet();
+
+    config.baseCfg.reportTime = T_PHASE_CALIB;
+    configUpdateDatalog(T_PHASE_CALIB);
 
     pEcmCfg->ctCfg[ch - NUM_V].phCal = 90.0f;
     ecmConfigChannel(ch);
@@ -678,9 +683,7 @@ static bool configureDatalog(void) {
   }
 
   config.baseCfg.reportTime = convF.val;
-  config.baseCfg.reportCycles =
-      configTimeToCycles(convF.val, config.baseCfg.mainsFreq);
-  ecmConfigReportCycles(config.baseCfg.reportCycles);
+  configUpdateDatalog(convF.val);
 
   printSettingDatalog(false);
   return true;
@@ -2199,6 +2202,12 @@ bool configUnsavedChanges(void) { return unsavedChange; }
 
 uint16_t configTimeToCycles(const float time, const uint32_t mainsFreq) {
   return (uint16_t)qfp_float2uint(qfp_fmul(time, qfp_uint2float(mainsFreq)));
+}
+
+void configUpdateDatalog(const float datalog) {
+  config.baseCfg.reportCycles =
+      configTimeToCycles(datalog, config.baseCfg.mainsFreq);
+  ecmConfigReportCycles(config.baseCfg.reportCycles);
 }
 
 VersionInfo_t configVersion(void) {
