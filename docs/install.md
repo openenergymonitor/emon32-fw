@@ -7,7 +7,7 @@ The following guide covers installation of the [emonPi3 and emonTx6 6x CT input 
 **Hardware covered in this guide:**
 
 - [emonPi3/emonTx6: 6 input energy monitor](overview.md)
-- emonVs: Precision voltage sensor and power supply
+- [emonVs: Precision voltage sensor and power supply](#emonvs-installation)
 - RJ45 voltage sensor and power supply cable
 - Up to 6 CT sensors
 

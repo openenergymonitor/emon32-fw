@@ -1,5 +1,5 @@
 emonPi3 and emonTx6 User Guide
-==================
+==============================
 
 .. toctree::
    :maxdepth: 2
@@ -9,3 +9,4 @@ emonPi3 and emonTx6 User Guide
    configuration.md
    firmware.md
    Temperature, Pulse, and Analog <other_sensors.md>
+   hardware.md
