@@ -248,3 +248,43 @@ void putFloat(float val, const size_t flt_len) {
 
   serialPuts(strBuffer);
 }
+
+int utilLinearFit(const size_t n, const XY_t *pXY, XY_t *pMC) {
+  /* https://stackoverflow.com/questions/5083465/fast-efficient-least-squares-fit-algorithm-in-c
+   */
+
+  const float fn = qfp_uint2float(n);
+
+  float sumX  = 0.0f;
+  float sumX2 = 0.0f;
+  float sumY  = 0.0f;
+  float sumXY = 0.0f;
+
+  for (size_t i = 0; i < n; i++) {
+    const float x = pXY[i].X;
+    const float y = pXY[i].Y;
+
+    sumX  = qfp_fadd(sumX, x);
+    sumX2 = qfp_fadd(sumX2, qfp_fmul(x, x));
+    sumY  = qfp_fadd(sumY, y);
+    sumXY = qfp_fadd(sumXY, qfp_fmul(x, y));
+  }
+
+  const float denom = qfp_fmul(fn, sumX2) - qfp_fmul(sumX, sumX);
+  /* Singular matrix, can't solve */
+  if (0.0f == denom) {
+    pMC->X = 0.0f;
+    pMC->Y = 0.0f;
+    return 1;
+  }
+
+  /* Gradient */
+  pMC->X = qfp_fsub(qfp_fmul(fn, sumXY), qfp_fmul(sumX, sumY));
+  pMC->X = qfp_fdiv(pMC->X, denom);
+
+  /* Intercept */
+  pMC->Y = qfp_fsub(qfp_fmul(sumY, sumX2), qfp_fmul(sumX, sumXY));
+  pMC->Y = qfp_fdiv(pMC->Y, denom);
+
+  return 0;
+}

@@ -534,17 +534,17 @@ static bool configureCalib(void) {
     }
 
     calibcfg.prevDatalog = config.baseCfg.reportTime;
-    calibcfg.incr        = 1.0f;
-    calibcfg.phi         = 90.0f;
     calibcfg.defer       = true;
-    calibcfg.first       = true;
+    calibcfg.iter        = 0;
+    calibcfg.phipf[0].X  = 80.0f;
+    calibcfg.phipf[1].X  = 100.0f;
 
     ECMCfg_t *pEcmCfg = ecmConfigGet();
 
     config.baseCfg.reportTime = T_PHASE_CALIB;
     configUpdateDatalog(T_PHASE_CALIB);
 
-    pEcmCfg->ctCfg[ch - NUM_V].phCal = 90.0f;
+    pEcmCfg->ctCfg[ch - NUM_V].phCal = 80.0f;
     ecmConfigChannel(ch);
 
     calibcfg.inProgress = true;

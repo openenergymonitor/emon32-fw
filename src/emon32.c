@@ -357,6 +357,8 @@ static bool evtTake(const EVTSRC_t evt) {
 static void handleCalibCfg(const ECMDataset_t *pECM) {
   CalibConfig_t *calibcfg = configCalibStatus();
   if (calibcfg->inProgress) {
+
+    /* Amplitude calibration */
     if (calibcfg->mode == 'a') {
 
       calibcfg->accum =
@@ -403,94 +405,73 @@ static void handleCalibCfg(const ECMDataset_t *pECM) {
         }
         calibcfg->inProgress = false;
       }
-    } else { /* Phase calibration */
+
+    } else {
+
+      /* Phase calibration */
       ECMCfg_t   *pEcmCfg = ecmConfigGet();
-      const float lastPF  = calibcfg->lastPF;
       const float thisPF  = pECM->CT[calibcfg->ch].pf;
+      float       phiNxt  = 0.0f;
 
       if (calibcfg->defer) {
         calibcfg->defer = false;
         return;
       }
 
-      calibcfg->iter++;
-      const float pfDelta    = qfp_fsub(lastPF, thisPF);
-      const float pfDeltaAbs = utilFabs(pfDelta);
-      float       phiNxt;
+      if (2u > calibcfg->iter) {
+        calibcfg->defer                   = true;
+        calibcfg->phipf[calibcfg->iter].Y = thisPF;
 
-      if (calibcfg->iter > CAL_PHASE_MAX_ITER ||
-          pfDeltaAbs <= CAL_PHASE_PF_TOL) {
-        bool failed = false;
-        /* If the PF didn't settle, restore the original phase. */
-        if (calibcfg->iter > CAL_PHASE_MAX_ITER) {
-          phiNxt = pConfig->ctCfg[calibcfg->ch].phase;
-          failed = true;
-        } else {
-          phiNxt = calibcfg->phi - 90.0f;
+        if (0u == calibcfg->iter) {
+          phiNxt = 100.0f;
+        } else if (1u == calibcfg->iter) {
+          XY_t mc = {0};
+          utilLinearFit(2u, calibcfg->phipf, &mc);
+
+          /* Take ±1° around coarse ~0 PF in 8 x 0.25° increments */
+          phiNxt = qfp_fsub(qfp_fdiv(mc.Y, qfp_fmul(mc.X, -1.0f)), 1.0f);
+          calibcfg->phipf[0].X = phiNxt;
+          for (size_t i = 1; i < CAL_PHASE_ITER; i++) {
+            calibcfg->phipf[i].X = qfp_fadd(calibcfg->phipf[i - 1u].X, 0.25f);
+          }
         }
 
-        pConfig->ctCfg[calibcfg->ch].phase = phiNxt;
-        pEcmCfg->ctCfg[calibcfg->ch].phCal = phiNxt;
-        ecmConfigChannel(calibcfg->ch + NUM_V);
-        calibcfg->inProgress = false;
+        calibcfg->iter++;
 
-        /* Restore original data log period. */
-        pConfig->baseCfg.reportTime = calibcfg->prevDatalog;
-        configUpdateDatalog(calibcfg->prevDatalog);
-
-        handleCalibCfgPrintP(phiNxt, calibcfg->ch, failed);
-
-        return;
-      }
-
-      if (calibcfg->first) {
-        calibcfg->first  = false;
-        calibcfg->lastPF = thisPF;
-        phiNxt           = qfp_fadd(calibcfg->phi, calibcfg->incr);
-
-        calibcfg->phi                      = phiNxt;
-        pEcmCfg->ctCfg[calibcfg->ch].phCal = phiNxt;
-        ecmConfigChannel(calibcfg->ch + NUM_V);
-        return;
-      }
-
-      bool pfCrossing   = qfp_fmul(lastPF, thisPF) < 0.0f;
-      bool pfAbsGreater = (lastPF < utilFabs(thisPF));
-
-      if (!pfCrossing) {
-        if (pfAbsGreater) {
-          /* Going in the wrong direction. */
-          calibcfg->incr = qfp_fmul(calibcfg->incr, -1.0f);
-          phiNxt = qfp_fadd(calibcfg->phi, qfp_fmul(calibcfg->incr, 2.0f));
-        } else {
-          phiNxt = qfp_fadd(calibcfg->phi, calibcfg->incr);
-        }
       } else {
-        /* Crossed PF == 0, reverse and reduce step size */
-        calibcfg->incr = qfp_fmul(calibcfg->incr, -0.5f);
-        phiNxt         = qfp_fadd(calibcfg->phi, calibcfg->incr);
+
+        /* Linear through points to get phase value */
+        if (calibcfg->iter == (CAL_PHASE_ITER + 1u)) {
+          bool failed = false;
+          XY_t mc     = {0};
+
+          failed = (bool)utilLinearFit(CAL_PHASE_ITER, calibcfg->phipf, &mc);
+
+          if (!failed) {
+            /* Setting Y(PF) = 0, solve for X(PHI) = m / c */
+            phiNxt = qfp_fsub(qfp_fdiv(mc.Y, qfp_fmul(mc.X, -1.0f)), 90.0f);
+          } else {
+            /* Restore previous value if failed */
+            phiNxt = pConfig->ctCfg[calibcfg->ch].phase;
+          }
+
+          /* Restore original data log period. */
+          pConfig->baseCfg.reportTime = calibcfg->prevDatalog;
+          configUpdateDatalog(calibcfg->prevDatalog);
+
+          calibcfg->inProgress = false;
+          handleCalibCfgPrintP(phiNxt, calibcfg->ch, failed);
+
+        } else {
+          calibcfg->phipf[calibcfg->iter - 2u].Y = thisPF;
+
+          calibcfg->iter++;
+          phiNxt = calibcfg->phipf[calibcfg->iter - 2u].X;
+        }
       }
 
-      const uint32_t prevIV = pEcmCfg->ctCfg[calibcfg->ch].idxInterpolateV;
       pEcmCfg->ctCfg[calibcfg->ch].phCal = phiNxt;
       ecmConfigChannel(calibcfg->ch + NUM_V);
-
-      /* If the interpolation position has changed, defer next sample */
-      const uint32_t thisIV = pEcmCfg->ctCfg[calibcfg->ch].idxInterpolateV;
-      calibcfg->defer       = prevIV != thisIV;
-
-      serialPuts("> Phase Calibration:\r\n");
-      printf_("  - Sample: %d\r\n", calibcfg->iter);
-      serialPuts("  - phi: ");
-      putFloat(calibcfg->phi, 0);
-      serialPuts("\r\n  - PF: ");
-      putFloat(thisPF, 0);
-      serialPuts("\r\n  - phiNxt: ");
-      putFloat(phiNxt, 0);
-      serialPuts("\r\n");
-
-      calibcfg->phi    = phiNxt;
-      calibcfg->lastPF = thisPF;
     }
   }
 }
@@ -512,7 +493,7 @@ static void handleCalibCfgPrintA(const CalibCfgP_t *pCal) {
 static void handleCalibCfgPrintP(const float phi, const size_t idx,
                                  const bool failed) {
   if (!failed) {
-    printf_("> Finished phase calibration for CT%d\r\n.", idx + 1u);
+    printf_("> Finished phase calibration for CT%d.\r\n", idx + 1u);
     serialPuts("  - New phase calibration: ");
     putFloat(phi, 0);
     serialPuts("\r\n");

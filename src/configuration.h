@@ -5,23 +5,21 @@
 #include <stdint.h>
 
 #include "board_def.h"
+#include "util.h"
 
 typedef struct CalibConfig_ {
   bool    inProgress; /* true when a configuration is in progress. */
   bool    isCT;       /* Indicate if channel is CT or V. */
   uint8_t ch;         /* channel that's being configured. */
-  uint8_t iter;       /* Iteration count. */
   char    mode;       /* amplitude or phase configuration. */
   /* Amplitude calibration */
   float   target; /* target amplitude value. */
   float   accum;  /* accumulated value. */
   /* Phase calibration */
   float   prevDatalog; /* Previous data log period */
-  float   phi;         /* Current phase. */
-  float   lastPF;      /* Previous power factor. */
-  float   incr;        /* Phase increment. */
-  bool    defer;       /* Defer this sample set. */
-  bool    first;       /* Need to take a π/2 sample first. */
+  size_t  iter;        /* Fill iteration */
+  XY_t    phipf[8];    /* Phase/PF pairs */
+  bool    defer;       /* Defer this sample set */
 } CalibConfig_t;
 
 /* Configurable options. All the structs are packed to allow simple write to

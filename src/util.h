@@ -29,6 +29,11 @@ typedef struct ConvUint_ {
   } val;
 } ConvUint_t;
 
+typedef struct XY_ {
+  float X;
+  float Y;
+} XY_t;
+
 /*! @brief Convert null terminated string to float, returns the value.
  *  @param [in] pBuf : pointer to string buffer
  *  @return converted float and status
@@ -76,6 +81,14 @@ size_t utilFtoa(char *pBuf, float val);
  *  @return the number of characters (including NULL).
  */
 size_t utilItoa(char *pBuf, int32_t val, const ITOA_BASE_t base);
+
+/*! @brief Return the gradient and intercept of a set of data
+ *  @param [in] n : number of points
+ *  @param [in] pXY : pointer to X/Y pairs
+ *  @param [out] pMC : pointer to gradient/intercept pair
+ *  @return : 0 for success, 1 otherwise
+ */
+int utilLinearFit(const size_t n, const XY_t *pXY, XY_t *pMC);
 
 /*! @brief Convert unsigned integer to null terminated string.
  *  @param [in] pBuf : pointer to string buffer, at least 11 characters
