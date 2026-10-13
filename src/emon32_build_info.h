@@ -17,8 +17,9 @@
 
 struct Emon32BuildInfo {
   /*
-      The release is the closest tag to the build's revision, aka - the most
-      recent release when the build was created.
+      For a tagged revision, the release is that tag. On main, it is the most
+      recent reachable tag. On other branches, it is the highest versioned
+      release branch with a beta suffix.
 
       Don't parse or compare to this string, the release year, month, and
       day are given separate properties if you want to programmatically

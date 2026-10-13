@@ -11,8 +11,9 @@ import platform
 import pwd
 import subprocess
 import textwrap
-
 from datetime import datetime, timezone
+
+from version_info import extract_commit, extract_version
 
 
 def username():
@@ -28,27 +29,11 @@ def generate_build_info_c(configuration, cc=""):
         text=True,
     ).stdout.strip()
 
-    try:
-        release = subprocess.run(
-            ["git", "describe", "--always", "--tags", "--abbrev=0"],
-            capture_output=True,
-            check=True,
-            text=True,
-        ).stdout.strip()
-    except subprocess.CalledProcessError:
-        release = "None"
+    release = extract_version()
 
     day, month, year = datetime.now(timezone.utc).strftime("%d.%m.%Y").split(".")
 
-    try:
-        revision = subprocess.run(
-            ["git", "describe", "--always", "--dirty"],
-            capture_output=True,
-            check=True,
-            text=True,
-        ).stdout.strip()
-    except subprocess.CalledProcessError:
-        revision = "None"
+    revision = extract_commit()
 
     compiler = f"gcc {gcc_version}"
 
