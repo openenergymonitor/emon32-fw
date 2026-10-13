@@ -15,6 +15,7 @@
 #include "driver_USB.h"
 #include "driver_WDT.h"
 
+#include "calibration.h"
 #include "configuration.h"
 #include "dataPack.h"
 #include "eeprom.h"
@@ -43,14 +44,6 @@ typedef struct TxBlink_ {
   uint32_t timeBlink;  /* Time to blink LED for */
 } TxBlink_t;
 
-typedef struct CalibCfgP_ {
-  float  mean;   /* Mean amplitude */
-  float  target; /* Target amplitude */
-  float  newCal; /* New calibration value */
-  size_t index;  /* V/CT index */
-  bool   isCT;   /* indicates if this is a CT */
-} CalibCfgP_t;
-
 /*************************************
  * Persistent state variables
  *************************************/
@@ -77,10 +70,6 @@ static void evtKiloHertz(void);
 static void evtClear(const EVTSRC_t evt);
 static bool evtPending(EVTSRC_t evt);
 static bool evtTake(const EVTSRC_t evt);
-static void handleCalibCfg(const ECMDataset_t *pECM);
-static void handleCalibCfgPrintA(const CalibCfgP_t *pCal);
-static void handleCalibCfgPrintP(const float phi, const size_t idx,
-                                 const bool failed);
 static void pulseConfigure(void);
 static void rfmConfigure(void);
 static bool ssd1306IndicateShutdown(void);
@@ -352,155 +341,6 @@ static bool evtTake(const EVTSRC_t evt) {
   __set_PRIMASK(primask);
 
   return ret;
-}
-
-static void handleCalibCfg(const ECMDataset_t *pECM) {
-  CalibConfig_t *calibcfg = configCalibStatus();
-  if (calibcfg->inProgress) {
-
-    /* Amplitude calibration */
-    if (calibcfg->mode == 'a') {
-
-      calibcfg->accum =
-          calibcfg->isCT
-              ? qfp_fadd(calibcfg->accum, pECM->CT[calibcfg->ch].rmsI)
-              : qfp_fadd(calibcfg->accum, pECM->rmsV[calibcfg->ch]);
-      calibcfg->iter++;
-
-      if (CAL_AMPL_AVG == calibcfg->iter) {
-        ECMCfg_t   *ecmCfg = ecmConfigGet();
-        const float mean   = qfp_fdiv(calibcfg->accum, (float)CAL_AMPL_AVG);
-
-        if (mean < 0.25f) {
-          calibcfg->inProgress = false;
-          serialPuts("> Measured input too low, calibration failed.\r\n");
-          return;
-        }
-
-        const float ratio  = qfp_fdiv(calibcfg->target, mean);
-        CalibCfgP_t result = {.index  = calibcfg->ch + 1u,
-                              .isCT   = calibcfg->isCT,
-                              .mean   = mean,
-                              .target = calibcfg->target,
-                              .newCal = 0.0f};
-
-        if (calibcfg->isCT) {
-          const float newCal =
-              qfp_fmul(ratio, pConfig->ctCfg[calibcfg->ch].ctCal);
-          pConfig->ctCfg[calibcfg->ch].ctCal   = newCal;
-          ecmCfg->ctCfg[calibcfg->ch].ctCalRaw = newCal;
-          ecmConfigChannel(calibcfg->ch + NUM_V);
-
-          result.newCal = newCal;
-          handleCalibCfgPrintA(&result);
-        } else {
-          const float newCal =
-              qfp_fmul(ratio, pConfig->voltageCfg[calibcfg->ch].voltageCal);
-          pConfig->voltageCfg[calibcfg->ch].voltageCal = newCal;
-          ecmCfg->vCfg[calibcfg->ch].voltageCalRaw     = newCal;
-          ecmConfigChannel(calibcfg->ch);
-
-          result.newCal = newCal;
-          handleCalibCfgPrintA(&result);
-        }
-        calibcfg->inProgress = false;
-      }
-
-    } else {
-
-      /* Phase calibration */
-      ECMCfg_t   *pEcmCfg = ecmConfigGet();
-      const float thisPF  = pECM->CT[calibcfg->ch].pf;
-      float       phiNxt  = 0.0f;
-
-      if (calibcfg->defer) {
-        calibcfg->defer = false;
-        return;
-      }
-
-      if (2u > calibcfg->iter) {
-        calibcfg->defer                   = true;
-        calibcfg->phipf[calibcfg->iter].Y = thisPF;
-
-        if (0u == calibcfg->iter) {
-          phiNxt = 100.0f;
-        } else if (1u == calibcfg->iter) {
-          XY_t mc = {0};
-          utilLinearFit(2u, calibcfg->phipf, &mc);
-
-          /* Take ±1° around coarse ~0 PF in 8 x 0.25° increments */
-          phiNxt = qfp_fsub(qfp_fdiv(mc.Y, qfp_fmul(mc.X, -1.0f)), 1.0f);
-          calibcfg->phipf[0].X = phiNxt;
-          for (size_t i = 1; i < CAL_PHASE_ITER; i++) {
-            calibcfg->phipf[i].X = qfp_fadd(calibcfg->phipf[i - 1u].X, 0.25f);
-          }
-        }
-
-        calibcfg->iter++;
-
-      } else {
-
-        /* Linear through points to get phase value */
-        if (calibcfg->iter == (CAL_PHASE_ITER + 1u)) {
-          bool failed = false;
-          XY_t mc     = {0};
-
-          failed = (bool)utilLinearFit(CAL_PHASE_ITER, calibcfg->phipf, &mc);
-
-          if (!failed) {
-            /* Setting Y(PF) = 0, solve for X(PHI) = m / c */
-            phiNxt = qfp_fsub(qfp_fdiv(mc.Y, qfp_fmul(mc.X, -1.0f)), 90.0f);
-          } else {
-            /* Restore previous value if failed */
-            phiNxt = pConfig->ctCfg[calibcfg->ch].phase;
-          }
-
-          /* Restore original data log period. */
-          pConfig->baseCfg.reportTime = calibcfg->prevDatalog;
-          configUpdateDatalog(calibcfg->prevDatalog);
-
-          calibcfg->inProgress = false;
-          handleCalibCfgPrintP(phiNxt, calibcfg->ch, failed);
-
-        } else {
-          calibcfg->phipf[calibcfg->iter - 2u].Y = thisPF;
-
-          calibcfg->iter++;
-          phiNxt = calibcfg->phipf[calibcfg->iter - 2u].X;
-        }
-      }
-
-      pEcmCfg->ctCfg[calibcfg->ch].phCal = phiNxt;
-      ecmConfigChannel(calibcfg->ch + NUM_V);
-    }
-  }
-}
-
-static void handleCalibCfgPrintA(const CalibCfgP_t *pCal) {
-  printf_("> Finished calibration for %s%d.\r\n", (pCal->isCT ? "CT" : "V"),
-          pCal->index);
-  printf_("  - Measured %sRMS  : ", (pCal->isCT ? "I" : "V"));
-  putFloat(pCal->mean, 0);
-  printf_(" %s.\r\n", (pCal->isCT ? "A" : "V"));
-  printf_("  - Actual %sRMS  : ", (pCal->isCT ? "I" : "V"));
-  putFloat(pCal->target, 0);
-  printf_(" %s.\r\n", (pCal->isCT ? "A" : "V"));
-  serialPuts("  - New calibration: ");
-  putFloat(pCal->newCal, 0);
-  serialPuts(".\r\n");
-}
-
-static void handleCalibCfgPrintP(const float phi, const size_t idx,
-                                 const bool failed) {
-  if (!failed) {
-    printf_("> Finished phase calibration for CT%d.\r\n", idx + 1u);
-    serialPuts("  - New phase calibration: ");
-    putFloat(phi, 0);
-    serialPuts("\r\n");
-  } else {
-    printf_("> Failed to find phase calibration for CT%d\r\n.", idx + 1u);
-    serialPuts("  - Restored original phase value.\r\n");
-  }
 }
 
 /*! @brief Configure any pulse counter interfaces */
@@ -1058,10 +898,7 @@ int main(void) {
 
         /* During phase calibration, do not send messages as the data log period
          * is changed. */
-        CalibConfig_t *pCC    = configCalibStatus();
-        const bool     calibP = pCC->inProgress && (pCC->mode == 'p');
-
-        if (!calibP) {
+        if (!calibrationNoTransmit()) {
           transmitData(&dataset, &rfmPkts);
         }
 
@@ -1071,7 +908,7 @@ int main(void) {
         cumulativeProcess(&nvmCumulative, &dataset,
                           pConfig->baseCfg.epDeltaStore);
 
-        handleCalibCfg(dataset.pECM);
+        calibrationProcess(dataset.pECM, pConfig);
 
         /* Blink the STATUS LED, and clear the event. */
         uiLedColour(LED_RED);
