@@ -114,6 +114,9 @@ void ecmConfigure(void);
  */
 void emon32EventSet(const EVTSRC_t evt);
 
+/*! @brief Setup the CT expander pins depending whether a channel is active */
+void emon32ExpanderSetup(void);
+
 /*! @brief Output to serial (USB if available, and hardware UART).
  *  @param [in] s: pointer to null terminated string
  */

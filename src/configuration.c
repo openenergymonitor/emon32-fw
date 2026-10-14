@@ -316,6 +316,9 @@ static bool configureVCTChannel(void) {
     } else {
       ecmCfg->ctCfg[ch - NUM_V].active  = active;
       config.ctCfg[ch - NUM_V].ctActive = active;
+      if ((ch - NUM_V) > 5u) {
+        emon32ExpanderSetup();
+      }
       printSettingCT(ch - NUM_V, false);
     }
     ecmConfigChannel(ch);
@@ -423,6 +426,10 @@ static bool configureVCTChannel(void) {
 
   config.ctCfg[ch].vChan2  = vCh2 - 1;
   ecmCfg->ctCfg[ch].vChan2 = vCh2 - 1;
+
+  if ((ch - NUM_V) > 5u) {
+    emon32ExpanderSetup();
+  }
 
   printSettingCT(ch, false);
   ecmConfigChannel(ch + NUM_V);

@@ -291,6 +291,32 @@ void emon32EventSet(const EVTSRC_t evt) {
   __enable_irq();
 }
 
+void emon32ExpanderSetup(void) {
+  bool           ct7_12 = false;
+  extern uint8_t pinsADC[][2];
+
+  for (size_t i = 0; i < 6u; i++) {
+    if (pConfig->ctCfg[i + 6u].ctActive) {
+      ct7_12 = true;
+      break;
+    }
+  }
+
+  /* Configure the expander pins as ADC inputs or GPIO with pull down. This
+   * removes any floating voltages on these pins. */
+  for (size_t i = 0; i < 6u; i++) {
+    const uint8_t grp = pinsADC[i + 11u][0];
+    const uint8_t pin = pinsADC[i + 11u][1];
+    if (ct7_12) {
+      portPinMux(grp, pin, PORT_PMUX_PMUXE_B_Val);
+    } else {
+      portPinMuxClear(grp, pin);
+      portPinCfg(grp, pin, PORT_PINCFG_PULLEN, PIN_CFG_SET);
+      portPinDrv(grp, pin, PIN_DRV_CLR);
+    }
+  }
+}
+
 /*! @brief This function is called when the 1 ms timer fires.
  *         Latency is not guaranteed, so only non-timing critical things
  *         should be done here (UI update, watchdog etc)
@@ -781,6 +807,7 @@ int main(void) {
             pConfig->opaCfg[2].func == 'a' && pConfig->opaCfg[2].opaActive;
         adcDMACStop();
         adcSetup(ainActive);
+        emon32ExpanderSetup();
         ecmConfigure();
         ecmFlush();
         dmacCallbackBufferFill(&ecmDmaCallback);
