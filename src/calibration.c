@@ -121,6 +121,8 @@ void calibrationProcess(const ECMDataset_t *pECM, Emon32Config_t *pConfig) {
         pConfig->baseCfg.reportTime = calibcfg->prevDatalog;
         configUpdateDatalog(calibcfg->prevDatalog);
 
+        pConfig->ctCfg[calibcfg->ch].phase = phiNxt;
+
         calibcfg->inProgress = false;
         calibrationPrintPhase(phiNxt, calibcfg->ch, failed);
       } else {
