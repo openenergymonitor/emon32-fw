@@ -1,7 +1,7 @@
 #include <stddef.h>
 
 #include "calibration.h"
-
+#include "configuration.h"
 #include "emon32.h"
 #include "util.h"
 
@@ -72,6 +72,7 @@ void calibrationProcess(const ECMDataset_t *pECM, Emon32Config_t *pConfig) {
         calibrationPrintAmplitude(&result);
       }
       calibcfg->inProgress = false;
+      configUnsavedUpdate();
     }
   } else {
     /* Phase calibration */
@@ -123,6 +124,7 @@ void calibrationProcess(const ECMDataset_t *pECM, Emon32Config_t *pConfig) {
 
         pConfig->ctCfg[calibcfg->ch].phase = phiNxt;
 
+        configUnsavedUpdate();
         calibcfg->inProgress = false;
         calibrationPrintPhase(phiNxt, calibcfg->ch, failed);
       } else {

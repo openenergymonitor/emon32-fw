@@ -173,6 +173,8 @@ static bool configCheckUnsaved(void) {
   return (0 != memcmp(&config, &config_nvm, sizeof(config)));
 }
 
+void configUnsavedUpdate(void) { unsavedChange = configCheckUnsaved(); }
+
 /*************************************
  * Defaults and NVM initialisation
  *************************************/

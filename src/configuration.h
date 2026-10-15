@@ -153,6 +153,9 @@ void configProcessCmd(void);
  */
 bool configUnsavedChanges(void);
 
+/*! @brief Update the unsaved change flag at end of process */
+void configUnsavedUpdate(void);
+
 /*! @brief Update the data log period
  *  @param [in] datalog : data log period (s)
  */
