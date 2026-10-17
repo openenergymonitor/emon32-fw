@@ -113,7 +113,14 @@ void calibrationProcess(const ECMDataset_t *pECM, Emon32Config_t *pConfig) {
         if (!failed) {
           /* Setting Y(PF) = 0, solve for X(PHI) = c / -m */
           phiNxt = qfp_fsub(qfp_fdiv(mc.Y, qfp_fmul(mc.X, -1.0f)), 90.0f);
-        } else {
+
+          /* Invalid if greater than ±15° */
+          if (utilFabs(phiNxt) > 15.0f) {
+            failed = true;
+          }
+        }
+
+        if (failed) {
           /* Restore previous value if failed */
           phiNxt = pConfig->ctCfg[calibcfg->ch].phase;
         }
