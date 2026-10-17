@@ -422,10 +422,13 @@ static void calibrationPhase(CTCfg_t *pCfgCT, const VCfg_t *pCfgV, size_t idxCT,
    */
   uint32_t       samplePeriodus = ecmCfg.samplePeriod * OVERSAMPLING_RATIO;
   const uint32_t numSamples = ecmCfg.ainActive[0] ? VCT_TOTAL + 1u : VCT_TOTAL;
+  const float    freqV      = datasetProc.freqV == 0.0f
+                                  ? qfp_uint2float(ecmCfg.mainsFreq)
+                                  : datasetProc.freqV;
 
   float phaseShift_deg =
       qfp_fmul((360.0f / 1E6f),
-               qfp_uint2float(samplePeriodus * numSamples * ecmCfg.mainsFreq));
+               qfp_fmul(qfp_uint2float(samplePeriodus * numSamples), freqV));
   float phaseShiftSets = qfp_fdiv(phiCT_V, phaseShift_deg);
 
   /* After downsampling, the time between samples remains t_s _not_ 2*t_s.
