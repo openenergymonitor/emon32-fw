@@ -132,7 +132,8 @@ void calibrationProcess(const ECMDataset_t *pECM, Emon32Config_t *pConfig) {
         pConfig->ctCfg[calibcfg->ch].phase = phiNxt;
 
         configUnsavedUpdate();
-        calibcfg->inProgress = false;
+        pEcmCfg->useFmeasured = false;
+        calibcfg->inProgress  = false;
         calibrationPrintPhase(phiNxt, calibcfg->ch, failed);
       } else {
         calibcfg->phipf[calibcfg->iter - 2u].Y = thisPF;

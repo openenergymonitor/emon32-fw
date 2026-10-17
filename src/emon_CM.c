@@ -420,11 +420,11 @@ static void calibrationPhase(CTCfg_t *pCfgCT, const VCfg_t *pCfgV, size_t idxCT,
    *  - Sample rate in rad: 2π / 360 * °
    *  => 2π / 1E6 * f_mains * t_s * OS_R * VCT (360s cancel)
    */
-  uint32_t       samplePeriodus = ecmCfg.samplePeriod * OVERSAMPLING_RATIO;
+  const uint32_t samplePeriodus = ecmCfg.samplePeriod * OVERSAMPLING_RATIO;
   const uint32_t numSamples = ecmCfg.ainActive[0] ? VCT_TOTAL + 1u : VCT_TOTAL;
-  const float    freqV      = datasetProc.freqV == 0.0f
-                                  ? qfp_uint2float(ecmCfg.mainsFreq)
-                                  : datasetProc.freqV;
+  const float    freqV = (ecmCfg.useFmeasured && (datasetProc.freqV != 0.0f))
+                             ? datasetProc.freqV
+                             : qfp_uint2float(ecmCfg.mainsFreq);
 
   float phaseShift_deg =
       qfp_fmul((360.0f / 1E6f),

@@ -101,6 +101,7 @@ typedef struct ECMCfg_ {
   CTCfg_t ctCfg[NUM_CT]; /* CT Configuration */
   VCfg_t  vCfg[NUM_V];   /* Voltage configuration */
 
+  bool useFmeasured;       /* Use the measured frequency for calibration */
   bool ainActive[NUM_AIN]; /* AIN configuration */
 } ECMCfg_t;
 
