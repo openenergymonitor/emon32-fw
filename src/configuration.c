@@ -300,6 +300,14 @@ static bool configureVCTChannel(void) {
 
   ch = convU.val.u32;
 
+  if (calibcfg.inProgress) {
+    uint32_t chInt = calibcfg.isCT ? calibcfg.ch + NUM_V : calibcfg.ch;
+    if (ch == chInt) {
+      printfError("Cannot configure channel under calibration.");
+      return false;
+    }
+  }
+
   convU = utilAtoui(cmdArgs.argv[1], ITOA_BASE10);
   if (!convU.valid || (convU.val.u32 > 1u)) {
     serialPutsError("Invalid active value (valid: 0 or 1).");
