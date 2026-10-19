@@ -554,7 +554,6 @@ static bool configureCalib(void) {
     configUpdateDatalog(T_PHASE_CALIB);
 
     pEcmCfg->ctCfg[ch - NUM_V].phCal = 80.0f;
-    pEcmCfg->useFmeasured            = true;
     ecmConfigChannel(ch);
 
     calibcfg.inProgress = true;
