@@ -420,12 +420,14 @@ static void calibrationPhase(CTCfg_t *pCfgCT, const VCfg_t *pCfgV, size_t idxCT,
    *  - Sample rate in rad: 2π / 360 * °
    *  => 2π / 1E6 * f_mains * t_s * OS_R * VCT (360s cancel)
    */
-  uint32_t       samplePeriodus = ecmCfg.samplePeriod * OVERSAMPLING_RATIO;
+  const uint32_t samplePeriodus = ecmCfg.samplePeriod * OVERSAMPLING_RATIO;
   const uint32_t numSamples = ecmCfg.ainActive[0] ? VCT_TOTAL + 1u : VCT_TOTAL;
+  const float    freq =
+      pCfgCT->fMeasured ? datasetProc.freqV : qfp_uint2float(ecmCfg.mainsFreq);
 
   float phaseShift_deg =
       qfp_fmul((360.0f / 1E6f),
-               qfp_uint2float(samplePeriodus * numSamples * ecmCfg.mainsFreq));
+               qfp_fmul(qfp_uint2float(samplePeriodus * numSamples), freq));
   float phaseShiftSets = qfp_fdiv(phiCT_V, phaseShift_deg);
 
   /* After downsampling, the time between samples remains t_s _not_ 2*t_s.
@@ -830,6 +832,11 @@ ECMDataset_t *ecmProcessSet(void) {
 
   for (size_t idxCT = 0; idxCT < NUM_CT; idxCT++) {
     if (channelActive[idxCT + NUM_V]) {
+
+      if (ecmCfg.ctCfg[idxCT].recalcXY) {
+        ecmConfigChannel(idxCT + NUM_V);
+      }
+
       int32_t idxV1 = ecmCfg.ctCfg[idxCT].vChan1;
       int32_t idxV2 = ecmCfg.ctCfg[idxCT].vChan2;
 

@@ -561,6 +561,9 @@ static bool configureCalib(void) {
     config.baseCfg.reportTime = T_PHASE_CALIB;
     configUpdateDatalog(T_PHASE_CALIB);
 
+    pEcmCfg->ctCfg[ch - NUM_V].fMeasured = true;
+    pEcmCfg->ctCfg[ch - NUM_V].recalcXY  = true;
+
     pEcmCfg->ctCfg[ch - NUM_V].phCal = 80.0f;
     ecmConfigChannel(ch);
 

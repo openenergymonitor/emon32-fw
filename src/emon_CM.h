@@ -77,6 +77,8 @@ typedef struct CTCfgUnpacked_ {
   float    ctCal;
   float    ctCalRaw;
   bool     active;
+  bool     recalcXY;
+  bool     fMeasured;
   uint8_t  vChan1;
   uint8_t  vChan2;
   int32_t  wattHourInit;

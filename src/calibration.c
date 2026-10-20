@@ -131,6 +131,10 @@ void calibrationProcess(const ECMDataset_t *pECM, Emon32Config_t *pConfig) {
 
         pConfig->ctCfg[calibcfg->ch].phase = phiNxt;
 
+        /* Restore nominal mains frequency. */
+        pEcmCfg->ctCfg[calibcfg->ch].recalcXY  = false;
+        pEcmCfg->ctCfg[calibcfg->ch].fMeasured = false;
+
         configUnsavedUpdate();
         calibcfg->inProgress = false;
         calibrationPrintPhase(phiNxt, calibcfg->ch, failed);
