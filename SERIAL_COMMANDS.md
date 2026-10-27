@@ -115,23 +115,34 @@ k4 1 90.0 4.2 1 2    # Enable CT1, references V1 and V2 (L1-L2 load)
 s                    # Save configuration
 ```
 
-### Calibrate a CT input amplitude
-
-If you have a known current available, you can use this to calibrate your Pi3/Tx6.
-
-```
-i4 a 45.1    # Calibrate CT1 with 45.1 A RMS.
-s            # Save configuration after completion.
-```
-
 ### Calibrate a voltage input amplitude
 
 If you have a known voltage available, you can use this to calibrate your Pi3/Tx6.
 
 ```
-i1 a 239.5    # Calibrate V1 with 239.5 V RMS.
-s             # Save configuration after completion.
+i1 a 239.5    # Calibrate V1 with 239.5 V RMS
+s             # Save configuration after completion
 ```
+
+### Calibrate a CT input amplitude
+
+If you have a known current available, you can use this to calibrate your Pi3/Tx6.
+
+```
+i4 a 45.1    # Calibrate CT1 with 45.1 A RMS
+s            # Save configuration
+```
+
+### Find the phase of a CT input
+
+Connect a **resistive** load on the CT input you want to get the phase for. The current through it should ideally be between 30% of the rated power and your usual current draw.
+
+```
+i4 p        # Determine the phase of CT1
+s           # Save configuration
+```
+
+The phase calibration will take 10 s with normal reporting disabled during this period. It is recommended to repeat the procedure 3-5 times and use the mean, discarding any obvious outliers.
 
 ### Configure a pulse input
 
