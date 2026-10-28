@@ -44,7 +44,7 @@ To test if your serial connection is working, try these commands first:
 | **h** | Safe Raspberry Pi power off countdown (will not remove power) |
 | **i\<x> \<y> \<i.i>** | Auto calibration<br>Parameters:<br>- `x`: Channel number (1-3 = Voltage; 4+ = CT)<br>- `y`: Mode select<br>&nbsp;&nbsp;- `a`: amplitude<br>&nbsp;&nbsp;- `p`: phase<br>- `i.i`: measured RMS amplitude<br>Example: `i4 a 45` |
 | **j\<n>** | JSON serial format<br>- `j0`: Disable JSON format<br>- `j1`: Enable JSON format |
-| **k\<x> \<a> \<y.y> \<z.z> \<v1> \<v2>** | Configure an analog input (voltage or current)<br>Parameters:<br>- `x`: Channel number (1-3 = Voltage; 4+ = CT)<br>- `a`: Active status (0 = DISABLED, 1 = ENABLED)<br>- `y.y`: V/CT calibration constant<br>- `z.z`: CT phase calibration value (degrees)<br>- `v1`: CT voltage channel 1 (reference)<br>- `v2`: CT voltage channel 2 (for L-L loads)<br>Example: `k4 1 90.0 1.5 1 1` |
+| **k\<x> \<a> \<y.y> \<z.z> \<v1> \<v2>** | Configure an analog input (voltage or current)<br>Parameters:<br>- `x`: Channel number (1-3 = Voltage; 4+ = CT)<br>- `a`: Active status (0 = DISABLED, 1 = ENABLED)<br>- `y.y`: V/CT calibration constant<br>- `z.z`: CT phase calibration value (degrees)<br>- `v1`: CT voltage channel 1 (reference)<br>- `v2`: CT voltage channel 2 (for L-L loads only)<br>Example: `k4 1 90.0 1.5 1` |
 | **l** | List current settings (displays all configuration) |
 | **ls** | List saved settings (displays all configuration) |
 | **lh** | List current settings (displays all configuration), human readable |
@@ -98,6 +98,7 @@ s                    # Save configuration
 - Channel number (2 or 3)
 - Active status (1 = enabled)
 - Calibration value (typically 100.0, range: 25.0-150.0)
+- Phase value (typically 0)
 
 The phase and voltage reference parameters (v1, v2) are only required for CT channels.
 

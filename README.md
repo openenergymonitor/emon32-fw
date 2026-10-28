@@ -129,7 +129,7 @@ The Script requires that `picocom` is installed to provide the connection to put
 
 #### Usage
 
-`./flash-emonpi3.sh --build` - to make and upload.
+`./scripts/flash-emontx6.sh --build` - to make and upload.
 
 ### Compiling
 

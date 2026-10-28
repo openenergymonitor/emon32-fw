@@ -217,8 +217,8 @@ The emonPi3 or emonTx6 can be calibrated against known voltage and current refer
 
 The calibration for voltage is configured as a percentage. A calibration value of `100.0` corresponds to 240 V. This value is then scaled to match the calibration value. Example calculations when the calibration input is 240.0 V are shown below.
 
-- Measured 242.0 V, set voltage calibration value to 240/242 = `0.992`.
-- Measured 239.0 V, set voltage calibration value to 240/239 = `1.004`.
+- Measured 242.0 V, set voltage calibration value to (240/242)*100 = `99.2`.
+- Measured 239.0 V, set voltage calibration value to (240/239)*100 = `100.4`.
 
 You can use the calibration mechanism to set these values automatically, see the [configuration section](configuration.md) for more information.
 

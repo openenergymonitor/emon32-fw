@@ -119,7 +119,7 @@ units =     n, V, V, V, W, W, W, W, W, W, Wh, Wh, Wh, Wh, Wh, Wh
 
 Both single-phase and three-phase modes use additional nodes for supplementary data:
 
-- **Node N+1**: Temperature and pulse data (node 21 if N=20)
+- **Node N+1**: Temperature, pulse, and analog data (node 21 if N=20)
 - **Node N+2**: Extended CT channels 7-12 (node 22 if N=20)
 
 ### Configuration Steps
