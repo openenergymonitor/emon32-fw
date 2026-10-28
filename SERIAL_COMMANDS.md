@@ -52,7 +52,7 @@ To test if your serial connection is working, try these commands first:
 | **m\<v> \<w> \<x> \<y> \<z>** | Configure a OneWire/pulse/analog input<br>Parameters:<br>- `v`: Channel index<br>- `w`: Active status (0 = DISABLED, 1 = ENABLED)<br>- `x`: Function select<br>&nbsp;&nbsp;- `a`: analog<br>&nbsp;&nbsp;- `b`: Both edges (pulse)<br>&nbsp;&nbsp;- `f`: Falling edge (pulse)<br>&nbsp;&nbsp;- `r`: Rising edge (pulse)<br>&nbsp;&nbsp;- `o`: OneWire (temperature sensor)<br>- `y`: Pull-up resistor (0 = OFF, 1 = ON)<br>- `z`: Minimum time, in milliseconds, between pulses<br>Example: `m1 1 r 1 50` |
 | **n\<n>** | Set node ID [1..60]<br>Example: `n5` sets node ID to 5 |
 | **o<x>** | OneWire configuration<br>Options:<br>- `x` = `ca`: clear all saved OneWire addresses<br>- `x` = `c<n>`: clear saved OneWire address for channel `n`<br>- `x` = `f`: reset and find OneWire devices<br>- `x` = `h`: hold the found OneWire addresses (overrides any manually configured addresses)<br>- `x` = `l`: list OneWire devices<br>- `x` = `n`: list all saved OneWire addresses<br>- `x` = integer, `n`: move supplied address to position `n`(see Examples)<br>- `x` = `r <a> <b>`, remap found sensor `<a>` to index `<b>` |
-| **p\<n>** | Set the RF power level<br>Example: `p7` |
+| **p\<n>** | Set the RF power level (0-31). Transmitter may be damaged for values greater than 25 when no antenna is installed.<br>Example: `p7` |
 | **q** | Reset the system (confirmation required) |
 | **r** | Restore default settings (unsaved changes will be lost) |
 | **rs** | Restore saved settings (unsaved changes will be lost) |
@@ -104,7 +104,7 @@ The phase and voltage reference parameters (v1, v2) are only required for CT cha
 ### Configure a CT channel
 
 ```
-k4 1 90.0 1.5 1 1    # Enable CT1, cal=90.0, phase=1.5°, refs V1-V1
+k4 1 90.0 1.5 1      # Enable CT1, cal=90.0, phase=1.5°, reference V1
 s                    # Save configuration
 ```
 
@@ -186,7 +186,7 @@ s                     # Save configuration
 
 ### Save a OneWire temperature sensor to a position
 
-OneWire temperature sensors such as the DS18B20 are found in order. If a temperature sensor is removed, then the index of the remaining sensors will change. To save a sensor to an index so it is always shown there, use the following steps. In this example, the temperature sensor's 64 bit address is `0xea3ce104577b0728` and it is saved to index 3.
+OneWire temperature sensors such as the DS18B20 are found in order. If a temperature sensor is removed or fails, then the index of the remaining sensors will change on the next device search. To save a sensor to an index so it is always shown there, use the following steps. In this example, the temperature sensor's 64 bit address is `0xea3ce104577b0728` and it is saved to index 3.
 
 ```
 ol                         # List the sensor addresses (optional)
