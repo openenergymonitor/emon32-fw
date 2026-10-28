@@ -1,6 +1,7 @@
 #include <stdbool.h>
 #include <stdio.h>
 
+#include "emon32.h"
 #include "util.h"
 
 #include "qfplib-m0-full.h"
@@ -77,6 +78,11 @@ ConvUint_t utilAtoui(const char *pBuf, ITOA_BASE_t base) {
   uint32_t   result = 0;
   ConvUint_t conv   = {false, {0}};
 
+  /* Empty string should be treated as failure */
+  if (*pBuf == '\0') {
+    return conv;
+  }
+
   /* Process left-to-right, no string reversal needed */
   if (ITOA_BASE10 == base) {
     while (*pBuf) {
@@ -126,6 +132,8 @@ bool utilCharPrintable(const char c) {
   /* Allow any printable character plus \r and \n */
   return (((c >= 32) && (c <= 126)) || ('\r' == c) || ('\n' == c));
 }
+
+float utilFabs(const float f) { return (f < 0.0f) ? qfp_fmul(f, -1.0f) : f; }
 
 size_t utilFtoa(char *pBuf, float val) {
   char     buf[16]; /* Enough for -2147483648.99 + null */
@@ -186,6 +194,11 @@ ConvFloat_t utilAtof(const char *pBuf) {
   bool        inFraction = false;
   ConvFloat_t conv       = {false, 0.0f};
 
+  /* Empty string should be treated as failure */
+  if (*pBuf == '\0') {
+    return conv;
+  }
+
   if ('-' == *pBuf) {
     isNegative = true;
     pBuf++;
@@ -223,4 +236,55 @@ ConvFloat_t utilAtof(const char *pBuf) {
 
   conv.valid = true;
   return conv;
+}
+
+void putFloat(float val, const size_t flt_len) {
+  char   strBuffer[16];
+  size_t ftoalen = utilFtoa(strBuffer, val);
+
+  while (ftoalen++ <= flt_len) {
+    serialPuts(" ");
+  }
+
+  serialPuts(strBuffer);
+}
+
+int utilLinearFit(const size_t n, const XY_t *pXY, XY_t *pMC) {
+  /* https://stackoverflow.com/questions/5083465/fast-efficient-least-squares-fit-algorithm-in-c
+   */
+
+  const float fn = qfp_uint2float(n);
+
+  float sumX  = 0.0f;
+  float sumX2 = 0.0f;
+  float sumY  = 0.0f;
+  float sumXY = 0.0f;
+
+  for (size_t i = 0; i < n; i++) {
+    const float x = pXY[i].X;
+    const float y = pXY[i].Y;
+
+    sumX  = qfp_fadd(sumX, x);
+    sumX2 = qfp_fadd(sumX2, qfp_fmul(x, x));
+    sumY  = qfp_fadd(sumY, y);
+    sumXY = qfp_fadd(sumXY, qfp_fmul(x, y));
+  }
+
+  const float denom = qfp_fmul(fn, sumX2) - qfp_fmul(sumX, sumX);
+  /* Singular matrix, can't solve */
+  if (0.0f == denom) {
+    pMC->X = 0.0f;
+    pMC->Y = 0.0f;
+    return 1;
+  }
+
+  /* Gradient */
+  pMC->X = qfp_fsub(qfp_fmul(fn, sumXY), qfp_fmul(sumX, sumY));
+  pMC->X = qfp_fdiv(pMC->X, denom);
+
+  /* Intercept */
+  pMC->Y = qfp_fsub(qfp_fmul(sumY, sumX2), qfp_fmul(sumX, sumXY));
+  pMC->Y = qfp_fdiv(pMC->Y, denom);
+
+  return 0;
 }

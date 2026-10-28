@@ -10,20 +10,27 @@
 
 #include "qfplib-m0-full.h"
 
+enum StrIdx_ {
+  STR_MSG    = 0,
+  STR_V      = 1,
+  STR_P      = 2,
+  STR_E      = 3,
+  STR_PULSE  = 4,
+  STR_TEMP   = 5,
+  STR_COLON  = 6,
+  STR_CRLF   = 7,
+  STR_DQUOTE = 8,
+  STR_LCURL  = 9,
+  STR_RCURL  = 10,
+  STR_COMMA  = 11,
+  STR_ANALOG = 12,
+  STR_PF     = 13,
+  STR_I      = 14,
+  STR_AP     = 15,
+  STR_FREQ   = 16
+};
+
 #define CONV_STR_W 16
-#define STR_MSG    0
-#define STR_V      1
-#define STR_P      2
-#define STR_E      3
-#define STR_PULSE  4
-#define STR_TEMP   5
-#define STR_COLON  6
-#define STR_CRLF   7
-#define STR_DQUOTE 8
-#define STR_LCURL  9
-#define STR_RCURL  10
-#define STR_COMMA  11
-#define STR_ANALOG 12
 
 /* "Fat" string with current length and buffer size. */
 typedef struct StrN {
@@ -44,18 +51,20 @@ static size_t strnCatUint(StrN_t *strD, uint32_t v);
 static char tmpStr[CONV_STR_W] = {0};
 
 /* Strings that are inserted in the transmitted message */
-const StrN_t baseStr[13] = {
-    {.str = "MSG", .n = 3, .m = 4},   {.str = "V", .n = 1, .m = 2},
-    {.str = "P", .n = 1, .m = 2},     {.str = "E", .n = 1, .m = 2},
-    {.str = "pulse", .n = 5, .m = 6}, {.str = "t", .n = 1, .m = 2},
-    {.str = ":", .n = 1, .m = 2},     {.str = "\r\n", .n = 2, .m = 3},
-    {.str = "\"", .n = 1, .m = 2},    {.str = "{", .n = 1, .m = 2},
-    {.str = "}", .n = 1, .m = 2},     {.str = ",", .n = 1, .m = 2},
-    {.str = "analog", .n = 6, .m = 7}};
+const StrN_t baseStr[17] = {
+    {.str = "MSG", .n = 3, .m = 4},    {.str = "V", .n = 1, .m = 2},
+    {.str = "P", .n = 1, .m = 2},      {.str = "E", .n = 1, .m = 2},
+    {.str = "pulse", .n = 5, .m = 6},  {.str = "t", .n = 1, .m = 2},
+    {.str = ":", .n = 1, .m = 2},      {.str = "\r\n", .n = 2, .m = 3},
+    {.str = "\"", .n = 1, .m = 2},     {.str = "{", .n = 1, .m = 2},
+    {.str = "}", .n = 1, .m = 2},      {.str = ",", .n = 1, .m = 2},
+    {.str = "analog", .n = 6, .m = 7}, {.str = "PF", .n = 2, .m = 3},
+    {.str = "I", .n = 1, .m = 2},      {.str = "AP", .n = 2, .m = 3},
+    {.str = "F", .n = 1, .m = 2}};
 
 /*! @brief Append "<field><id>:" to the string
  *  @param [out] strD : pointer to the fat string
- *  @param [in] id : numeric index
+ *  @param [in] id : numeric index; don't print if >4095
  *  @param [in] field : field name index, e.g. "STR_V"
  *  @param [in] json : select format
  */
@@ -66,7 +75,9 @@ static void catId(StrN_t *strD, const uint32_t id, const int32_t field,
     strD->n += strnCat(strD, &baseStr[STR_DQUOTE]);
   }
   strD->n += strnCat(strD, &baseStr[field]);
-  strD->n += strnCatUint(strD, id);
+  if (id < 4096) {
+    strD->n += strnCatUint(strD, id);
+  }
   if (json) {
     strD->n += strnCat(strD, &baseStr[STR_DQUOTE]);
   }
@@ -152,28 +163,32 @@ static size_t strnCat(StrN_t *strD, const StrN_t *strS) {
   return bytesToCopy;
 }
 
-size_t dataPackSerial(const Emon32Dataset_t *pData, char *pDst, const size_t m,
-                      const bool json, const CHActive_t *pChsActive) {
+size_t dataPackSerial(const Emon32Dataset_t *pData, char *pDst,
+                      const DataPackOpts_t *pOpts) {
   EMON32_ASSERT(pData);
   EMON32_ASSERT(pDst);
 
   StrN_t strn;
-  initFields(&strn, pDst, m);
+  initFields(&strn, pDst, pOpts->bufSize);
 
-  catMsg(&strn, pData->msgNum, json);
+  catMsg(&strn, pData->msgNum, pOpts->json);
 
   /* V channels; only print V2/V3 if either active */
   const uint32_t numV = (pData->pECM->activeCh & 0x6) ? NUM_V : 1;
 
   for (size_t i = 0; i < numV; i++) {
-    if (json && !pChsActive->V[i]) {
+    if (pOpts->json && !pOpts->pChsActive->V[i]) {
       continue;
     }
-    catId(&strn, (i + 1), STR_V, json);
+    catId(&strn, (i + 1), STR_V, pOpts->json);
     strn.n += strnCatFloat(&strn, pData->pECM->rmsV[i]);
   }
 
-  /* CT channels (power and energy)
+  /* Print frequency for V1 only */
+  catId(&strn, 4096u, STR_FREQ, pOpts->json);
+  strn.n += strnCatFloat(&strn, pData->pECM->freqV);
+
+  /* CT channels (power, energy, [current, PF, apparent power])
    * Only print onboard CTs 7-12 if any are present
    */
   const uint32_t numCT =
@@ -181,22 +196,47 @@ size_t dataPackSerial(const Emon32Dataset_t *pData, char *pDst, const size_t m,
                                                                  : (NUM_CT / 2);
 
   for (size_t i = 0; i < numCT; i++) {
-    if (json && !pChsActive->CT[i]) {
+    if (pOpts->json && !pOpts->pChsActive->CT[i]) {
       continue;
     }
-    catId(&strn, (i + 1), STR_P, json);
+    catId(&strn, (i + 1), STR_P, pOpts->json);
     strn.n += strnCatInt(&strn, pData->pECM->CT[i].realPower);
   }
   for (size_t i = 0; i < numCT; i++) {
-    if (json && !pChsActive->CT[i]) {
+    if (pOpts->json && !pOpts->pChsActive->CT[i]) {
       continue;
     }
-    catId(&strn, (i + 1), STR_E, json);
+    catId(&strn, (i + 1), STR_E, pOpts->json);
     strn.n += strnCatInt(&strn, pData->pECM->CT[i].wattHour);
   }
 
-  if ((!json || pChsActive->analog)) {
-    catId(&strn, 3u, STR_ANALOG, json);
+  /* Verbose serial output */
+  if (2u == pOpts->serialLog) {
+    for (size_t i = 0; i < numCT; i++) {
+      if (pOpts->json && !pOpts->pChsActive->CT[i]) {
+        continue;
+      }
+      catId(&strn, (i + 1), STR_I, pOpts->json);
+      strn.n += strnCatFloat(&strn, pData->pECM->CT[i].rmsI);
+    }
+    for (size_t i = 0; i < numCT; i++) {
+      if (pOpts->json && !pOpts->pChsActive->CT[i]) {
+        continue;
+      }
+      catId(&strn, (i + 1), STR_PF, pOpts->json);
+      strn.n += strnCatFloat(&strn, pData->pECM->CT[i].pf);
+    }
+    for (size_t i = 0; i < numCT; i++) {
+      if (pOpts->json && !pOpts->pChsActive->CT[i]) {
+        continue;
+      }
+      catId(&strn, (i + 1), STR_AP, pOpts->json);
+      strn.n += strnCatInt(&strn, pData->pECM->CT[i].apparentPower);
+    }
+  }
+
+  if ((!pOpts->json || pOpts->pChsActive->analog)) {
+    catId(&strn, 3u, STR_ANALOG, pOpts->json);
     strn.n += strnCatUint(&strn, pData->pECM->ain);
   }
 
@@ -204,25 +244,25 @@ size_t dataPackSerial(const Emon32Dataset_t *pData, char *pDst, const size_t m,
    * handled by the attached SBC. */
   if (sercomExtIntfEnabled()) {
     for (size_t i = 0; i < NUM_OPA; i++) {
-      if (json && !pChsActive->pulse[i]) {
+      if (pOpts->json && !pOpts->pChsActive->pulse[i]) {
         continue;
       }
-      catId(&strn, (i + 1), STR_PULSE, json);
+      catId(&strn, (i + 1), STR_PULSE, pOpts->json);
       strn.n += strnCatUint(&strn, pData->pulseCnt[i]);
     }
 
     for (size_t i = 0; i < TEMP_MAX_ONEWIRE; i++) {
-      if (json && (pData->temp[i] == 4800)) {
+      if (pOpts->json && (pData->temp[i] == 4800)) {
         continue;
       }
-      catId(&strn, (i + 1), STR_TEMP, json);
+      catId(&strn, (i + 1), STR_TEMP, pOpts->json);
       strn.n +=
           strnCatFloat(&strn, tempAsFloat(TEMP_INTF_ONEWIRE, pData->temp[i]));
     }
   }
 
   /* Terminate with } for JSON and \r\n */
-  if (json) {
+  if (pOpts->json) {
     strn.n += strnCat(&strn, &baseStr[STR_RCURL]);
   }
   strn.n += strnCat(&strn, &baseStr[STR_CRLF]);

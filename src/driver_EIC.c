@@ -18,8 +18,8 @@ void eicEnable(void) {
 void eicSetup(void) {
   /* EIC APB clock is unmasked on reset (16.8.8)
    * GCLK required for edge detection */
-  GCLK->CLKCTRL.reg =
-      GCLK_CLKCTRL_ID(EIC_GCLK_ID) | GCLK_CLKCTRL_GEN(3u) | GCLK_CLKCTRL_CLKEN;
+  GCLK->CLKCTRL.reg = GCLK_CLKCTRL_ID(EIC_GCLK_ID) |
+                      GCLK_CLKCTRL_GEN(GCLK_PERIPH) | GCLK_CLKCTRL_CLKEN;
 
   /* EXTINT[0] is DISABLE_EXT_INTFn */
   portPinMux(GRP_DISABLE_EXTn, PIN_DISABLE_EXTn, PORT_PMUX_PMUXE_A);

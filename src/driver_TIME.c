@@ -1,6 +1,7 @@
 #include "board_def.h"
 #include "emon32_samd.h"
 
+#include "driver_CLK.h"
 #include "driver_TIME.h"
 #include "emon32.h"
 #include "pulse.h"
@@ -165,12 +166,14 @@ uint32_t timerMillisDelta(const uint32_t prevMillis) {
 }
 
 void timerSetup(void) {
+  clkSetupTime(false);
+
   /* TIMER_ADC is used to trigger ADC sampling at constant rate. Enable APB
-   * clock, run from generator 3 (OSC8M @ F_PERIPH).
+   * clock, run from generator 5 (GCLK_TIME) (OSC8M @ F_PERIPH).
    */
   PM->APBCMASK.reg |= TIMER_ADC_APBCMASK;
   GCLK->CLKCTRL.reg = GCLK_CLKCTRL_ID(TIMER_ADC_GCLK_ID) |
-                      GCLK_CLKCTRL_GEN(3u) | GCLK_CLKCTRL_CLKEN;
+                      GCLK_CLKCTRL_GEN(GCLK_TIME) | GCLK_CLKCTRL_CLKEN;
 
   /* Configure as 16bit counter (F_PERIPH / 8) -> F_TIMER_ADC.
    * In MFRQ mode, the CC0 register is used as the period.
@@ -198,8 +201,8 @@ void timerSetup(void) {
    * Enable the interrupt for Compare Match, do not route to NVIC
    */
   PM->APBCMASK.reg |= TIMER_DELAY_APBCMASK;
-  GCLK->CLKCTRL.reg              = GCLK_CLKCTRL_ID(TIMER_DELAY_GCLK_ID) |
-                                   GCLK_CLKCTRL_GEN(3u) | GCLK_CLKCTRL_CLKEN;
+  GCLK->CLKCTRL.reg = GCLK_CLKCTRL_ID(TIMER_DELAY_GCLK_ID) |
+                      GCLK_CLKCTRL_GEN(GCLK_TIME) | GCLK_CLKCTRL_CLKEN;
   TIMER_DELAY->COUNT32.CTRLA.reg = TC_CTRLA_MODE_COUNT32 |
                                    TC_CTRLA_PRESCALER_DIV8 | TC_CTRLA_RUNSTDBY |
                                    TC_CTRLA_PRESCSYNC_RESYNC;
@@ -210,7 +213,7 @@ void timerSetup(void) {
    */
   PM->APBCMASK.reg |= TIMER_TICK_APBCMASK;
   GCLK->CLKCTRL.reg = GCLK_CLKCTRL_ID(TIMER_TICK_GCLK_ID) |
-                      GCLK_CLKCTRL_GEN(3u) | GCLK_CLKCTRL_CLKEN;
+                      GCLK_CLKCTRL_GEN(GCLK_TIME) | GCLK_CLKCTRL_CLKEN;
 
   TIMER_TICK->COUNT32.CTRLA.reg = TC_CTRLA_SWRST;
   while (TIMER_TICK->COUNT32.CTRLA.reg & TC_CTRLA_SWRST)

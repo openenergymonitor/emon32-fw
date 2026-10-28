@@ -9,7 +9,8 @@
 #define CHARS_COLS_LENGTH 5u
 #define PAGE_ADDR_END     7u /* 8 lines, 3u for 128x32 display -> 4 lines */
 #define COL_ADDR_END      127u
-#define LINE_MEM_SIZE     (PAGE_ADDR_END + 1u) * (COL_ADDR_END + 1u)
+#define LINE_MEM_SIZE     (COL_ADDR_END + 1u)
+#define DISPLAY_MEM_SIZE  ((PAGE_ADDR_END + 1u) * (COL_ADDR_END + 1u))
 #define MAX_X             COL_ADDR_END
 #define MAX_Y             (PAGE_ADDR_END + 1u) * 8u
 
@@ -88,6 +89,9 @@
 static SSD1306_Status_t bufUpdatePos();
 static SSD1306_Status_t drawChar(const char c);
 static bool             ssd1306I2CActivate(void);
+static SSD1306_Status_t ssd1306SetAddressWindow(uint8_t pageStart,
+                                                uint8_t pageEnd);
+static SSD1306_Status_t ssd1306WriteCommand(uint8_t command);
 
 static bool displayFound;
 
@@ -196,19 +200,14 @@ static Sercom *pSercom;
 
 /*! @var lineBuffer : one line buffer */
 static uint8_t  lineBuffer[LINE_MEM_SIZE];
-static uint32_t posBuf = 0;
+static uint8_t  pageBuf = 0;
+static uint32_t posBuf  = 0;
 
 static SSD1306_Status_t bufUpdatePos(void) {
-  uint32_t y     = posBuf >> 7;
-  uint32_t x     = posBuf - (y << 7);
-  uint32_t x_nxt = x + CHARS_COLS_LENGTH + 1u;
+  const uint32_t xNxt = posBuf + CHARS_COLS_LENGTH + 1u;
 
-  if (x_nxt > COL_ADDR_END) {
-    if (y > PAGE_ADDR_END) {
-      return SSD1306_FAIL;
-    } else if (y < (PAGE_ADDR_END - 1u)) {
-      posBuf = (y + 1u) << 7;
-    }
+  if ((pageBuf > PAGE_ADDR_END) || (xNxt > (COL_ADDR_END + 1u))) {
+    return SSD1306_FAIL;
   }
 
   return SSD1306_SUCCESS;
@@ -241,9 +240,69 @@ static bool ssd1306I2CActivate(void) {
   return true;
 }
 
+static SSD1306_Status_t ssd1306WriteCommand(uint8_t command) {
+  if (I2CM_SUCCESS != i2cDataWrite(pSercom, SSD1306_COMMAND)) {
+    return SSD1306_FAIL;
+  }
+  if (I2CM_SUCCESS != i2cDataWrite(pSercom, command)) {
+    return SSD1306_FAIL;
+  }
+  return SSD1306_SUCCESS;
+}
+
+static SSD1306_Status_t ssd1306SetAddressWindow(uint8_t pageStart,
+                                                uint8_t pageEnd) {
+  if (ssd1306WriteCommand(SSD1306_SET_COLUMN_ADDR) != SSD1306_SUCCESS) {
+    return SSD1306_FAIL;
+  }
+  if (ssd1306WriteCommand(0u) != SSD1306_SUCCESS) {
+    return SSD1306_FAIL;
+  }
+  if (ssd1306WriteCommand(COL_ADDR_END) != SSD1306_SUCCESS) {
+    return SSD1306_FAIL;
+  }
+  if (ssd1306WriteCommand(SSD1306_SET_PAGE_ADDR) != SSD1306_SUCCESS) {
+    return SSD1306_FAIL;
+  }
+  if (ssd1306WriteCommand(pageStart) != SSD1306_SUCCESS) {
+    return SSD1306_FAIL;
+  }
+  if (ssd1306WriteCommand(pageEnd) != SSD1306_SUCCESS) {
+    return SSD1306_FAIL;
+  }
+
+  return SSD1306_SUCCESS;
+}
+
 bool ssd1306Active(void) { return displayFound; }
 
 void ssd1306ClearBuffer(void) { memset(lineBuffer, 0, LINE_MEM_SIZE); }
+
+SSD1306_Status_t ssd1306DisplayClear(void) {
+
+  if (!ssd1306I2CActivate()) {
+    return SSD1306_FAIL;
+  }
+
+  if (ssd1306SetAddressWindow(0u, PAGE_ADDR_END) != SSD1306_SUCCESS) {
+    return SSD1306_FAIL;
+  }
+  if (I2CM_SUCCESS != i2cDataWrite(pSercom, SSD1306_DATA_STREAM)) {
+    return SSD1306_FAIL;
+  }
+  for (size_t i = 0; i < DISPLAY_MEM_SIZE; i++) {
+    if (I2CM_SUCCESS != i2cDataWrite(pSercom, 0u)) {
+      return SSD1306_FAIL;
+    }
+  }
+  i2cAck(pSercom, I2CM_ACK, I2CM_ACK_CMD_STOP);
+
+  ssd1306ClearBuffer();
+  pageBuf = 0u;
+  posBuf  = 0u;
+
+  return SSD1306_SUCCESS;
+}
 
 SSD1306_Status_t ssd1306DisplayOff(void) {
 
@@ -268,6 +327,9 @@ SSD1306_Status_t ssd1306DisplayUpdate(void) {
     return SSD1306_FAIL;
   }
 
+  if (ssd1306SetAddressWindow(pageBuf, pageBuf) != SSD1306_SUCCESS) {
+    return SSD1306_FAIL;
+  }
   if (I2CM_SUCCESS != i2cDataWrite(pSercom, SSD1306_DATA_STREAM)) {
     return SSD1306_FAIL;
   }
@@ -345,10 +407,15 @@ SSD1306_Status_t ssd1306Init(Sercom *pSercomI2C) {
   }
   i2cAck(pSercom, I2CM_ACK, I2CM_ACK_CMD_STOP);
 
-  ssd1306ClearBuffer();
+  if (ssd1306DisplayClear() != SSD1306_SUCCESS) {
+    return SSD1306_FAIL;
+  }
 
   displayFound = true;
   return SSD1306_SUCCESS;
 }
 
-void ssd1306SetPosition(const PosXY_t pos) { posBuf = pos.x + (pos.y << 7u); }
+void ssd1306SetPosition(const PosXY_t pos) {
+  pageBuf = (uint8_t)pos.y;
+  posBuf  = pos.x;
+}

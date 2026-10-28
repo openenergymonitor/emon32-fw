@@ -59,12 +59,7 @@ void usbCDCTask(void) {
     if (-1 == ch) {
       continue;
     }
-    /* Check if we're waiting for a confirmation (bootloader, zero, etc.) */
-    if (configHandleConfirmation(ch)) {
-      continue;
-    }
-    /* Normal command processing */
-    configCmdChar(ch);
+    configRxQueueChar((uint8_t)ch);
   }
 }
 

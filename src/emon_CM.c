@@ -257,7 +257,8 @@ void ecmConfigInit(void) {
 }
 
 void ecmConfigReportCycles(uint32_t reportCycles) {
-  ecmCfg.reportCycles = reportCycles;
+  ecmCfg.reportCycles  = reportCycles;
+  ecmCfg.reportTime_us = (1000000u / ecmCfg.mainsFreq) * reportCycles;
 }
 
 /******************************************************************************
@@ -419,12 +420,14 @@ static void calibrationPhase(CTCfg_t *pCfgCT, const VCfg_t *pCfgV, size_t idxCT,
    *  - Sample rate in rad: 2π / 360 * °
    *  => 2π / 1E6 * f_mains * t_s * OS_R * VCT (360s cancel)
    */
-  uint32_t       samplePeriodus = ecmCfg.samplePeriod * OVERSAMPLING_RATIO;
+  const uint32_t samplePeriodus = ecmCfg.samplePeriod * OVERSAMPLING_RATIO;
   const uint32_t numSamples = ecmCfg.ainActive[0] ? VCT_TOTAL + 1u : VCT_TOTAL;
+  const float    freq =
+      pCfgCT->fMeasured ? datasetProc.freqV : qfp_uint2float(ecmCfg.mainsFreq);
 
   float phaseShift_deg =
       qfp_fmul((360.0f / 1E6f),
-               qfp_uint2float(samplePeriodus * numSamples * ecmCfg.mainsFreq));
+               qfp_fmul(qfp_uint2float(samplePeriodus * numSamples), freq));
   float phaseShiftSets = qfp_fdiv(phiCT_V, phaseShift_deg);
 
   /* After downsampling, the time between samples remains t_s _not_ 2*t_s.
@@ -461,16 +464,23 @@ static void calibrationPhase(CTCfg_t *pCfgCT, const VCfg_t *pCfgV, size_t idxCT,
       qfp_fsub(shiftXRate, qfp_fmul(pCfgCT->phaseY[idxPh], rateSqr));
 }
 
-void ecmClearEnergy(void) {
+void ecmEnergyClear(void) {
   for (size_t i = 0; i < NUM_CT; i++) {
     datasetProc.CT[i].wattHour = 0;
     residualEnergy[i]          = 0.0f;
   }
 }
 
-void ecmClearEnergyChannel(const size_t idx) {
+void ecmEnergyClearChannel(const size_t idx) {
   if (idx < NUM_CT) {
     datasetProc.CT[idx].wattHour = 0;
+    residualEnergy[idx]          = 0.0f;
+  }
+}
+
+void ecmEnergySetChannel(const size_t idx, const int32_t wh) {
+  if (idx < NUM_CT) {
+    datasetProc.CT[idx].wattHour = wh;
     residualEnergy[idx]          = 0.0f;
   }
 }
@@ -707,7 +717,9 @@ RAMFUNC ECM_STATUS_t ecmInjectSample(void) {
    * sample. For example, DS18B20 requires 750 ms to sample.
    */
   bool pend1sNoVAC =
-      useAssumedV && (tRepLastDelta > (ecmCfg.reportTime_us - 1000000u));
+      ecmCfg.reportTime_us >= 1000000u
+          ? useAssumedV && (tRepLastDelta > (ecmCfg.reportTime_us - 1000000u))
+          : false;
   bool pend1sCycles =
       accumCollecting->cycles == (ecmCfg.reportCycles - ecmCfg.mainsFreq);
 
@@ -751,7 +763,7 @@ ECMPerformance_t *ecmPerformance(void) {
   return perfIdle;
 }
 
-RAMFUNC ECMDataset_t *ecmProcessSet(void) {
+ECMDataset_t *ecmProcessSet(void) {
   uint32_t  t_start = 0;
   CalcRMS_t rms;
 
@@ -805,8 +817,26 @@ RAMFUNC ECMDataset_t *ecmProcessSet(void) {
     }
   }
 
+  /* Frequency; only V1 considered as assumed synchronous.
+   * Account for overflow on long acquisition times.
+   */
+  uint32_t cycles_scaled = accumProcessing->cycles;
+  uint32_t tDelta_scaled = accumProcessing->tDelta_us;
+  while (cycles_scaled > 4250u) {
+    cycles_scaled = cycles_scaled / 2u;
+    tDelta_scaled = tDelta_scaled / 2u;
+  }
+
+  datasetProc.freqV = qfp_fdiv(qfp_uint2float(cycles_scaled * 1000000u),
+                               qfp_uint2float(tDelta_scaled));
+
   for (size_t idxCT = 0; idxCT < NUM_CT; idxCT++) {
     if (channelActive[idxCT + NUM_V]) {
+
+      if (ecmCfg.ctCfg[idxCT].recalcXY) {
+        ecmConfigChannel(idxCT + NUM_V);
+      }
+
       int32_t idxV1 = ecmCfg.ctCfg[idxCT].vChan1;
       int32_t idxV2 = ecmCfg.ctCfg[idxCT].vChan2;
 

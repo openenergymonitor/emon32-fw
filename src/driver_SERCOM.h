@@ -126,9 +126,22 @@ void uartEnableTx(Sercom *sercom);
 char uartGetc(Sercom *sercom);
 
 /*! @brief Indicate if a byte is waiting in the USART data buffer.
+ *  @param [in] sercom : SERCOM instance
  *  @return true if waiting, false otherwise
  */
 bool uartGetcReady(const Sercom *sercom);
+
+/*! @brief Disable an interrupt source in the UART
+ *  @param [in] sercom : SERCOM instance
+ *  @param [in] interrupt : interrupt to disable
+ */
+void uartInterruptDisable(Sercom *sercom, uint8_t interrupt);
+
+/*! @brief Enable an interrupt source in the UART
+ *  @param [in] sercom : SERCOM instance
+ *  @param [in] interrupt : interrupt to disable
+ */
+void uartInterruptEnable(Sercom *sercom, uint8_t interrupt);
 
 /*! @brief Return the interrupt status for the UART instance
  *  @param [in] sercom : SERCOM instance
@@ -141,9 +154,3 @@ uint32_t uartInterruptStatus(const Sercom *sercom);
  *  @param [in] c : Single character
  */
 void uartPutcBlocking(Sercom *sercom, char c);
-
-/*! @brief Send a string (blocking) on UART
- *  @param [in] sercom : pointer to the SERCOM instance
- *  @param [in] s : Pointer to null terminated string
- */
-void uartPutsBlocking(Sercom *sercom, const char *s);

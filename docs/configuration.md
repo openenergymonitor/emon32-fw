@@ -27,30 +27,43 @@ The following table details the available commands and their function.
 | Command | Description |
 |---------|-------------|
 | **?** | Show help text |
+| **emonlock** | Lock the configuration interface |
+| **emonunlock** | Unlock the configuration interface |
 | **a\<n>** | Set the assumed RMS voltage as integer (when no AC voltage detected)<br>Example: `a230` sets assumed voltage to 230V |
 | **b** | Backup configuration to serial |
-| **c\<n>** | Log to serial output<br>- `c0`: Disable serial logging<br>- `c1`: Enable serial logging |
+| **c\<n>** | Log to serial output<br>- `c0`: Disable serial logging<br>- `c1`: Enable serial logging<br>- `c2`: Enable verbose serial logging |
 | **d\<x.x>** | Set data log period in seconds<br>Example: `d10.0` sets logging period to 10 seconds |
 | **e** | Enter bootloader mode for firmware updates |
 | **f\<n>** | Set line frequency in Hz<br>- `f50`: 50 Hz (Europe, UK, etc.)<br>- `f60`: 60 Hz (US, Canada, etc.) |
 | **g\<n>** | Set network group for RF communication (default = 210)<br>Example: `g210` |
 | **h** | Safe Raspberry Pi power off countdown (will not remove power) |
+| **i\<x> \<y> \<i.i>** | Auto calibration<br>Parameters:<br>- `x`: Channel number (1-3 = Voltage; 4+ = CT)<br>- `y`: Mode select<br>&nbsp;&nbsp;- `a`: amplitude<br>&nbsp;&nbsp;- `p`: phase<br>- `i.i`: measured RMS amplitude<br>Example: `i4 a 45` |
 | **j\<n>** | JSON serial format<br>- `j0`: Disable JSON format<br>- `j1`: Enable JSON format |
 | **k\<x> \<a> \<y.y> \<z.z> \<v1> \<v2>** | Configure an analog input (voltage or current)<br>Parameters:<br>- `x`: Channel number (1-3 = Voltage; 4+ = CT)<br>- `a`: Active status (0 = DISABLED, 1 = ENABLED)<br>- `y.y`: V/CT calibration constant<br>- `z.z`: CT phase calibration value (degrees)<br>- `v1`: CT voltage channel 1 (reference)<br>- `v2`: CT voltage channel 2 (for L-L loads)<br>Example: `k4 1 90.0 1.5 1 1` |
 | **l** | List current settings (displays all configuration) |
+| **ls** | List saved settings (displays all configuration) |
+| **lh** | List current settings (displays all configuration), human readable |
+| **lhs** | List saved settings (displays all configuration), human readable |
 | **m\<v> \<w> \<x> \<y> \<z>** | Configure a OneWire/pulse input<br>Parameters:<br>- `v`: Channel index<br>- `w`: Active status (0 = DISABLED, 1 = ENABLED)<br>- `x`: Function select<br>&nbsp;&nbsp;- `a`: analog<br>&nbsp;&nbsp;- `b`: Both edges (pulse)<br>&nbsp;&nbsp;- `f`: Falling edge (pulse)<br>&nbsp;&nbsp;- `r`: Rising edge (pulse)<br>&nbsp;&nbsp;- `o`: OneWire (temperature sensor)<br>- `y`: Pull-up resistor (0 = OFF, 1 = ON)<br>- `z`: Minimum time, in milliseconds, between pulses<br>Example: `m1 1 r 1 50` |
 | **n\<n>** | Set node ID [1..60]<br>Example: `n5` sets node ID to 5 |
-| **o<x>** | OneWire configuration<br>Options:<br>- `x` = `ca`: clear all saved OneWire addresses<br>- `x` = `c<n>`: clear saved OneWire address for channel `n`<br>- `x` = `f`: reset and find OneWire devices<br>- `x` = `h`: hold the found OneWire addresses (overrides any manually configured addresses)<br>- `x` = `l`: list OneWire devices<br>- `x` = `n`: list all saved OneWire addresses<br>- `x` = integer, `n`: move an address to position `n` (see Examples)<br>- `x` = `r <a> <b>`, remap found sensor `<a>` to index `<b>` |
-| **p\<n>** | Set the RF power level<br>Example: `p7` |
+| **o<x>** | OneWire configuration<br>Options:<br>- `x` = `ca`: clear all saved OneWire addresses<br>- `x` = `c<n>`: clear saved OneWire address for channel `n`<br>- `x` = `f`: reset and find OneWire devices<br>- `x` = `h`: hold the found OneWire addresses (overrides any manually configured addresses)<br>- `x` = `l`: list OneWire devices<br>- `x` = `n`: list all saved OneWire addresses<br>- `x` = integer, `n`: move supplied address to position `n` (see Examples)<br>- `x` = `r <a> <b>`, remap found sensor `<a>` to index `<b>` |
+| **p\<n>** | Set the RF power level (0-31). Transmitter may be damaged for values greater than 25 when no antenna is installed.<br>Example: `p7` |
 | **q** | Reset the system (confirmation required) |
 | **r** | Restore default settings (unsaved changes will be lost) |
 | **rs** | Restore saved settings (unsaved changes will be lost) |
 | **s** | Save settings to NVM (non-volatile memory)<br>Must be used after making configuration changes |
 | **t** | Trigger report on next cycle (force immediate data transmission) |
+| **u** | Save accumulator values to NVM |
 | **v** | Show firmware and board information |
 | **w\<n>** | RF module active<br>- `w0`: Disable RF<br>- `w1`: Enable RF |
 | **x\<n>** | 433 MHz RF frequency compatibility<br>- `x0`: 433.92 MHz (standard)<br>- `x1`: 433.00 MHz (legacy compatibility) |
-| **z** | Zero energy/pulse accumulators (reset Wh/pulse counters)<br>- `z`: Zero all accumulators (E1-E12, pulse1-3) with confirmation<br>- `ze1` to `ze12`: Zero individual energy accumulator (e.g., `ze3` zeros E3 only)<br>- `zp1` to `zp2`: Zero individual pulse accumulator (e.g., `zp1` zeros pulse1 only)<br>All commands require 'y' confirmation |
+| **ye<n> <m>** | Set energy accumulator `n` to `m` Wh |
+| **yp<n> <m>** | Set pulse accumulator `n` to `m` pulses |
+| **z** | Zero energy/pulse accumulators (reset Wh/pulse counters)<br>- `z`: Zero all accumulators (E1-E12, pulse1-3) with confirmation<br>- `ze1` to `ze12`: Zero individual energy accumulator (e.g., `ze3` zeros E3 only)<br>- `zp1` to `zp3`: Zero individual pulse accumulator (e.g., `zp1` zeros pulse1 only)<br>All commands require 'y' confirmation |
+
+## Locking and unlocking the configuration
+
+To protect against accidental changes, the configuration interface can be locked against changes. Read only commands are still available when locked.
 
 ## EmonHub Node Decoder Configuration
 
@@ -58,25 +71,27 @@ The emonTx6 transmits data via RF that needs to be decoded by EmonHub. The node 
 
 ### Single-Phase Mode
 
-When only voltage channel V1 is active, the emonTx6 operates in single-phase mode and transmits a single voltage reading along with power and energy data.
-
 The decoder configuration for node 20 (main CT1-6 channels) in single-phase mode is:
 
 ```
 [[20]]
 nodename = emonTx6_20
 [[[rx]]]
-names =     MSG, Vrms, P1, P2, P3, P4, P5, P6, E1, E2, E3, E4, E5, E6
-datacodes = L, h, h, h, h, h, h, h, l, l, l, l, l, l
-scales =    1.0, 0.01, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0
-units =     n, V, W, W, W, W, W, W, Wh, Wh, Wh, Wh, Wh, Wh
+names =     MSG, Vrms1, Vrms2, Vrms3, P1, P2, P3, P4, P5, P6, E1, E2, E3, E4, E5, E6
+datacodes = L, h, h, h, h, h, h, h, h, h, l, l, l, l, l, l
+scales =    1.0, 0.01, 0.01, 0.01, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0
+units =     n, V, V, V, W, W, W, W, W, W, Wh, Wh, Wh, Wh, Wh, Wh
 ```
 
 **Data fields:**
 - `MSG`: Message counter
-- `Vrms`: Single RMS voltage (scaled by 0.01)
+- `Vrms1`: Single RMS voltage (scaled by 0.01)
+- `Vrms2`: Always 0
+- `Vrms3`: Always 0
 - `P1-P6`: Real power for CT channels 1-6 (watts)
 - `E1-E6`: Energy accumulator for CT channels 1-6 (watt-hours)
+
+In single-phase mode, Vrms2 and Vrms3 will always read as 0.
 
 ### Three-Phase Mode
 
@@ -104,7 +119,7 @@ units =     n, V, V, V, W, W, W, W, W, W, Wh, Wh, Wh, Wh, Wh, Wh
 
 Both single-phase and three-phase modes use additional nodes for supplementary data:
 
-- **Node N+1**: Temperature and pulse data (node 21 if N=20)
+- **Node N+1**: Temperature, pulse, and analog data (node 21 if N=20)
 - **Node N+2**: Extended CT channels 7-12 (node 22 if N=20)
 
 ### Configuration Steps

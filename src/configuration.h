@@ -5,6 +5,22 @@
 #include <stdint.h>
 
 #include "board_def.h"
+#include "util.h"
+
+typedef struct CalibConfig_ {
+  bool    inProgress; /* true when a configuration is in progress. */
+  bool    isCT;       /* Indicate if channel is CT or V. */
+  uint8_t ch;         /* channel that's being configured. */
+  char    mode;       /* amplitude or phase configuration. */
+  /* Amplitude calibration */
+  float   target; /* target amplitude value. */
+  float   accum;  /* accumulated value. */
+  /* Phase calibration */
+  float   prevDatalog; /* Previous data log period */
+  size_t  iter;        /* Fill iteration */
+  XY_t    phipf[8];    /* Phase/PF pairs */
+  bool    defer;       /* Defer this sample set */
+} CalibConfig_t;
 
 /* Configurable options. All the structs are packed to allow simple write to
  * EEPROM as a contiguous set.
@@ -15,7 +31,7 @@ typedef struct __attribute__((__packed__)) BaseCfg_ {
   uint16_t reportCycles; /* Cycles between reports */
   uint16_t epDeltaStore; /* Minimum energy/pulse delta to store */
   uint8_t  dataGrp;      /* Transmission group - default 210 */
-  bool     logToSerial;  /* Log data to serial output */
+  uint8_t  logToSerial;  /* Data log to serial configuration */
   bool     useJson;      /* JSON format for serial output */
   uint16_t assumedVrms;  /* Assumed RMS voltage if not present */
   bool     debugSerial;  /* Verbose debug logged to serial */
@@ -87,10 +103,23 @@ typedef struct VersionInfo_ {
   const char *revision;
 } VersionInfo_t;
 
+/*! @brief Get the status of any auto configuration in progress.
+ *  @return pointer to the auto configuration struct.
+ */
+CalibConfig_t *configCalibStatus(void);
+
 /*! @brief Add a character to the command stream
  *  @param [in] c : character to add
  */
 void configCmdChar(const uint8_t c);
+
+/*! @brief Queue a received character for command processing
+ *  @param [in] c : character to add
+ */
+void configRxQueueChar(const uint8_t c);
+
+/*! @brief Process queued received characters */
+void configRxProcess(void);
 
 /*! @brief Check if waiting for confirmation and handle if yes
  *  @param [in] c : character received
@@ -123,6 +152,14 @@ void configProcessCmd(void);
  *  @return true if there are unsaved changes, false otherwise
  */
 bool configUnsavedChanges(void);
+
+/*! @brief Update the unsaved change flag at end of process */
+void configUnsavedUpdate(void);
+
+/*! @brief Update the data log period
+ *  @param [in] datalog : data log period (s)
+ */
+void configUpdateDatalog(const float datalog);
 
 /*! @brief Fetch the version and revision information
  *  @return Version and revision struct

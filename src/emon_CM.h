@@ -77,6 +77,8 @@ typedef struct CTCfgUnpacked_ {
   float    ctCal;
   float    ctCalRaw;
   bool     active;
+  bool     recalcXY;
+  bool     fMeasured;
   uint8_t  vChan1;
   uint8_t  vChan2;
   int32_t  wattHourInit;
@@ -114,10 +116,11 @@ typedef struct DataCT_ {
 
 typedef struct ECMDataset_ {
   float    wallTime;
-  uint32_t activeCh;
+  uint32_t activeCh;        /* Bitmap of active channels */
   float    rmsV[NUM_V * 2]; /* For L-L */
-  DataCT_t CT[NUM_CT];
-  uint16_t ain;
+  float    freqV;           /* line frequency */
+  DataCT_t CT[NUM_CT];      /* CT data */
+  uint16_t ain;             /* analog value */
 } ECMDataset_t;
 
 typedef struct ECMPerformance_ {
@@ -140,12 +143,18 @@ typedef struct AutoPhaseRes_ {
  *****************************************************************************/
 
 /*! @brief Clear accumulated energy in dataset */
-void ecmClearEnergy(void);
+void ecmEnergyClear(void);
 
 /*! @brief Clear accumulated energy for a single channel
  *  @param [in] idx : channel index (0 to NUM_CT-1)
  */
-void ecmClearEnergyChannel(const size_t idx);
+void ecmEnergyClearChannel(const size_t idx);
+
+/*! @brief Set accumulated energy for a single channel
+ *  @param [in] idx : channel index (0 to NUM_CT-1)
+ *  @param [in] wh : value to set in Wh
+ */
+void ecmEnergySetChannel(const size_t idx, const int32_t wh);
 
 /*! @brief Get the pointer to the configuration struct
  *  @return pointer to Emon CM configuration struct
@@ -209,7 +218,7 @@ ECM_STATUS_t ecmProcessCycle(void) RAMFUNC;
 /*! @brief Processes a whole data set
  *  @return pointer to the processed data structure
  */
-ECMDataset_t *ecmProcessSet(void) RAMFUNC;
+ECMDataset_t *ecmProcessSet(void);
 
 /*! @brief Force trigger data set processing on next cycle complete */
 void ecmProcessSetTrigger(void);

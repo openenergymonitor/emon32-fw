@@ -1,7 +1,16 @@
 # emon32 Change Log
 
 > [!NOTE]
-> Only tagged changes will be described here. Changes are sorted by descending time.
+> Only changes between tags will be described here. Changes are sorted by descending time.
+
+## v1.2.0
+
+- Added frequency monitoring.
+- Added phase and ampltitude calibration commands.
+- Improved unsaved change indication.
+- Allow viewing saved configurations.
+- Energy/pulse values can be set.
+- Datalog is now updated when no external V sense.
 
 ## v1.1.1
 
@@ -20,4 +29,3 @@
 ## v1.0
 
 - Initial public release.
-

@@ -4,16 +4,17 @@
 #include "driver_PORT.h"
 #include "driver_SERCOM.h"
 #include "driver_TIME.h"
+#include "uartFifo.h"
 
 #define I2CM_ACTIVATE_TIMEOUT_US 200u /* Time to wait for I2C address phase */
 #define I2CM_DATA_TIMEOUT_US     200u /* Time to wait for I2C data byte */
 
 static void i2cmCommon(Sercom *pSercom);
 static void i2cmExtPinsSetup(void);
+
 static void sercomSetupSPI(void);
 static void spiExtPinsSetup(bool enable);
 
-static void uartInterruptEnable(Sercom *sercom, uint8_t interrupt);
 static void uartSetup(void);
 
 static volatile bool extIntfEnabled = true;
@@ -94,13 +95,13 @@ void sercomSetup(void) {
 
   PM->APBCMASK.reg |= SERCOM_I2CM_INT_APBCMASK;
   GCLK->CLKCTRL.reg = GCLK_CLKCTRL_ID(SERCOM_I2CM_INT_GCLK_ID) |
-                      GCLK_CLKCTRL_GEN(3u) | GCLK_CLKCTRL_CLKEN;
+                      GCLK_CLKCTRL_GEN(GCLK_PERIPH) | GCLK_CLKCTRL_CLKEN;
 
   i2cmCommon(SERCOM_I2CM);
 
   PM->APBCMASK.reg |= SERCOM_I2CM_EXT_APBCMASK;
   GCLK->CLKCTRL.reg = GCLK_CLKCTRL_ID(SERCOM_I2CM_EXT_GCLK_ID) |
-                      GCLK_CLKCTRL_GEN(3u) | GCLK_CLKCTRL_CLKEN;
+                      GCLK_CLKCTRL_GEN(GCLK_PERIPH) | GCLK_CLKCTRL_CLKEN;
 
   i2cmExtPinsSetup();
   i2cmCommon(SERCOM_I2CM_EXT);
@@ -149,7 +150,7 @@ static void uartSetup(void) {
   /* Configure clocks - runs from the OSC8M clock on gen 3 */
   PM->APBCMASK.reg |= SERCOM_UART_APBCMASK;
   GCLK->CLKCTRL.reg = GCLK_CLKCTRL_ID(SERCOM_UART_GCLK_ID) |
-                      GCLK_CLKCTRL_GEN(3u) | GCLK_CLKCTRL_CLKEN;
+                      GCLK_CLKCTRL_GEN(GCLK_PERIPH) | GCLK_CLKCTRL_CLKEN;
 
   /* Reset the USART fully to flush any state */
   SERCOM_UART->USART.CTRLA.reg = SERCOM_USART_CTRLA_SWRST;
@@ -170,6 +171,7 @@ static void uartSetup(void) {
     ;
 
   SERCOM_UART->USART.BAUD.reg = baud;
+  NVIC_EnableIRQ(SERCOM_UART_INTERACTIVE_IRQn);
 }
 
 static void sercomSetupSPI(void) {
@@ -177,7 +179,7 @@ static void sercomSetupSPI(void) {
   /* Configure clocks - runs from the OSC8M clock on gen 3 */
   PM->APBCMASK.reg |= SERCOM_SPI_APBCMASK;
   GCLK->CLKCTRL.reg = GCLK_CLKCTRL_ID(SERCOM_SPI_GCLK_ID) |
-                      GCLK_CLKCTRL_GEN(3u) | GCLK_CLKCTRL_CLKEN;
+                      GCLK_CLKCTRL_GEN(GCLK_PERIPH) | GCLK_CLKCTRL_CLKEN;
 
   /* Table 25-2 - driven @ F_REF = F_PERIPH. BAUD = F_REF / 2F_BAUD - 1
    * RFM69 maximum SCK is 10 MHz, so can go at maximum 4 MHz SCK easily.
@@ -229,15 +231,9 @@ void uartPutcBlocking(Sercom *sercom, char c) {
   sercom->USART.INTFLAG.reg = SERCOM_USART_INTFLAG_DRE;
 }
 
-void uartPutsBlocking(Sercom *sercom, const char *s) {
-  while (*s) {
-    uartPutcBlocking(sercom, *s++);
-  }
-}
-
 void uartEnableRx(Sercom *sercom, const uint32_t irqn) {
   uartInterruptEnable(sercom, SERCOM_USART_INTENSET_RXC);
-  NVIC_EnableIRQ(irqn);
+  (void)irqn;
 
   sercom->USART.CTRLB.bit.RXEN = 1;
 
@@ -265,7 +261,11 @@ bool uartGetcReady(const Sercom *sercom) {
   return (bool)(sercom->USART.INTFLAG.reg & SERCOM_USART_INTFLAG_RXC);
 }
 
-static void uartInterruptEnable(Sercom *sercom, uint8_t interrupt) {
+void uartInterruptDisable(Sercom *sercom, uint8_t interrupt) {
+  sercom->USART.INTENCLR.reg = interrupt;
+}
+
+void uartInterruptEnable(Sercom *sercom, uint8_t interrupt) {
   sercom->USART.INTENSET.reg = interrupt;
 }
 

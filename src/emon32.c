@@ -15,6 +15,7 @@
 #include "driver_USB.h"
 #include "driver_WDT.h"
 
+#include "calibration.h"
 #include "configuration.h"
 #include "dataPack.h"
 #include "eeprom.h"
@@ -26,6 +27,7 @@
 #include "periph_rfm69.h"
 #include "pulse.h"
 #include "temperature.h"
+#include "uartFifo.h"
 #include "ui.h"
 #include "util.h"
 
@@ -65,16 +67,17 @@ static void cumulativeProcess(Emon32Cumulative_t    *pPkt,
 static void datasetAddPulse(Emon32Dataset_t *pDst);
 static void ecmDmaCallback(void);
 static void evtKiloHertz(void);
+static void evtClear(const EVTSRC_t evt);
 static bool evtPending(EVTSRC_t evt);
+static bool evtTake(const EVTSRC_t evt);
 static void pulseConfigure(void);
-void        putchar_(char c);
 static void rfmConfigure(void);
 static bool ssd1306IndicateShutdown(void);
 static void ssd1306IndicateStartup(void);
 static void ssd1306RefreshTitle(void);
-static void ssd1306Setup(void);
-static void tempReadEvt(Emon32Dataset_t *pData, const uint32_t numT);
-static void tempSample(const uint32_t numTempSensors);
+static uint32_t ssd1306Setup(void);
+static void     tempReadEvt(Emon32Dataset_t *pData, const uint32_t numT);
+static void     tempSample(const uint32_t numTempSensors);
 static uint32_t tempSetup(Emon32Dataset_t *pData);
 static void     totalEnergy(const Emon32Dataset_t *pData, EPAccum_t *pAcc);
 static void     transmitData(const Emon32Dataset_t *pSrc, uint32_t *pPkt);
@@ -272,7 +275,7 @@ void ecmDmaCallback(void) {
   }
 }
 
-void emon32EventClr(const EVTSRC_t evt) {
+static void evtClear(const EVTSRC_t evt) {
   /* Disable interrupts during RMW update of event status */
   uint32_t evtDecode = ~(1u << evt);
   __disable_irq();
@@ -286,6 +289,32 @@ void emon32EventSet(const EVTSRC_t evt) {
   __disable_irq();
   evtPend |= evtDecode;
   __enable_irq();
+}
+
+void emon32ExpanderSetup(void) {
+  bool           ct7_12 = false;
+  extern uint8_t pinsADC[][2];
+
+  for (size_t i = 0; i < 6u; i++) {
+    if (pConfig->ctCfg[i + 6u].ctActive) {
+      ct7_12 = true;
+      break;
+    }
+  }
+
+  /* Configure the expander pins as ADC inputs or GPIO with pull down. This
+   * removes any floating voltages on these pins. */
+  for (size_t i = 0; i < 6u; i++) {
+    const uint8_t grp = pinsADC[i + 11u][0];
+    const uint8_t pin = pinsADC[i + 11u][1];
+    if (ct7_12) {
+      portPinMux(grp, pin, PORT_PMUX_PMUXE_B_Val);
+    } else {
+      portPinMuxClear(grp, pin);
+      portPinCfg(grp, pin, PORT_PINCFG_PULLEN, PIN_CFG_SET);
+      portPinDrv(grp, pin, PIN_DRV_CLR);
+    }
+  }
 }
 
 /*! @brief This function is called when the 1 ms timer fires.
@@ -328,6 +357,18 @@ static void evtKiloHertz(void) {
  */
 static bool evtPending(EVTSRC_t evt) { return (evtPend & (1u << evt)) != 0; }
 
+static bool evtTake(const EVTSRC_t evt) {
+  uint32_t evtDecode = (1u << evt);
+  uint32_t primask   = __get_PRIMASK();
+
+  __disable_irq();
+  const bool ret = (evtPend & evtDecode) ? true : false;
+  evtPend &= ~evtDecode;
+  __set_PRIMASK(primask);
+
+  return ret;
+}
+
 /*! @brief Configure any pulse counter interfaces */
 static void pulseConfigure(void) {
 
@@ -353,16 +394,6 @@ static void pulseConfigure(void) {
   }
 }
 
-/*! @brief Allows the printf function to print to the debug console. If the
- * USB CDC is connected, characters should be routed there.
- */
-void putchar_(char c) {
-  if (usbCDCIsConnected()) {
-    usbCDCTxChar(c);
-  }
-  uartPutcBlocking(SERCOM_UART, c);
-}
-
 static void rfmConfigure(void) {
   RFMOpt_t rfmOpt = {0};
   rfmOpt.freq     = (RFM_Freq_t)pConfig->dataTxCfg.rfmFreq;
@@ -381,7 +412,7 @@ void serialPuts(const char *s) {
   if (usbCDCIsConnected()) {
     usbCDCPutsBlocking(s);
   }
-  uartPutsBlocking(SERCOM_UART, s);
+  uartPutsBlocking(s);
 }
 
 static bool ssd1306IndicateShutdown(void) {
@@ -411,6 +442,7 @@ static bool ssd1306IndicateShutdown(void) {
       xy.y = 2u;
       snprintf_(buffer, 24, "Shut down.");
     }
+    ssd1306ClearBuffer();
     ssd1306SetPosition(xy);
     ssd1306DrawString(buffer);
     ssd1306DisplayUpdate();
@@ -445,29 +477,45 @@ static void ssd1306IndicateStartup(void) {
     }
 
     ssd1306RefreshTitle();
+    ssd1306ClearBuffer();
     ssd1306SetPosition((PosXY_t){.x = (47u - offset_release), .y = 1u});
     ssd1306DrawString(vInfo.release);
+    ssd1306DisplayUpdate();
+
+    ssd1306ClearBuffer();
     ssd1306SetPosition((PosXY_t){.x = (44u - offset_rev), .y = 2u});
     ssd1306DrawString(vInfo.revision);
+    ssd1306DisplayUpdate();
 
+    ssd1306ClearBuffer();
     ssd1306SetPosition((PosXY_t){.x = 35u, .y = 4u});
     ssd1306DrawString("Starting...");
-
     ssd1306DisplayUpdate();
   }
 }
 
 static void ssd1306RefreshTitle(void) {
-  ssd1306ClearBuffer();
+  ssd1306DisplayClear();
   ssd1306SetPosition((PosXY_t){.x = 44u, .y = 0u});
   ssd1306DrawString("emonPi3");
+  ssd1306DisplayUpdate();
 }
 
-/*! @brief Setup the SSD1306 display, if present. Display a basic message */
-static void ssd1306Setup(void) {
-  if (SSD1306_SUCCESS == ssd1306Init(SERCOM_I2CM_EXT)) {
-    ssd1306IndicateStartup();
-  }
+/*! @brief Setup the SSD1306 display. If present, display a basic message. Retry
+ * up to 4 times with I2C bus recovery as device is coming out of reset. */
+static uint32_t ssd1306Setup(void) {
+  uint32_t retries = 0u;
+  do {
+    const SSD1306_Status_t s = ssd1306Init(SERCOM_I2CM_EXT);
+    if (SSD1306_SUCCESS == s) {
+      ssd1306IndicateStartup();
+      break;
+    } else {
+      retries++;
+      waitWithUSB(100u);
+    }
+  } while (retries < 4u);
+  return retries;
 }
 
 static void tempReadEvt(Emon32Dataset_t *pData, const uint32_t numT) {
@@ -507,7 +555,7 @@ static void tempReadEvt(Emon32Dataset_t *pData, const uint32_t numT) {
 
   if ((0 == numT) || (numT == tempRdCount)) {
     emon32EventSet(EVT_PROCESS_DATASET);
-    emon32EventClr(EVT_TEMP_READ);
+    evtClear(EVT_TEMP_READ);
     tempRdCount = 0;
   }
 }
@@ -612,13 +660,16 @@ static void transmitData(const Emon32Dataset_t *pSrc, uint32_t *pPkt) {
   if ('a' == pConfig->opaCfg[2].func) {
     chsActive.analog = pConfig->opaCfg[2].opaActive;
   }
+  const DataPackOpts_t opts = {.bufSize    = TX_BUFFER_W,
+                               .json       = pConfig->baseCfg.useJson,
+                               .serialLog  = pConfig->baseCfg.logToSerial,
+                               .pChsActive = &chsActive};
 
-  (void)dataPackSerial(pSrc, txBuffer, TX_BUFFER_W, pConfig->baseCfg.useJson,
-                       &chsActive);
+  (void)dataPackSerial(pSrc, txBuffer, &opts);
 
   if (pConfig->dataTxCfg.useRFM) {
 
-    if (pConfig->baseCfg.logToSerial) {
+    if (0 != pConfig->baseCfg.logToSerial) {
       serialPuts(txBuffer);
     }
     /* Always send CT1-6 */
@@ -656,7 +707,9 @@ static void transmitData(const Emon32Dataset_t *pSrc, uint32_t *pPkt) {
     __enable_irq();
 
   } else {
-    serialPuts(txBuffer);
+    if (0 != pConfig->baseCfg.logToSerial) {
+      serialPuts(txBuffer);
+    }
   }
 }
 
@@ -666,8 +719,8 @@ static void transmitData(const Emon32Dataset_t *pSrc, uint32_t *pPkt) {
  */
 static void ucSetup(void) {
   clkSetup();
-  timerSetup();
   portSetup();
+  timerSetup();
   eicSetup();
   dmacSetup();
   sercomSetup();
@@ -702,7 +755,7 @@ int main(void) {
   /* Pause to allow any external pins to settle */
   waitWithUSB(100);
   spiConfigureExt();
-  ssd1306Setup();
+  const uint32_t ssdRetries = ssd1306Setup();
 
   eicEnable();
   uartEnableTx(SERCOM_UART);
@@ -726,10 +779,9 @@ int main(void) {
   numTempSensors     = tempSetup(&dataset);
   numTempSensorsLast = numTempSensors;
 
-  /* Wait 1s to allow USB to enumerate as serial. Not always possible, but
-   * gives the possibility. The board information can be accessed through the
-   * serial console later. */
-  waitWithUSB(1000);
+  /* Wait 1 s to allow USB to enumerate as serial. Not always possible. The
+   * board information can be accessed through the serial console later. */
+  waitWithUSB(1000u - (ssdRetries * 100u));
   configFirmwareBoardInfo();
   uartEnableRx(SERCOM_UART, SERCOM_UART_INTERACTIVE_IRQn);
   wdtEnable();
@@ -750,33 +802,32 @@ int main(void) {
     while (0 != evtPend) {
 
       /* Configure sampling and start */
-      if (evtPending(EVT_SMP_CFG_START)) {
+      if (evtTake(EVT_SMP_CFG_START)) {
         const bool ainActive =
             pConfig->opaCfg[2].func == 'a' && pConfig->opaCfg[2].opaActive;
         adcDMACStop();
         adcSetup(ainActive);
+        emon32ExpanderSetup();
         ecmConfigure();
         ecmFlush();
         dmacCallbackBufferFill(&ecmDmaCallback);
         adcDMACStart();
-        emon32EventClr(EVT_SMP_CFG_START);
       }
 
       /* External interface disable */
-      if (evtPending(EVT_EXT_DISABLE)) {
+      if (evtTake(EVT_EXT_DISABLE)) {
         sercomExtIntfDisable();
-        emon32EventClr(EVT_EXT_DISABLE);
       }
 
       /* Raspberry Pi has shutdown, indicate safe to remove power */
       if (evtPending(EVT_PI_SHUTDOWN)) {
         if (!ssd1306IndicateShutdown()) {
-          emon32EventClr(EVT_PI_SHUTDOWN);
+          evtClear(EVT_PI_SHUTDOWN);
         }
       }
 
       /* 1 ms timer flag */
-      if (evtPending(EVT_TICK_1kHz)) {
+      if (evtTake(EVT_TICK_1kHz)) {
         wdtFeed();
         tud_task();
         usbCDCTask();
@@ -788,24 +839,26 @@ int main(void) {
         configCheckConfirmationTimeout();
 
         evtKiloHertz();
-        emon32EventClr(EVT_TICK_1kHz);
+      }
+
+      /* Pending character(s) from the serial receive queue */
+      if (evtTake(EVT_PROCESS_RX_CHAR)) {
+        configRxProcess();
       }
 
       /* Pending character(s) in echo queue */
-      if (evtPending(EVT_ECHO)) {
+      if (evtTake(EVT_ECHO)) {
         uint8_t c = configEchoChar();
         while (c) {
           putchar_((char)c);
           c = configEchoChar();
         }
-        emon32EventClr(EVT_ECHO);
       }
 
       /* Configuration request to store accumulator values to NVM on demand. */
-      if (evtPending(EVT_STORE_ACCUM)) {
+      if (evtTake(EVT_STORE_ACCUM)) {
         cumulativeNVMStore(&nvmCumulative, &dataset, false);
         printf_("> Storing...\r\n");
-        emon32EventClr(EVT_STORE_ACCUM);
       }
 
       /* Configuration request to clear all accumulator values (energy and
@@ -813,7 +866,7 @@ int main(void) {
        * next read/write is reset. Clear the running counters in the main
        * loop, any residual energy in the dataset, and all pulse counters.
        */
-      if (evtPending(EVT_CLEAR_ACCUM)) {
+      if (evtTake(EVT_CLEAR_ACCUM)) {
         lastStoredEP.E = 0;
         lastStoredEP.P = 0;
         /* REVISIT : may need to make this asynchronous as it will take 240 ms
@@ -821,34 +874,30 @@ int main(void) {
          */
         eepromWLClear();
         eepromWLReset(sizeof(nvmCumulative));
-        ecmClearEnergy();
+        ecmEnergyClear();
         for (size_t i = 0; i < NUM_OPA; i++) {
           pulseSetCount(i, 0);
         }
         serialPuts("    - Accumulators cleared.\r\n");
-        emon32EventClr(EVT_CLEAR_ACCUM);
       }
 
       /* There has been a trigger request externally; the CM buffers will be
        * swapped on the next cycle. If there has been sufficient time between
        * the last temperature sample, start a temperature sample as well.
        */
-      if (evtPending(EVT_ECM_TRIG)) {
+      if (evtTake(EVT_ECM_TRIG)) {
         tempSample(numTempSensors);
         ecmProcessSetTrigger();
-        emon32EventClr(EVT_ECM_TRIG);
       }
 
       /* Trigger a temperature sample 1 s before the report is due. */
-      if (evtPending(EVT_ECM_PEND_1S)) {
+      if (evtTake(EVT_ECM_PEND_1S)) {
         tempSample(numTempSensors);
-        emon32EventClr(EVT_ECM_PEND_1S);
       }
 
       /* Readout has been requested, trigger a temperature read. */
-      if (evtPending(EVT_ECM_SET_CMPL)) {
+      if (evtTake(EVT_ECM_SET_CMPL)) {
         emon32EventSet(EVT_TEMP_READ);
-        emon32EventClr(EVT_ECM_SET_CMPL);
       }
 
       /* Read back samples from each DS18B20 present. This is a blocking
@@ -860,7 +909,7 @@ int main(void) {
         if (sercomExtIntfEnabled()) {
           tempReadEvt(&dataset, numTempSensors);
         } else {
-          emon32EventClr(EVT_TEMP_READ);
+          evtClear(EVT_TEMP_READ);
           emon32EventSet(EVT_PROCESS_DATASET);
         }
       }
@@ -868,12 +917,17 @@ int main(void) {
       /* Report period elapsed; generate, pack, and send through the
        * configured channels.
        */
-      if (evtPending(EVT_PROCESS_DATASET)) {
+      if (evtTake(EVT_PROCESS_DATASET)) {
 
         dataset.msgNum++;
         dataset.pECM = ecmProcessSet();
         datasetAddPulse(&dataset);
-        transmitData(&dataset, &rfmPkts);
+
+        /* During phase calibration, do not send messages as the data log period
+         * is changed. */
+        if (!calibrationNoTransmit()) {
+          transmitData(&dataset, &rfmPkts);
+        }
 
         /* If the energy used since the last storage is greater than the
          * configured energy delta then save the accumulated energy to NVM.
@@ -881,11 +935,12 @@ int main(void) {
         cumulativeProcess(&nvmCumulative, &dataset,
                           pConfig->baseCfg.epDeltaStore);
 
+        calibrationProcess(dataset.pECM, pConfig);
+
         /* Blink the STATUS LED, and clear the event. */
         uiLedColour(LED_RED);
         txBlink.timeBlink  = timerMillis();
         txBlink.txIndicate = true;
-        emon32EventClr(EVT_PROCESS_DATASET);
       }
 
       if (evtPending(EVT_TX_RFM)) {
@@ -900,7 +955,7 @@ int main(void) {
 
           if (0 == rfmPkts) {
             /* All packets sent */
-            emon32EventClr(EVT_TX_RFM);
+            evtClear(EVT_TX_RFM);
           } else if (rfmPkts & 0x1u) {
             sendPkt = true;
           } else if (rfmPkts & (1u << 1)) {
@@ -925,16 +980,15 @@ int main(void) {
         } else if (RFM_TX_ABORT == txState) {
           /* RFM module blocked, reset and reconfigure */
           rfmConfigure();
-          emon32EventClr(EVT_TX_RFM);
+          evtClear(EVT_TX_RFM);
         }
       }
 
-      if (evtPending(EVT_PROCESS_CMD)) {
+      if (evtTake(EVT_PROCESS_CMD)) {
         configProcessCmd();
-        emon32EventClr(EVT_PROCESS_CMD);
       }
 
-      if (evtPending(EVT_OPA_INIT)) {
+      if (evtTake(EVT_OPA_INIT)) {
         pulseConfigure();
         numTempSensors = tempSetup(&dataset);
         if (numTempSensorsLast != numTempSensors) {
@@ -942,7 +996,6 @@ int main(void) {
                   numTempSensors, (1u == numTempSensors ? "" : "s"));
           numTempSensorsLast = numTempSensors;
         }
-        emon32EventClr(EVT_OPA_INIT);
       }
     }
 

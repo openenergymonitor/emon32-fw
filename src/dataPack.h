@@ -12,6 +12,13 @@ typedef struct CHActive_ {
   bool analog;
 } CHActive_t;
 
+typedef struct DataPackOpts_ {
+  CHActive_t *pChsActive;
+  size_t      bufSize;
+  bool        json;
+  uint8_t     serialLog;
+} DataPackOpts_t;
+
 typedef enum PackedRange_ {
   PACKED_CT1_6,
   PACKED_TEMP_PULSE,
@@ -25,13 +32,11 @@ typedef enum PackedRange_ {
  *         a NULL. Clears data buffer in advance.
  *  @param [in] pData : pointer to the raw data
  *  @param [out] pDst : pointer to the destination buffer
- *  @param [in] m : width of the destination buffer
- *  @param [in] json : false -> K:V; true -> JSON
- *  @param [in] chsActive : indicates presence or absence of sensors
+ *  @param [in] pOpts : pointer to the options struct
  *  @return the number of the characters that would be packed
  */
-size_t dataPackSerial(const Emon32Dataset_t *pData, char *pDst, const size_t m,
-                      const bool json, const CHActive_t *pChsActive);
+size_t dataPackSerial(const Emon32Dataset_t *pData, char *pDst,
+                      const DataPackOpts_t *pOpts);
 
 /*! @brief Pack the voltage, power, energy, temperature, and pulse data into a
  *         packed structure for transmission over RFM link.

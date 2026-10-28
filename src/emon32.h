@@ -29,7 +29,7 @@ _Static_assert((sizeof(bool) == 1), "bool must be 1 byte");
  * Remaining
  *********************************/
 
-#define TX_BUFFER_W 512u
+#define TX_BUFFER_W 1024u
 
 /* Configuration key - indicates that the configuration is the default or
  * has been retrieved from non-volatile storage */
@@ -90,6 +90,7 @@ typedef enum EVTSRC_ {
   EVT_TX_RFM          = 9u,
   EVT_OPA_INIT        = 14u,
   EVT_TEMP_READ       = 15u,
+  EVT_PROCESS_RX_CHAR = 18u,
   EVT_PROCESS_CMD     = 19u,
   EVT_PROCESS_DATASET = 20u,
   EVT_STORE_ACCUM     = 21u,
@@ -107,16 +108,14 @@ void debugPuts(const char *s);
 /*! @brief Configure the continuous energy monitoring system */
 void ecmConfigure(void);
 
-/*! @brief Clear a pending event/interrupt flag after the task has been handled
- *  @param [in] evt : event source in enum
- */
-void emon32EventClr(const EVTSRC_t evt);
-
 /*! @brief Set the pending event/interrupt flag for tasks that are not handled
  *         within an ISR
  *  @param [in] evt : Event source in enum
  */
 void emon32EventSet(const EVTSRC_t evt);
+
+/*! @brief Setup the CT expander pins depending whether a channel is active */
+void emon32ExpanderSetup(void);
 
 /*! @brief Output to serial (USB if available, and hardware UART).
  *  @param [in] s: pointer to null terminated string

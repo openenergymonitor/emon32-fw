@@ -32,30 +32,39 @@ To test if your serial connection is working, try these commands first:
 | Command | Description |
 |---------|-------------|
 | **?** | Show help text |
-| **a\<n>** | Set the assumed RMS voltage as integer (when no AC voltage detected)<br>Example: `a230` sets assumed voltage to 230V |
+| **emonlock** | Lock the configuration interface |
+| **emonunlock** | Unlock the configuration interface |
+| **a\<n>** | Set the assumed RMS voltage as integer (when no AC voltage detected)<br>Example: `a230` sets assumed voltage to 230 V |
 | **b** | Backup configuration to serial |
-| **c\<n>** | Log to serial output<br>- `c0`: Disable serial logging<br>- `c1`: Enable serial logging |
+| **c\<n>** | Log to serial output<br>- `c0`: Disable serial logging<br>- `c1`: Enable serial logging<br>- `c2`: Enable verbose serial logging |
 | **d\<x.x>** | Set data log period in seconds<br>Example: `d10.0` sets logging period to 10 seconds |
 | **e** | Enter bootloader mode for firmware updates |
 | **f\<n>** | Set line frequency in Hz<br>- `f50`: 50 Hz (Europe, UK, etc.)<br>- `f60`: 60 Hz (US, Canada, etc.) |
 | **g\<n>** | Set network group for RF communication (default = 210)<br>Example: `g210` |
 | **h** | Safe Raspberry Pi power off countdown (will not remove power) |
+| **i\<x> \<y> \<i.i>** | Auto calibration<br>Parameters:<br>- `x`: Channel number (1-3 = Voltage; 4+ = CT)<br>- `y`: Mode select<br>&nbsp;&nbsp;- `a`: amplitude<br>&nbsp;&nbsp;- `p`: phase<br>- `i.i`: measured RMS amplitude<br>Example: `i4 a 45` |
 | **j\<n>** | JSON serial format<br>- `j0`: Disable JSON format<br>- `j1`: Enable JSON format |
-| **k\<x> \<a> \<y.y> \<z.z> \<v1> \<v2>** | Configure an analog input (voltage or current)<br>Parameters:<br>- `x`: Channel number (1-3 = Voltage; 4+ = CT)<br>- `a`: Active status (0 = DISABLED, 1 = ENABLED)<br>- `y.y`: V/CT calibration constant<br>- `z.z`: CT phase calibration value (degrees)<br>- `v1`: CT voltage channel 1 (reference)<br>- `v2`: CT voltage channel 2 (for L-L loads)<br>Example: `k4 1 90.0 1.5 1 1` |
+| **k\<x> \<a> \<y.y> \<z.z> \<v1> \<v2>** | Configure an analog input (voltage or current)<br>Parameters:<br>- `x`: Channel number (1-3 = Voltage; 4+ = CT)<br>- `a`: Active status (0 = DISABLED, 1 = ENABLED)<br>- `y.y`: V/CT calibration constant<br>- `z.z`: CT phase calibration value (degrees)<br>- `v1`: CT voltage channel 1 (reference)<br>- `v2`: CT voltage channel 2 (for L-L loads only)<br>Example: `k4 1 90.0 1.5 1` |
 | **l** | List current settings (displays all configuration) |
+| **ls** | List saved settings (displays all configuration) |
+| **lh** | List current settings (displays all configuration), human readable |
+| **lhs** | List saved settings (displays all configuration), human readable |
 | **m\<v> \<w> \<x> \<y> \<z>** | Configure a OneWire/pulse/analog input<br>Parameters:<br>- `v`: Channel index<br>- `w`: Active status (0 = DISABLED, 1 = ENABLED)<br>- `x`: Function select<br>&nbsp;&nbsp;- `a`: analog<br>&nbsp;&nbsp;- `b`: Both edges (pulse)<br>&nbsp;&nbsp;- `f`: Falling edge (pulse)<br>&nbsp;&nbsp;- `r`: Rising edge (pulse)<br>&nbsp;&nbsp;- `o`: OneWire (temperature sensor)<br>- `y`: Pull-up resistor (0 = OFF, 1 = ON)<br>- `z`: Minimum time, in milliseconds, between pulses<br>Example: `m1 1 r 1 50` |
 | **n\<n>** | Set node ID [1..60]<br>Example: `n5` sets node ID to 5 |
-| **o<x>** | OneWire configuration<br>Options:<br>- `x` = `ca`: clear all saved OneWire addresses<br>- `x` = `c<n>`: clear saved OneWire address for channel `n`<br>- `x` = `f`: reset and find OneWire devices<br>- `x` = `h`: hold the found OneWire addresses (overrides any manually configured addresses)<br>- `x` = `l`: list OneWire devices<br>- `x` = `n`: list all saved OneWire addresses<br>- `x` = integer, `n`: move an address to position `n` (see Examples)<br>- `x` = `r <a> <b>`, remap found sensor `<a>` to index `<b>` |
-| **p\<n>** | Set the RF power level<br>Example: `p7` |
+| **o\<x>** | OneWire configuration<br>Options:<br>- `x` = `ca`: clear all saved OneWire addresses<br>- `x` = `c<n>`: clear saved OneWire address for channel `n`<br>- `x` = `f`: reset and find OneWire devices<br>- `x` = `h`: hold the found OneWire addresses (overrides any manually configured addresses)<br>- `x` = `l`: list OneWire devices<br>- `x` = `n`: list all saved OneWire addresses<br>- `x` = integer, `n`: move supplied address to position `n`(see Examples)<br>- `x` = `r <a> <b>`, remap found sensor `<a>` to index `<b>` |
+| **p\<n>** | Set the RF power level (0-31). Transmitter may be damaged for values greater than 25 when no antenna is installed.<br>Example: `p7` |
 | **q** | Reset the system (confirmation required) |
 | **r** | Restore default settings (unsaved changes will be lost) |
 | **rs** | Restore saved settings (unsaved changes will be lost) |
 | **s** | Save settings to NVM (non-volatile memory)<br>Must be used after making configuration changes |
 | **t** | Trigger report on next cycle (force immediate data transmission) |
+| **u** | Save accumulator values to NVM |
 | **v** | Show firmware and board information |
 | **w\<n>** | RF module active<br>- `w0`: Disable RF<br>- `w1`: Enable RF |
 | **x\<n>** | 433 MHz RF frequency compatibility<br>- `x0`: 433.92 MHz (standard)<br>- `x1`: 433.00 MHz (legacy compatibility) |
-| **z** | Zero energy/pulse accumulators (reset Wh/pulse counters)<br>- `z`: Zero all accumulators (E1-E12, pulse1-3) with confirmation<br>- `ze1` to `ze12`: Zero individual energy accumulator (e.g., `ze3` zeros E3 only)<br>- `zp1` to `zp2`: Zero individual pulse accumulator (e.g., `zp1` zeros pulse1 only)<br>All commands require 'y' confirmation |
+| **ye\<n> \<m>** | Set energy accumulator `n` to `m` Wh |
+| **yp\<n> \<m>** | Set pulse accumulator `n` to `m` pulses |
+| **z** | Zero energy/pulse accumulators (reset Wh/pulse counters)<br>- `z`: Zero all accumulators (E1-E12, pulse1-3) with confirmation<br>- `ze1` to `ze12`: Zero individual energy accumulator (e.g., `ze3` zeros E3 only)<br>- `zp1` to `zp3`: Zero individual pulse accumulator (e.g., `zp1` zeros pulse1 only)<br>All commands require 'y' confirmation |
 
 ## Configuration Workflow
 
@@ -67,11 +76,21 @@ When making configuration changes:
 
 ## Examples
 
-### Enable Voltage Channels V2 and V3 (for 3-phase monitoring)
+### Lock and unlocking the configuration
+
+To protect against accidental changes, the configuration interface can be locked against changes. Read only commands are still available when locked.
 
 ```
-k2 1 100.0           # Enable V2 with default calibration (100.0)
-k3 1 100.0           # Enable V3 with default calibration (100.0)
+emonlock             # Configuration locked
+emonunlock           # Configuration unlocked
+```
+
+### Enable All Voltage Channels For 3-Phase Monitoring
+
+```
+k1 1 100.0 0         # Enable V1 with amplitude scale 100.0 and phase 0.0°
+k2 1 100.0 0         # Enable V2 with amplitude scale 100.0 and phase 0.0°
+k3 1 100.0 0         # Enable V3 with amplitude scale 100.0 and phase 0.0°
 s                    # Save configuration
 ```
 
@@ -80,22 +99,59 @@ s                    # Save configuration
 - Channel number (2 or 3)
 - Active status (1 = enabled)
 - Calibration value (typically 100.0, range: 25.0-150.0)
+- Phase value (typically 0)
 
 The phase and voltage reference parameters (v1, v2) are only required for CT channels.
+
+### Disable a voltage channel
+
+```
+k2 0                 # Disable V2
+s                    # Save configuration
+```
 
 ### Configure a CT channel
 
 ```
-k4 1 90.0 1.5 1 1    # Enable CT4, cal=90.0, phase=1.5°, refs V1-V1
+k4 1 90.0 1.5 1      # Enable CT1, cal=90.0, phase=1.5°, reference V1
 s                    # Save configuration
 ```
 
 ### Configure a 3-phase CT on L1-L2
 
 ```
-k4 1 90.0 4.2 1 2    # Enable CT4, references V1 and V2 (L1-L2 load)
+k4 1 90.0 4.2 1 2    # Enable CT1, references V1 and V2 (L1-L2 load)
 s                    # Save configuration
 ```
+
+### Calibrate a voltage input amplitude
+
+If you have a known voltage available, you can use this to calibrate your Pi3/Tx6.
+
+```
+i1 a 239.5    # Calibrate V1 with 239.5 V RMS
+s             # Save configuration after completion
+```
+
+### Calibrate a CT input amplitude
+
+If you have a known current available, you can use this to calibrate your Pi3/Tx6.
+
+```
+i4 a 45.1    # Calibrate CT1 with 45.1 A RMS
+s            # Save configuration
+```
+
+### Find the phase of a CT input
+
+Connect a **resistive** load on the CT input you want to get the phase for. The current through it should ideally be between 30% of the rated power and your usual current draw.
+
+```
+i4 p        # Determine the phase of CT1
+s           # Save configuration
+```
+
+The phase calibration will take 10 s with normal reporting disabled during this period. It is recommended to repeat the procedure 3-5 times and use the mean, discarding any obvious outliers.
 
 ### Configure a pulse input
 
@@ -128,16 +184,18 @@ j1                    # Enable JSON format
 s                     # Save configuration
 ```
 
+To add RMS current, power factor, and apparent power to serial output use `c2`.
+
 ### Set line frequency to 50 Hz
 
 ```
 f50                   # Set to 50 Hz
-s                     # Save (will automatically reset)
+s                     # Save configuration
 ```
 
 ### Save a OneWire temperature sensor to a position
 
-OneWire temperature sensors such as the DS18B20 are found in order. If a temperature sensor is removed, then the index of the remaining sensors will change. To save a sensor to an index so it is always shown there, use the following steps. In this example, the temperature sensor's 64 bit address is `0xea3ce104577b0728` and it is saved to index 3.
+OneWire temperature sensors such as the DS18B20 are found in order. If a temperature sensor is removed or fails, then the index of the remaining sensors will change on the next device search. To save a sensor to an index so it is always shown there, use the following steps. In this example, the temperature sensor's 64 bit address is `0xea3ce104577b0728` and it is saved to index 3.
 
 ```
 ol                         # List the sensor addresses (optional)
@@ -191,4 +249,3 @@ If you're not seeing any output on the hardware UART:
 - USB CDC baud rate doesn't matter (automatically negotiated)
 - Hardware UART uses 115200 baud, 8N1
 - Configuration changes are only temporary until saved with `s`
-- Settings that require a reset will automatically trigger a reset when saved

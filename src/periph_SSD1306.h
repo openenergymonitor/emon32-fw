@@ -14,8 +14,11 @@ typedef struct PosXY_ {
  */
 bool ssd1306Active(void);
 
-/*! @brief Clear the SSD1306 buffer */
+/*! @brief Clear the SSD1306 line buffer */
 void ssd1306ClearBuffer(void);
+
+/*! @brief Clear the SSD1306 display RAM */
+SSD1306_Status_t ssd1306DisplayClear(void);
 
 /*! @brief Turn the display off */
 SSD1306_Status_t ssd1306DisplayOff(void);
