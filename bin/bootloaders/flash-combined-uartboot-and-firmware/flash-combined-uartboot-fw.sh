@@ -33,3 +33,5 @@ trap - EXIT HUP INT TERM
 
 arm-none-eabi-gdb -nx --batch  -x hex_bmp_flash.gdb
 arm-none-eabi-gdb -nx --batch  -x elf_bmp_flash.gdb
+
+echo "\n\n---- DONE! ----"
